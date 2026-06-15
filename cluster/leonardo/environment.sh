@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+stack=${1:-${COMM_PLAYGROUND_STACK:-}}
+
+if [[ -z "$stack" ]]; then
+  echo "usage: source cluster/leonardo/environment.sh <cuda|sycl>" >&2
+  echo "or set COMM_PLAYGROUND_STACK=<cuda|sycl> before sourcing" >&2
+  return 2 2>/dev/null || exit 2
+fi
+
+case "$stack" in
+  cuda)
+    source "$script_dir/env/cuda.sh"
+    ;;
+  sycl)
+    source "$script_dir/env/sycl.sh"
+    ;;
+  *)
+    echo "unknown Leonardo stack '$stack' (expected cuda or sycl)" >&2
+    return 2 2>/dev/null || exit 2
+    ;;
+esac

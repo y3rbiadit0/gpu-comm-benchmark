@@ -1,0 +1,128 @@
+{
+  "version": 5,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "cuda-mpi",
+      "inherits": "base",
+      "cacheVariables": {
+        "ENABLE_CUDA_MPI": "ON"
+      }
+    },
+    {
+      "name": "sycl-mpi",
+      "inherits": "base",
+      "cacheVariables": {
+        "ENABLE_SYCL_MPI": "ON"
+      }
+    },
+    {
+      "name": "leonardo-cuda-mpi",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "ENABLE_CUDA_MPI": "ON",
+        "CMAKE_CUDA_COMPILER": "$env{CUDACXX}",
+        "CUDAToolkit_ROOT": "$env{CUDA_ROOT}",
+        "CMAKE_CUDA_HOST_COMPILER": "nvc++",
+        "CMAKE_CUDA_ARCHITECTURES": "$env{COMM_PLAYGROUND_CUDA_ARCH}",
+        "MPI_CXX_COMPILER": "mpicxx"
+      }
+    },
+    {
+      "name": "leonardo-sycl-mpi",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "ENABLE_SYCL_MPI": "ON",
+        "CMAKE_CXX_COMPILER": "$env{CXX}",
+        "COMM_PLAYGROUND_SYCL_FLAGS": "$env{COMM_PLAYGROUND_SYCL_FLAGS}",
+        "MPI_CXX_COMPILER": "mpicxx"
+      }
+    },
+    {
+      "name": "leonardo-cuda-nccl",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "ENABLE_CUDA_NCCL": "ON",
+        "CMAKE_CUDA_COMPILER": "$env{CUDACXX}",
+        "CUDAToolkit_ROOT": "$env{CUDA_ROOT}",
+        "CMAKE_CUDA_HOST_COMPILER": "nvc++",
+        "CMAKE_CUDA_ARCHITECTURES": "$env{COMM_PLAYGROUND_CUDA_ARCH}",
+        "NCCL_INCLUDE_DIR": "$env{NCCL_HOME}/include",
+        "NCCL_LIBRARY": "$env{NCCL_HOME}/lib/libnccl.so"
+      }
+    },
+    {
+      "name": "leonardo-cuda-nvshmem",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "ENABLE_CUDA_NVSHMEM": "ON",
+        "CMAKE_CUDA_COMPILER": "$env{CUDACXX}",
+        "CUDAToolkit_ROOT": "$env{CUDA_ROOT}",
+        "CMAKE_CUDA_HOST_COMPILER": "nvc++",
+        "CMAKE_CUDA_ARCHITECTURES": "$env{COMM_PLAYGROUND_CUDA_ARCH}",
+        "NVSHMEM_INCLUDE_DIR": "$env{NVSHMEM_HOME}/include",
+        "NVSHMEM_LIBRARY_PATH": "$env{NVSHMEM_HOME}/lib",
+        "NVSHMEM_LIBRARY": "$env{NVSHMEM_HOME}/lib/libnvshmem_host.so;$env{NVSHMEM_HOME}/lib/libnvshmem_device.a"
+      }
+    },
+    {
+      "name": "leonardo-sycl-oneccl",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "ENABLE_SYCL_ONECCL": "ON",
+        "CMAKE_CXX_COMPILER": "$env{CXX}",
+        "COMM_PLAYGROUND_SYCL_FLAGS": "$env{COMM_PLAYGROUND_SYCL_FLAGS}",
+        "oneCCL_ROOT": "$env{ONECCL_NCCL_ROOT}",
+        "MPI_CXX_COMPILER": "mpicxx"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "cuda-mpi",
+      "configurePreset": "cuda-mpi"
+    },
+    {
+      "name": "sycl-mpi",
+      "configurePreset": "sycl-mpi"
+    },
+    {
+      "name": "leonardo-cuda-mpi",
+      "configurePreset": "leonardo-cuda-mpi"
+    },
+    {
+      "name": "leonardo-sycl-mpi",
+      "configurePreset": "leonardo-sycl-mpi"
+    },
+    {
+      "name": "leonardo-cuda-nccl",
+      "configurePreset": "leonardo-cuda-nccl"
+    },
+    {
+      "name": "leonardo-cuda-nvshmem",
+      "configurePreset": "leonardo-cuda-nvshmem"
+    },
+    {
+      "name": "leonardo-sycl-oneccl",
+      "configurePreset": "leonardo-sycl-oneccl"
+    }
+  ]
+}
