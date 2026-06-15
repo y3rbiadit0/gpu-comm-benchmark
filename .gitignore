@@ -36,3 +36,16 @@
 *.app
 
 # End of https://www.toptal.com/developers/gitignore/api/c++
+
+### CMake / local builds ###
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+### Experiment output ###
+*.log
+*.err
+*.out
+results/
