@@ -24,6 +24,35 @@ This stack is based on `gcc/12.2.0`, `cuda/12.2`, `openmpi/4.1.6`, and a custom 
 
 ## Vector Add Experiments
 
+Submit fixed Leonardo topologies:
+
+```bash
+sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/1n1g.sh
+sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/1n4g.sh
+sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/2n4g.sh
+```
+
+```bash
+sbatch cluster/leonardo/experiments/vector_add/sycl_mpi/1n1g.sh
+sbatch cluster/leonardo/experiments/vector_add/sycl_mpi/1n4g.sh
+sbatch cluster/leonardo/experiments/vector_add/sycl_mpi/2n4g.sh
+```
+
+Useful overrides:
+
+```bash
+CP_N=16777216 CP_NTRIALS=5 sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/1n4g.sh
+CP_RESULT_NAME=vector-add-sycl-test sbatch cluster/leonardo/experiments/vector_add/sycl_mpi/1n4g.sh
+```
+
+Results are written under:
+
+```text
+results/<result-name>/vector_add/
+```
+
+Interactive wrappers are still available:
+
 ```bash
 NP=4 N=1048576 cluster/leonardo/experiments/vector_add/run_cuda_mpi.sh
 NP=4 N=1048576 cluster/leonardo/experiments/vector_add/run_sycl_mpi.sh
