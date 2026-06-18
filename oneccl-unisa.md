@@ -38,6 +38,37 @@ CCL_MPI_LIBRARY_PATH=/path/to/bundled/libmpi.so
 
 The oneCCL vector-add jobs use `mpirun` rather than direct `srun` so the launcher also comes from the bundled MPI stack when available.
 
+## Multi-Node Intel MPI Startup
+
+For two or more Leonardo nodes, bundled Intel MPI needs OFI for startup. The validated setup uses Intel MPI's bundled libfabric and forces the TCP provider:
+
+```bash
+export I_MPI_HYDRA_BOOTSTRAP=slurm
+export I_MPI_FABRICS=shm:ofi
+export I_MPI_DEBUG=0
+export I_MPI_OFI_PROVIDER=tcp
+export FI_PROVIDER=tcp
+export FI_PROVIDER_PATH=$ONECCL_NCCL_ROOT/opt/mpi/libfabric/lib/prov-tcp-only
+export FI_LOG_LEVEL=error
+export LD_LIBRARY_PATH=$ONECCL_NCCL_ROOT/opt/mpi/libfabric/lib:${LD_LIBRARY_PATH:-}
+```
+
+`cluster/leonardo/runtime/oneccl-nccl.sh` creates the `prov-tcp-only` directory when needed by symlinking Intel MPI's bundled TCP provider:
+
+```bash
+ln -sf $ONECCL_NCCL_ROOT/opt/mpi/libfabric/lib/prov/libtcp-fi.so \
+  $ONECCL_NCCL_ROOT/opt/mpi/libfabric/lib/prov-tcp-only/libtcp-fi.so
+```
+
+Without these settings, 2-node jobs can fail before oneCCL starts, inside `MPI_Init`:
+
+```text
+MPIDI_OFI_mpi_init_hook
+Fatal error in internal_Init: Other MPI error
+```
+
+MPI is only the launch/bootstrap layer in this setup. Once oneCCL constructs the NCCL communicator, GPU collective payloads use NCCL.
+
 ## NCCL Backend Collective Coverage
 
 The oneCCL NCCL backend used here does not implement `broadcast`:

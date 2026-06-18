@@ -46,6 +46,11 @@ cp_vector_add_print_summary() {
   echo "CCL_ATL_TRANSPORT: ${CCL_ATL_TRANSPORT:-unset}"
   echo "CCL_MPI_LIBRARY_PATH: ${CCL_MPI_LIBRARY_PATH:-unset}"
   echo "CCL_WORKER_COUNT: ${CCL_WORKER_COUNT:-unset}"
+  echo "I_MPI_FABRICS: ${I_MPI_FABRICS:-unset}"
+  echo "I_MPI_OFI_PROVIDER: ${I_MPI_OFI_PROVIDER:-unset}"
+  echo "FI_PROVIDER: ${FI_PROVIDER:-unset}"
+  echo "FI_PROVIDER_PATH: ${FI_PROVIDER_PATH:-unset}"
+  echo "FI_LOG_LEVEL: ${FI_LOG_LEVEL:-unset}"
   echo "NCCL_DEBUG: ${NCCL_DEBUG:-unset}"
   nvidia-smi || true
 }
