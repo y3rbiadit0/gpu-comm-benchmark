@@ -30,6 +30,19 @@ if(COMM_PLAYGROUND_ONECCL_USE_BUNDLED_MPI)
       $ENV{HOME}/oneCCL-nccl/deps/mpi/lib
     NO_DEFAULT_PATH)
 
+  if(NOT ONECCL_BUNDLED_MPI_LIBRARY)
+    file(GLOB _oneccl_bundled_mpi_candidates
+      "$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib/release/libmpi.so*"
+      "$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib/libmpi.so*"
+      "$ENV{ONECCL_ROOT}/opt/mpi/lib/release/libmpi.so*"
+      "$ENV{ONECCL_ROOT}/opt/mpi/lib/libmpi.so*"
+      "$ENV{HOME}/oneCCL-nccl/deps/mpi/lib/libmpi.so*")
+    if(_oneccl_bundled_mpi_candidates)
+      list(SORT _oneccl_bundled_mpi_candidates)
+      list(GET _oneccl_bundled_mpi_candidates 0 ONECCL_BUNDLED_MPI_LIBRARY)
+    endif()
+  endif()
+
   if(NOT ONECCL_BUNDLED_MPI_INCLUDE_DIR OR NOT ONECCL_BUNDLED_MPI_LIBRARY)
     message(FATAL_ERROR "oneCCL bundled MPI not found. Set ONECCL_NCCL_ROOT or ONECCL_BUNDLED_MPI_INCLUDE_DIR/ONECCL_BUNDLED_MPI_LIBRARY")
   endif()

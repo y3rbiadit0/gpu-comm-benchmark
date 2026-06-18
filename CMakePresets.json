@@ -97,8 +97,7 @@
         "COMM_PLAYGROUND_SYCL_FLAGS": "$env{COMM_PLAYGROUND_SYCL_FLAGS}",
         "oneCCL_ROOT": "$env{ONECCL_NCCL_ROOT}",
         "COMM_PLAYGROUND_ONECCL_USE_BUNDLED_MPI": "ON",
-        "ONECCL_BUNDLED_MPI_INCLUDE_DIR": "$env{ONECCL_NCCL_ROOT}/opt/mpi/include",
-        "ONECCL_BUNDLED_MPI_LIBRARY": "$env{HOME}/oneCCL-nccl/deps/mpi/lib/libmpi.so.12"
+        "ONECCL_BUNDLED_MPI_INCLUDE_DIR": "$env{ONECCL_NCCL_ROOT}/opt/mpi/include"
       }
     },
     {

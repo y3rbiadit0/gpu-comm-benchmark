@@ -3,6 +3,7 @@ set -euo pipefail
 
 export ONECCL_NCCL_ROOT=${ONECCL_NCCL_ROOT:-$HOME/opt/oneccl-nccl-leonardo}
 export ONECCL_BUNDLED_MPI_ROOT=${ONECCL_BUNDLED_MPI_ROOT:-$HOME/oneCCL-nccl/deps/mpi}
+user_ccl_mpi_library_path=${CCL_MPI_LIBRARY_PATH:-}
 
 if [[ -f "$ONECCL_NCCL_ROOT/env/vars.sh" ]]; then
   set +u
@@ -12,7 +13,31 @@ fi
 
 export CCL_BACKEND=${CCL_BACKEND:-nccl}
 export CCL_ATL_TRANSPORT=${CCL_ATL_TRANSPORT:-mpi}
-export CCL_MPI_LIBRARY_PATH=${CCL_MPI_LIBRARY_PATH:-$ONECCL_BUNDLED_MPI_ROOT/lib/libmpi.so.12}
+
+if [[ -n "$user_ccl_mpi_library_path" ]]; then
+  export CCL_MPI_LIBRARY_PATH="$user_ccl_mpi_library_path"
+else
+  unset CCL_MPI_LIBRARY_PATH
+  ccl_mpi_candidates=(
+    "$ONECCL_NCCL_ROOT/opt/mpi/lib/release/libmpi.so"
+    "$ONECCL_NCCL_ROOT"/opt/mpi/lib/release/libmpi.so.*
+    "$ONECCL_NCCL_ROOT/opt/mpi/lib/libmpi.so"
+    "$ONECCL_NCCL_ROOT"/opt/mpi/lib/libmpi.so.*
+    "$ONECCL_BUNDLED_MPI_ROOT/lib/libmpi.so.12"
+    "$ONECCL_BUNDLED_MPI_ROOT/lib/libmpi.so"
+    "$ONECCL_BUNDLED_MPI_ROOT"/lib/libmpi.so.*
+  )
+  for ccl_mpi_candidate in "${ccl_mpi_candidates[@]}"; do
+    if [[ -e "$ccl_mpi_candidate" ]]; then
+      export CCL_MPI_LIBRARY_PATH="$ccl_mpi_candidate"
+      break
+    fi
+  done
+  if [[ -z ${CCL_MPI_LIBRARY_PATH:-} ]]; then
+    echo "could not find bundled oneCCL MPI libmpi.so under $ONECCL_NCCL_ROOT or $ONECCL_BUNDLED_MPI_ROOT" >&2
+    return 1 2>/dev/null || exit 1
+  fi
+fi
 export CCL_LOG_LEVEL=${CCL_LOG_LEVEL:-warn}
 export CCL_WORKER_COUNT=${CCL_WORKER_COUNT:-1}
 export CCL_WORKER_AFFINITY=${CCL_WORKER_AFFINITY:-auto}
