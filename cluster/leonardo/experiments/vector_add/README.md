@@ -67,3 +67,36 @@ Outputs are written to:
 results/<result-name>/vector_add/<job-name>-<job-id>-<trial>-stdout.txt
 results/<result-name>/vector_add/<job-name>-<job-id>-<trial>-stderr.txt
 ```
+
+## Validated Results
+
+Validated on Leonardo A100 boost nodes with `CP_N=1048576`. Times are the mean over available successful trial stdout files.
+
+### 1 Node / 4 GPUs
+
+| Backend | Ranks/PEs | Trials | Mean Time (s) | Validation |
+| --- | ---: | ---: | ---: | --- |
+| `cuda_mpi` | 4 ranks | 3 | 0.007282 | PASS |
+| `cuda_nccl` | 4 ranks | 3 | 0.020193 | PASS |
+| `cuda_nvshmem` | 4 PEs | 3 | 0.007895 | PASS |
+| `oshmpi` | 4 PEs | 1 | 0.001038 | PASS |
+| `sycl_mpi` | 4 ranks | 3 | 0.003606 | PASS |
+| `sycl_oneccl` | 4 ranks | 3 | 0.082637 | PASS |
+
+### 2 Nodes / 8 GPUs
+
+| Backend | Ranks/PEs | Trials | Mean Time (s) | Validation |
+| --- | ---: | ---: | ---: | --- |
+| `cuda_mpi` | 8 ranks | 3 | 0.019709 | PASS |
+| `cuda_nccl` | 8 ranks | 3 | 0.079309 | PASS |
+| `cuda_nvshmem` | 8 PEs | 3 | 0.057354 | PASS |
+| `oshmpi` | 8 PEs | 3 | 0.004435 | PASS |
+| `sycl_mpi` | 8 ranks | 3 | 0.024260 | PASS |
+| `sycl_oneccl` | 8 ranks | 3 | 0.062249 | PASS |
+
+Notes:
+
+- `sycl_oneccl` uses the UNISA NCCL-enabled oneCCL fork with bundled Intel MPI on Leonardo.
+- The oneCCL NCCL backend does not implement `broadcast`, so `sycl_oneccl` emulates rank-0 input distribution with `allreduce(sum)` over zero-filled non-root buffers.
+- Multi-node `sycl_oneccl` requires bundled Intel MPI OFI/TCP startup settings from `cluster/leonardo/runtime/oneccl-nccl.sh`.
+- Regenerate the `cuda_nvshmem` and `oshmpi` rows after changes that made their result collection/timing semantics comparable: NVSHMEM now gathers local slices to PE 0 instead of doing a full-vector reduction, and OSHMPI reports max elapsed across PEs.

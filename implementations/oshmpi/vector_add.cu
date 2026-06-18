@@ -58,6 +58,7 @@ int main(int argc, char** argv) {
   const int pes = shmem_n_pes();
   bool space_created = false;
   void* space = nullptr;
+  double* elapsed_by_pe = nullptr;
 
   try {
     const auto global_size = comm_playground::parse_size_arg(argc, argv, 1U << 20U);
@@ -83,6 +84,10 @@ int main(int argc, char** argv) {
     auto* device_c = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, global_size * sizeof(float)));
     if (device_a == nullptr || device_b == nullptr || device_c == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI CUDA symmetric memory");
+    }
+    elapsed_by_pe = static_cast<double*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(double)));
+    if (elapsed_by_pe == nullptr) {
+      throw std::runtime_error("failed to allocate OSHMPI timing buffer");
     }
 
     std::vector<float> host_global_a;
@@ -133,6 +138,17 @@ int main(int argc, char** argv) {
     shmem_barrier_all();
 
     const auto elapsed = timer.seconds();
+    shmem_putmem(elapsed_by_pe + pe, &elapsed, sizeof(elapsed), 0);
+    shmem_quiet();
+    shmem_barrier_all();
+
+    double max_elapsed = elapsed;
+    if (pe == 0) {
+      max_elapsed = 0.0;
+      for (int source_pe = 0; source_pe < pes; ++source_pe) {
+        max_elapsed = std::max(max_elapsed, elapsed_by_pe[source_pe]);
+      }
+    }
 
     int global_ok = 1;
     if (pe == 0) {
@@ -141,6 +157,8 @@ int main(int argc, char** argv) {
       global_ok = comm_playground::validate_vector_add(host_global_c.data(), global_size, 0) ? 1 : 0;
     }
 
+    shmem_free(elapsed_by_pe);
+    elapsed_by_pe = nullptr;
     shmem_free(device_c);
     shmem_free(device_b);
     shmem_free(device_a);
@@ -148,7 +166,7 @@ int main(int argc, char** argv) {
     space_created = false;
 
     if (pe == 0) {
-      std::cout << "oshmpi_vector_add n=" << global_size << " pes=" << pes << " time_s=" << elapsed
+      std::cout << "oshmpi_vector_add n=" << global_size << " pes=" << pes << " time_s=" << max_elapsed
                 << " validation=" << (global_ok ? "PASS" : "FAIL") << '\n';
     }
 

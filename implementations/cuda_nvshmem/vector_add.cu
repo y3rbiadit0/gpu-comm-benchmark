@@ -99,15 +99,13 @@ int main(int argc, char** argv) {
     auto* device_a = static_cast<float*>(nvshmem_malloc(global_size * sizeof(float)));
     auto* device_b = static_cast<float*>(nvshmem_malloc(global_size * sizeof(float)));
     auto* device_c = static_cast<float*>(nvshmem_malloc(global_size * sizeof(float)));
-    auto* device_result = static_cast<float*>(nvshmem_malloc(global_size * sizeof(float)));
-    if (device_a == nullptr || device_b == nullptr || device_c == nullptr || device_result == nullptr) {
+    if (device_a == nullptr || device_b == nullptr || device_c == nullptr) {
       throw std::runtime_error("failed to allocate NVSHMEM symmetric memory");
     }
 
     check_cuda(cudaMemset(device_a, 0, global_size * sizeof(float)), "cudaMemset(device_a)");
     check_cuda(cudaMemset(device_b, 0, global_size * sizeof(float)), "cudaMemset(device_b)");
     check_cuda(cudaMemset(device_c, 0, global_size * sizeof(float)), "cudaMemset(device_c)");
-    check_cuda(cudaMemset(device_result, 0, global_size * sizeof(float)), "cudaMemset(device_result)");
 
     if (pe == 0) {
       check_cuda(cudaMemcpy(device_a, host_global_a.data(), global_size * sizeof(float), cudaMemcpyHostToDevice),
@@ -136,14 +134,18 @@ int main(int argc, char** argv) {
       check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize");
     }
 
-    nvshmem_float_sum_reduce(NVSHMEM_TEAM_WORLD, device_result, device_c, global_size);
+    nvshmem_barrier_all();
+    if (pe != 0 && local_size > 0) {
+      nvshmem_float_put(device_c + local_offset, device_c + local_offset, local_size, 0);
+    }
+    nvshmem_quiet();
     nvshmem_barrier_all();
 
     const auto elapsed = timer.seconds();
 
     int global_ok = 1;
     if (pe == 0) {
-      check_cuda(cudaMemcpy(host_global_c.data(), device_result, global_size * sizeof(float), cudaMemcpyDeviceToHost),
+      check_cuda(cudaMemcpy(host_global_c.data(), device_c, global_size * sizeof(float), cudaMemcpyDeviceToHost),
                  "cudaMemcpy(host_global_c)");
       global_ok = comm_playground::validate_vector_add(host_global_c.data(), global_size, 0) ? 1 : 0;
     }
@@ -155,7 +157,6 @@ int main(int argc, char** argv) {
     nvshmem_free(device_a);
     nvshmem_free(device_b);
     nvshmem_free(device_c);
-    nvshmem_free(device_result);
     nvshmem_finalize();
     nvshmem_initialized = false;
 
