@@ -1,5 +1,6 @@
-include(${PROJECT_SOURCE_DIR}/cmake/mpi.cmake)
 include(${PROJECT_SOURCE_DIR}/cmake/sycl.cmake)
+
+option(COMM_PLAYGROUND_ONECCL_USE_BUNDLED_MPI "Link SYCL oneCCL examples with oneCCL's bundled Intel MPI" OFF)
 
 find_path(ONECCL_INCLUDE_DIR oneapi/ccl.hpp
   HINTS ${oneCCL_ROOT} $ENV{ONECCL_ROOT} $ENV{CCL_ROOT}
@@ -14,5 +15,35 @@ endif()
 
 add_executable(sycl_oneccl_vector_add vector_add.cpp)
 target_include_directories(sycl_oneccl_vector_add PRIVATE ${ONECCL_INCLUDE_DIR})
-target_link_libraries(sycl_oneccl_vector_add PRIVATE comm_playground_common MPI::MPI_CXX ${ONECCL_LIBRARY})
+
+if(COMM_PLAYGROUND_ONECCL_USE_BUNDLED_MPI)
+  find_path(ONECCL_BUNDLED_MPI_INCLUDE_DIR mpi.h
+    HINTS $ENV{ONECCL_NCCL_ROOT}/opt/mpi $ENV{ONECCL_ROOT}/opt/mpi $ENV{CCL_ROOT}/opt/mpi
+    PATH_SUFFIXES include
+    NO_DEFAULT_PATH)
+  find_library(ONECCL_BUNDLED_MPI_LIBRARY mpi
+    HINTS
+      $ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib/release
+      $ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib
+      $ENV{ONECCL_ROOT}/opt/mpi/lib/release
+      $ENV{ONECCL_ROOT}/opt/mpi/lib
+      $ENV{HOME}/oneCCL-nccl/deps/mpi/lib
+    NO_DEFAULT_PATH)
+
+  if(NOT ONECCL_BUNDLED_MPI_INCLUDE_DIR OR NOT ONECCL_BUNDLED_MPI_LIBRARY)
+    message(FATAL_ERROR "oneCCL bundled MPI not found. Set ONECCL_NCCL_ROOT or ONECCL_BUNDLED_MPI_INCLUDE_DIR/ONECCL_BUNDLED_MPI_LIBRARY")
+  endif()
+
+  find_package(Threads REQUIRED)
+  get_filename_component(ONECCL_BUNDLED_MPI_LIBRARY_DIR "${ONECCL_BUNDLED_MPI_LIBRARY}" DIRECTORY)
+  target_include_directories(sycl_oneccl_vector_add PRIVATE ${ONECCL_BUNDLED_MPI_INCLUDE_DIR})
+  target_link_libraries(sycl_oneccl_vector_add PRIVATE comm_playground_common ${ONECCL_LIBRARY} ${ONECCL_BUNDLED_MPI_LIBRARY} ${CMAKE_DL_LIBS} Threads::Threads)
+  set_target_properties(sycl_oneccl_vector_add PROPERTIES
+    BUILD_RPATH "${ONECCL_BUNDLED_MPI_LIBRARY_DIR};$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib/release;$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib;$ENV{HOME}/oneCCL-nccl/deps/mpi/lib;$ENV{ONECCL_NCCL_ROOT}/lib;$ENV{DPCPP_INSTALL}/lib;$ENV{GCC12_LIB}"
+    INSTALL_RPATH "${ONECCL_BUNDLED_MPI_LIBRARY_DIR};$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib/release;$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib;$ENV{HOME}/oneCCL-nccl/deps/mpi/lib;$ENV{ONECCL_NCCL_ROOT}/lib;$ENV{DPCPP_INSTALL}/lib;$ENV{GCC12_LIB}")
+else()
+  include(${PROJECT_SOURCE_DIR}/cmake/mpi.cmake)
+  target_link_libraries(sycl_oneccl_vector_add PRIVATE comm_playground_common MPI::MPI_CXX ${ONECCL_LIBRARY})
+endif()
+
 comm_playground_enable_sycl(sycl_oneccl_vector_add)

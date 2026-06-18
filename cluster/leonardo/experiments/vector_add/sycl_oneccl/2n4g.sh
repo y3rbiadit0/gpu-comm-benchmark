@@ -19,6 +19,7 @@ CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-sycl-oneccl/implementatio
 CP_RESULT_NAME=${CP_RESULT_NAME:-vector-add-sycl-oneccl-2n4g}
 CP_NODES=2
 CP_TASKS_PER_NODE=4
+CP_LAUNCHER=mpirun
 
 source "$CP_PROJECT_ROOT/cluster/leonardo/experiments/vector_add/common.sh"
 cp_vector_add_main

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 export ONECCL_NCCL_ROOT=${ONECCL_NCCL_ROOT:-$HOME/opt/oneccl-nccl-leonardo}
-user_ccl_mpi_library_path=${CCL_MPI_LIBRARY_PATH:-}
+export ONECCL_BUNDLED_MPI_ROOT=${ONECCL_BUNDLED_MPI_ROOT:-$HOME/oneCCL-nccl/deps/mpi}
 
 if [[ -f "$ONECCL_NCCL_ROOT/env/vars.sh" ]]; then
   set +u
@@ -12,18 +12,7 @@ fi
 
 export CCL_BACKEND=${CCL_BACKEND:-nccl}
 export CCL_ATL_TRANSPORT=${CCL_ATL_TRANSPORT:-mpi}
-
-if [[ -n "$user_ccl_mpi_library_path" ]]; then
-  export CCL_MPI_LIBRARY_PATH="$user_ccl_mpi_library_path"
-else
-  if command -v mpicc >/dev/null 2>&1; then
-    mpi_lib_dir=$(mpicc --showme:libdirs 2>/dev/null | awk '{print $1}')
-    if [[ -n "$mpi_lib_dir" && -e "$mpi_lib_dir/libmpi.so" ]]; then
-      export CCL_MPI_LIBRARY_PATH="$mpi_lib_dir/libmpi.so"
-    fi
-  fi
-  export CCL_MPI_LIBRARY_PATH=${CCL_MPI_LIBRARY_PATH:-$HOME/oneCCL-nccl/deps/mpi/lib/libmpi.so.12}
-fi
+export CCL_MPI_LIBRARY_PATH=${CCL_MPI_LIBRARY_PATH:-$ONECCL_BUNDLED_MPI_ROOT/lib/libmpi.so.12}
 export CCL_LOG_LEVEL=${CCL_LOG_LEVEL:-warn}
 export CCL_WORKER_COUNT=${CCL_WORKER_COUNT:-1}
 export CCL_WORKER_AFFINITY=${CCL_WORKER_AFFINITY:-auto}
@@ -43,4 +32,10 @@ else
 fi
 
 ccl_mpi_lib_dir=$(dirname -- "$CCL_MPI_LIBRARY_PATH")
-export LD_LIBRARY_PATH="$ccl_mpi_lib_dir:${GCC12_LIB:-}:${DPCPP_INSTALL:-}/lib:${CUDA_HOME:-${CUDA_PATH:-}}/lib64:${LD_LIBRARY_PATH:-}"
+if [[ -d "$ONECCL_NCCL_ROOT/opt/mpi/bin" ]]; then
+  export PATH="$ONECCL_NCCL_ROOT/opt/mpi/bin:$PATH"
+fi
+if [[ -d "$ONECCL_BUNDLED_MPI_ROOT/bin" ]]; then
+  export PATH="$ONECCL_BUNDLED_MPI_ROOT/bin:$PATH"
+fi
+export LD_LIBRARY_PATH="$ccl_mpi_lib_dir:$ONECCL_NCCL_ROOT/opt/mpi/lib/release:$ONECCL_NCCL_ROOT/opt/mpi/lib:${GCC12_LIB:-}:${DPCPP_INSTALL:-}/lib:${CUDA_HOME:-${CUDA_PATH:-}}/lib64:${LD_LIBRARY_PATH:-}"
