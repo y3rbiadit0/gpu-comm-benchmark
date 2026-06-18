@@ -35,6 +35,7 @@
       "generator": "Ninja",
       "cacheVariables": {
         "ENABLE_CUDA_MPI": "ON",
+        "CMAKE_CXX_COMPILER": "nvc++",
         "CMAKE_CUDA_COMPILER": "$env{CUDACXX}",
         "CUDAToolkit_ROOT": "$env{CUDA_ROOT}",
         "CMAKE_CUDA_HOST_COMPILER": "nvc++",
@@ -59,10 +60,12 @@
       "generator": "Ninja",
       "cacheVariables": {
         "ENABLE_CUDA_NCCL": "ON",
+        "CMAKE_CXX_COMPILER": "nvc++",
         "CMAKE_CUDA_COMPILER": "$env{CUDACXX}",
         "CUDAToolkit_ROOT": "$env{CUDA_ROOT}",
         "CMAKE_CUDA_HOST_COMPILER": "nvc++",
         "CMAKE_CUDA_ARCHITECTURES": "$env{COMM_PLAYGROUND_CUDA_ARCH}",
+        "MPI_CXX_COMPILER": "mpicxx",
         "NCCL_INCLUDE_DIR": "$env{NCCL_HOME}/include",
         "NCCL_LIBRARY": "$env{NCCL_HOME}/lib/libnccl.so"
       }
@@ -73,10 +76,12 @@
       "generator": "Ninja",
       "cacheVariables": {
         "ENABLE_CUDA_NVSHMEM": "ON",
+        "CMAKE_CXX_COMPILER": "nvc++",
         "CMAKE_CUDA_COMPILER": "$env{CUDACXX}",
         "CUDAToolkit_ROOT": "$env{CUDA_ROOT}",
         "CMAKE_CUDA_HOST_COMPILER": "nvc++",
         "CMAKE_CUDA_ARCHITECTURES": "$env{COMM_PLAYGROUND_CUDA_ARCH}",
+        "MPI_CXX_COMPILER": "mpicxx",
         "NVSHMEM_INCLUDE_DIR": "$env{NVSHMEM_HOME}/include",
         "NVSHMEM_LIBRARY_PATH": "$env{NVSHMEM_HOME}/lib",
         "NVSHMEM_LIBRARY": "$env{NVSHMEM_HOME}/lib/libnvshmem_host.so;$env{NVSHMEM_HOME}/lib/libnvshmem_device.a"

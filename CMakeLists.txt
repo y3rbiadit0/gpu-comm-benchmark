@@ -24,13 +24,13 @@ if(ENABLE_SYCL_MPI)
 endif()
 
 if(ENABLE_SYCL_ONECCL)
-  message(FATAL_ERROR "SYCL + oneCCL is scaffolded but not implemented yet")
+  add_subdirectory(implementations/sycl_oneccl)
 endif()
 
 if(ENABLE_CUDA_NCCL)
-  message(FATAL_ERROR "CUDA + NCCL is scaffolded but not implemented yet")
+  add_subdirectory(implementations/cuda_nccl)
 endif()
 
 if(ENABLE_CUDA_NVSHMEM)
-  message(FATAL_ERROR "CUDA + NVSHMEM is scaffolded but not implemented yet")
+  add_subdirectory(implementations/cuda_nvshmem)
 endif()
