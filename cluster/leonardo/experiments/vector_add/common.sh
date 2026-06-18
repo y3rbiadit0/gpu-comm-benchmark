@@ -39,6 +39,11 @@ cp_vector_add_print_summary() {
   echo "stack: $CP_STACK"
   echo "runtime: $CP_RUNTIME"
   echo "UCX_TLS: ${UCX_TLS:-unset}"
+  echo "CCL_BACKEND: ${CCL_BACKEND:-unset}"
+  echo "CCL_ATL_TRANSPORT: ${CCL_ATL_TRANSPORT:-unset}"
+  echo "CCL_MPI_LIBRARY_PATH: ${CCL_MPI_LIBRARY_PATH:-unset}"
+  echo "CCL_WORKER_COUNT: ${CCL_WORKER_COUNT:-unset}"
+  echo "NCCL_DEBUG: ${NCCL_DEBUG:-unset}"
   nvidia-smi || true
 }
 

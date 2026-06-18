@@ -2,6 +2,7 @@
 set -euo pipefail
 
 export ONECCL_NCCL_ROOT=${ONECCL_NCCL_ROOT:-$HOME/opt/oneccl-nccl-leonardo}
+user_ccl_mpi_library_path=${CCL_MPI_LIBRARY_PATH:-}
 
 if [[ -f "$ONECCL_NCCL_ROOT/env/vars.sh" ]]; then
   set +u
@@ -11,7 +12,10 @@ fi
 
 export CCL_BACKEND=${CCL_BACKEND:-nccl}
 export CCL_ATL_TRANSPORT=${CCL_ATL_TRANSPORT:-mpi}
-if [[ -z ${CCL_MPI_LIBRARY_PATH:-} ]]; then
+
+if [[ -n "$user_ccl_mpi_library_path" ]]; then
+  export CCL_MPI_LIBRARY_PATH="$user_ccl_mpi_library_path"
+else
   if command -v mpicc >/dev/null 2>&1; then
     mpi_lib_dir=$(mpicc --showme:libdirs 2>/dev/null | awk '{print $1}')
     if [[ -n "$mpi_lib_dir" && -e "$mpi_lib_dir/libmpi.so" ]]; then
