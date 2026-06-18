@@ -98,6 +98,20 @@
         "oneCCL_ROOT": "$env{ONECCL_NCCL_ROOT}",
         "MPI_CXX_COMPILER": "mpicxx"
       }
+    },
+    {
+      "name": "leonardo-oshmpi",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "ENABLE_OSHMPI": "ON",
+        "CMAKE_CXX_COMPILER": "nvc++",
+        "CMAKE_CUDA_COMPILER": "$env{CUDACXX}",
+        "CUDAToolkit_ROOT": "$env{CUDA_ROOT}",
+        "CMAKE_CUDA_HOST_COMPILER": "nvc++",
+        "CMAKE_CUDA_ARCHITECTURES": "$env{COMM_PLAYGROUND_CUDA_ARCH}",
+        "OSHMPI_DIR": "$env{OSHMPI_HOME}"
+      }
     }
   ],
   "buildPresets": [
@@ -128,6 +142,10 @@
     {
       "name": "leonardo-sycl-oneccl",
       "configurePreset": "leonardo-sycl-oneccl"
+    },
+    {
+      "name": "leonardo-oshmpi",
+      "configurePreset": "leonardo-oshmpi"
     }
   ]
 }

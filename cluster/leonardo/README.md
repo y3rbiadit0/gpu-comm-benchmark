@@ -32,6 +32,7 @@ sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/1n4g.sh
 sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/2n4g.sh
 sbatch cluster/leonardo/experiments/vector_add/cuda_nccl/1n4g.sh
 sbatch cluster/leonardo/experiments/vector_add/cuda_nvshmem/1n4g.sh
+sbatch cluster/leonardo/experiments/vector_add/oshmpi/1n4g.sh
 ```
 
 ```bash

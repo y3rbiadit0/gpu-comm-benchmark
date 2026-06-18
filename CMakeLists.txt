@@ -7,6 +7,7 @@ option(ENABLE_SYCL_MPI "Build SYCL + MPI examples" OFF)
 option(ENABLE_SYCL_ONECCL "Build SYCL + oneCCL examples" OFF)
 option(ENABLE_CUDA_NCCL "Build CUDA + NCCL examples" OFF)
 option(ENABLE_CUDA_NVSHMEM "Build CUDA + NVSHMEM examples" OFF)
+option(ENABLE_OSHMPI "Build OSHMPI examples" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,4 +34,8 @@ endif()
 
 if(ENABLE_CUDA_NVSHMEM)
   add_subdirectory(implementations/cuda_nvshmem)
+endif()
+
+if(ENABLE_OSHMPI)
+  add_subdirectory(implementations/oshmpi)
 endif()
