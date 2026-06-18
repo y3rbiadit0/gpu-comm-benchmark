@@ -6,7 +6,6 @@
 #define USE_CUDA 1
 #endif
 #include <shmem.h>
-#include <shmemx.h>
 
 #include <algorithm>
 #include <exception>
@@ -16,6 +15,7 @@
 #include <vector>
 
 #include "cli.hpp"
+#include "oshmpi_space.h"
 #include "timing.hpp"
 #include "validation.hpp"
 
@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
   const int pe = shmem_my_pe();
   const int pes = shmem_n_pes();
   bool space_created = false;
-  shmemx_space_t space;
+  void* space = nullptr;
 
   try {
     const auto global_size = comm_playground::parse_size_arg(argc, argv, 1U << 20U);
@@ -71,19 +71,16 @@ int main(int argc, char** argv) {
     }
     check_cuda(cudaSetDevice(pe % device_count), "cudaSetDevice");
 
-    shmemx_space_config_t config = {};
-    config.sheap_size = std::max<std::size_t>(4U * global_size * sizeof(float), 1U << 20U);
-    config.num_contexts = 0;
-    config.hints = 0;
-    config.memkind = SHMEMX_MEM_CUDA;
-    config.device_handle = nullptr;
-    shmemx_space_create(config, &space);
-    shmemx_space_attach(space);
+    const auto symmetric_bytes = std::max<std::size_t>(4U * global_size * sizeof(float), 1U << 20U);
+    space = comm_playground_oshmpi_space_create(symmetric_bytes);
+    if (space == nullptr) {
+      throw std::runtime_error("failed to create OSHMPI CUDA memory space");
+    }
     space_created = true;
 
-    auto* device_a = static_cast<float*>(shmemx_space_malloc(space, global_size * sizeof(float)));
-    auto* device_b = static_cast<float*>(shmemx_space_malloc(space, global_size * sizeof(float)));
-    auto* device_c = static_cast<float*>(shmemx_space_malloc(space, global_size * sizeof(float)));
+    auto* device_a = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, global_size * sizeof(float)));
+    auto* device_b = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, global_size * sizeof(float)));
+    auto* device_c = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, global_size * sizeof(float)));
     if (device_a == nullptr || device_b == nullptr || device_c == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI CUDA symmetric memory");
     }
@@ -145,8 +142,7 @@ int main(int argc, char** argv) {
     shmem_free(device_c);
     shmem_free(device_b);
     shmem_free(device_a);
-    shmemx_space_detach(space);
-    shmemx_space_destroy(space);
+    comm_playground_oshmpi_space_destroy(space);
     space_created = false;
 
     if (pe == 0) {
@@ -159,8 +155,7 @@ int main(int argc, char** argv) {
   } catch (const std::exception& error) {
     std::cerr << "PE " << pe << ": " << error.what() << '\n';
     if (space_created) {
-      shmemx_space_detach(space);
-      shmemx_space_destroy(space);
+      comm_playground_oshmpi_space_destroy(space);
     }
     shmem_global_exit(1);
   }
