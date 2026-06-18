@@ -39,5 +39,11 @@ export PATH="$DPCPP_INSTALL/bin:$PATH"
 export LD_LIBRARY_PATH="$DPCPP_INSTALL/lib:$GCC12_LIB:$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
 export LIBRARY_PATH="$GCC12_LIB:${LIBRARY_PATH:-}"
 
+# DPC++'s CUDA adapter depends on hwloc symbols newer than Leonardo's module stack provides.
+export HWLOC_ROOT=${HWLOC_ROOT:-$HOME/opt/hwloc}
+export PATH="$HWLOC_ROOT/bin:$PATH"
+export LD_LIBRARY_PATH="$HWLOC_ROOT/lib:$LD_LIBRARY_PATH"
+export PKG_CONFIG_PATH="$HWLOC_ROOT/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+
 export COMM_PLAYGROUND_LEONARDO_STACK=sycl
 export COMM_PLAYGROUND_CUDA_ARCH=${COMM_PLAYGROUND_CUDA_ARCH:-80}
