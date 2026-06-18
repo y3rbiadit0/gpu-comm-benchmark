@@ -95,18 +95,27 @@ int main(int argc, char** argv) {
       throw std::runtime_error("failed to allocate SYCL device memory");
     }
 
+    queue.memset(device_a, 0, global_size * sizeof(float)).wait();
+    queue.memset(device_b, 0, global_size * sizeof(float)).wait();
+    queue.memset(device_c, 0, global_size * sizeof(float)).wait();
+    queue.memset(device_result, 0, global_size * sizeof(float)).wait();
+
     if (rank == 0) {
       queue.copy(host_global_a.data(), device_a, global_size).wait();
       queue.copy(host_global_b.data(), device_b, global_size).wait();
     }
-    queue.memset(device_c, 0, global_size * sizeof(float)).wait();
-    queue.memset(device_result, 0, global_size * sizeof(float)).wait();
 
     MPI_Barrier(MPI_COMM_WORLD);
     comm_playground::wall_timer timer;
 
-    ccl::broadcast(device_a, global_size, ccl::datatype::float32, 0, comm, stream).wait();
-    ccl::broadcast(device_b, global_size, ccl::datatype::float32, 0, comm, stream).wait();
+    ccl::allreduce(device_a, device_result, global_size, ccl::datatype::float32, ccl::reduction::sum, comm, stream)
+        .wait();
+    queue.copy(device_result, device_a, global_size).wait();
+    ccl::allreduce(device_b, device_result, global_size, ccl::datatype::float32, ccl::reduction::sum, comm, stream)
+        .wait();
+    queue.copy(device_result, device_b, global_size).wait();
+    queue.memset(device_c, 0, global_size * sizeof(float)).wait();
+    queue.memset(device_result, 0, global_size * sizeof(float)).wait();
 
     if (local_size > 0) {
       queue.parallel_for(sycl::range<1>{local_size}, [=](sycl::id<1> id) {
