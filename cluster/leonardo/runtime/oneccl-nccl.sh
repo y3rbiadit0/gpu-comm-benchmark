@@ -11,7 +11,15 @@ fi
 
 export CCL_BACKEND=${CCL_BACKEND:-nccl}
 export CCL_ATL_TRANSPORT=${CCL_ATL_TRANSPORT:-mpi}
-export CCL_MPI_LIBRARY_PATH=${CCL_MPI_LIBRARY_PATH:-$HOME/oneCCL-nccl/deps/mpi/lib/libmpi.so.12}
+if [[ -z ${CCL_MPI_LIBRARY_PATH:-} ]]; then
+  if command -v mpicc >/dev/null 2>&1; then
+    mpi_lib_dir=$(mpicc --showme:libdirs 2>/dev/null | awk '{print $1}')
+    if [[ -n "$mpi_lib_dir" && -e "$mpi_lib_dir/libmpi.so" ]]; then
+      export CCL_MPI_LIBRARY_PATH="$mpi_lib_dir/libmpi.so"
+    fi
+  fi
+  export CCL_MPI_LIBRARY_PATH=${CCL_MPI_LIBRARY_PATH:-$HOME/oneCCL-nccl/deps/mpi/lib/libmpi.so.12}
+fi
 export CCL_LOG_LEVEL=${CCL_LOG_LEVEL:-warn}
 export CCL_WORKER_COUNT=${CCL_WORKER_COUNT:-1}
 export CCL_WORKER_AFFINITY=${CCL_WORKER_AFFINITY:-auto}
@@ -30,5 +38,5 @@ else
   export I_MPI_FABRICS=${I_MPI_FABRICS:-shm}
 fi
 
-mpi_lib_dir=$(dirname -- "$CCL_MPI_LIBRARY_PATH")
-export LD_LIBRARY_PATH="$mpi_lib_dir:${GCC12_LIB:-}:${DPCPP_INSTALL:-}/lib:${CUDA_HOME:-${CUDA_PATH:-}}/lib64:${LD_LIBRARY_PATH:-}"
+ccl_mpi_lib_dir=$(dirname -- "$CCL_MPI_LIBRARY_PATH")
+export LD_LIBRARY_PATH="$ccl_mpi_lib_dir:${GCC12_LIB:-}:${DPCPP_INSTALL:-}/lib:${CUDA_HOME:-${CUDA_PATH:-}}/lib64:${LD_LIBRARY_PATH:-}"

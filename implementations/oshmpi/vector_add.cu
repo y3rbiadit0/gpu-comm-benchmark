@@ -114,6 +114,7 @@ int main(int argc, char** argv) {
         shmem_putmem(device_b, device_b, global_size * sizeof(float), target_pe);
       }
     }
+    shmem_quiet();
     shmem_barrier_all();
 
     if (local_size > 0) {
@@ -128,6 +129,7 @@ int main(int argc, char** argv) {
     if (pe != 0 && local_size > 0) {
       shmem_putmem(device_c + local_offset, device_c + local_offset, local_size * sizeof(float), 0);
     }
+    shmem_quiet();
     shmem_barrier_all();
 
     const auto elapsed = timer.seconds();
