@@ -8,24 +8,6 @@
 #include <shmem.h>
 #include <shmemx.h>
 
-#if defined(COMM_PLAYGROUND_OSHMPI_SHMEMX_SPACE_FALLBACK)
-typedef void* shmemx_space_t;
-typedef void* shmemx_device_handle_t;
-typedef enum { SHMEMX_MEM_HOST, SHMEMX_MEM_CUDA, SHMEMX_MEM_ZE } shmemx_memkind_t;
-typedef struct {
-  size_t sheap_size;
-  int num_contexts;
-  shmemx_memkind_t memkind;
-  shmemx_device_handle_t device_handle;
-  long hints;
-} shmemx_space_config_t;
-extern "C" void shmemx_space_create(shmemx_space_config_t, shmemx_space_t*);
-extern "C" void shmemx_space_destroy(shmemx_space_t);
-extern "C" void shmemx_space_attach(shmemx_space_t);
-extern "C" void shmemx_space_detach(shmemx_space_t);
-extern "C" void* shmemx_space_malloc(shmemx_space_t, size_t);
-#endif
-
 #include <algorithm>
 #include <exception>
 #include <iostream>
