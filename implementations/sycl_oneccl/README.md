@@ -1,3 +1,3 @@
 # SYCL + oneCCL
 
-Scaffold for SYCL kernels using oneCCL communication.
+SYCL vector add using oneCCL collectives: broadcast for input distribution and allreduce for result collection.

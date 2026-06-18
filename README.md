@@ -18,9 +18,9 @@ This repository collects small distributed GPU communication examples across pro
 | --- | --- |
 | `cuda_mpi` | `vector_add` implemented |
 | `sycl_mpi` | `vector_add` implemented |
-| `sycl_oneccl` | Scaffolded |
-| `cuda_nccl` | Scaffolded |
-| `cuda_nvshmem` | Scaffolded |
+| `sycl_oneccl` | `vector_add` implemented |
+| `cuda_nccl` | `vector_add` implemented |
+| `cuda_nvshmem` | `vector_add` implemented |
 
 ## Build
 

@@ -30,12 +30,15 @@ Submit fixed Leonardo topologies:
 sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/1n1g.sh
 sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/1n4g.sh
 sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/2n4g.sh
+sbatch cluster/leonardo/experiments/vector_add/cuda_nccl/1n4g.sh
+sbatch cluster/leonardo/experiments/vector_add/cuda_nvshmem/1n4g.sh
 ```
 
 ```bash
 sbatch cluster/leonardo/experiments/vector_add/sycl_mpi/1n1g.sh
 sbatch cluster/leonardo/experiments/vector_add/sycl_mpi/1n4g.sh
 sbatch cluster/leonardo/experiments/vector_add/sycl_mpi/2n4g.sh
+sbatch cluster/leonardo/experiments/vector_add/sycl_oneccl/1n4g.sh
 ```
 
 Useful overrides:
