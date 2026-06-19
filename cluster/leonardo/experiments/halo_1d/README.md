@@ -42,17 +42,36 @@ Validated on Leonardo A100 boost nodes with `CP_N=1048576`. Times are the mean o
 
 | Backend | Ranks/PEs | Trials | Mean Time (s) | Validation |
 | --- | ---: | ---: | ---: | --- |
-| `cuda_mpi` | 4 ranks | 3 | 0.002838 | PASS |
-| `cuda_nvshmem` | 4 PEs | 3 | 0.000187 | PASS |
-| `oshmpi` | 4 PEs | 3 | 0.000770 | PASS |
+| `cuda_mpi` | 4 ranks | 3 | 0.002873 | PASS |
+| `cuda_nccl` | 4 ranks | 3 | 0.023134 | PASS |
+| `cuda_nvshmem` | 4 PEs | 3 | 0.000186 | PASS |
+| `oshmpi` | 4 PEs | 3 | 0.000763 | PASS |
+| `sycl_mpi` | 4 ranks | 3 | 0.002553 | PASS |
+| `sycl_oneccl` | 4 ranks | 3 | 0.080008 | PASS |
 
 ### 2 Nodes / 8 GPUs
 
 | Backend | Ranks/PEs | Trials | Mean Time (s) | Validation |
 | --- | ---: | ---: | ---: | --- |
-| `cuda_mpi` | 8 ranks | 3 | 0.013222 | PASS |
-| `cuda_nvshmem` | 8 PEs | 3 | 0.000426 | PASS |
-| `oshmpi` | 8 PEs | 3 | 0.002091 | PASS |
+| `cuda_mpi` | 8 ranks | 3 | 0.014211 | PASS |
+| `cuda_nccl` | 8 ranks | 3 | 0.074619 | PASS |
+| `cuda_nvshmem` | 8 PEs | 3 | 0.000652 | PASS |
+| `oshmpi` | 8 PEs | 3 | 0.002476 | PASS |
+| `sycl_mpi` | 8 ranks | 3 | 0.014200 | PASS |
+| `sycl_oneccl` | 8 ranks | 3 | 0.063977 | PASS |
+
+### Relative To `cuda_mpi`
+
+Negative delta means faster than `cuda_mpi`; positive delta means slower.
+
+| Backend | 1 Node Delta | 1 Node Speedup | 2 Nodes Delta | 2 Nodes Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| `cuda_mpi` | 0.0% | 1.00x | 0.0% | 1.00x |
+| `cuda_nccl` | +705.2% | 0.12x | +425.1% | 0.19x |
+| `cuda_nvshmem` | -93.5% | 15.45x | -95.4% | 21.80x |
+| `oshmpi` | -73.4% | 3.77x | -82.6% | 5.74x |
+| `sycl_mpi` | -11.1% | 1.13x | -0.1% | 1.00x |
+| `sycl_oneccl` | +2684.8% | 0.04x | +350.2% | 0.22x |
 
 Notes:
 

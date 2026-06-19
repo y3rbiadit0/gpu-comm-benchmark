@@ -94,6 +94,19 @@ Validated on Leonardo A100 boost nodes with `CP_N=1048576`. Times are the mean o
 | `sycl_mpi` | 8 ranks | 3 | 0.024260 | PASS |
 | `sycl_oneccl` | 8 ranks | 3 | 0.062249 | PASS |
 
+### Relative To `cuda_mpi`
+
+Negative delta means faster than `cuda_mpi`; positive delta means slower.
+
+| Backend | 1 Node Delta | 1 Node Speedup | 2 Nodes Delta | 2 Nodes Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| `cuda_mpi` | 0.0% | 1.00x | 0.0% | 1.00x |
+| `cuda_nccl` | +177.3% | 0.36x | +302.4% | 0.25x |
+| `cuda_nvshmem` | -91.3% | 11.52x | -80.4% | 5.10x |
+| `oshmpi` | -74.9% | 3.98x | -77.9% | 4.53x |
+| `sycl_mpi` | -50.5% | 2.02x | +23.1% | 0.81x |
+| `sycl_oneccl` | +1034.8% | 0.09x | +215.8% | 0.32x |
+
 Notes:
 
 - `sycl_oneccl` uses the UNISA NCCL-enabled oneCCL fork with bundled Intel MPI on Leonardo.
