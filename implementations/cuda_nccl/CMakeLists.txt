@@ -16,6 +16,14 @@ add_executable(cuda_nccl_vector_add vector_add.cu)
 target_include_directories(cuda_nccl_vector_add PRIVATE ${NCCL_INCLUDE_DIR})
 target_link_libraries(cuda_nccl_vector_add PRIVATE comm_playground_common MPI::MPI_CXX ${NCCL_LIBRARY})
 
+add_executable(cuda_nccl_halo_1d halo_1d.cu)
+target_include_directories(cuda_nccl_halo_1d PRIVATE ${NCCL_INCLUDE_DIR})
+target_link_libraries(cuda_nccl_halo_1d PRIVATE comm_playground_common MPI::MPI_CXX ${NCCL_LIBRARY})
+
 set_target_properties(cuda_nccl_vector_add PROPERTIES
+  CUDA_SEPARABLE_COMPILATION OFF
+)
+
+set_target_properties(cuda_nccl_halo_1d PROPERTIES
   CUDA_SEPARABLE_COMPILATION OFF
 )

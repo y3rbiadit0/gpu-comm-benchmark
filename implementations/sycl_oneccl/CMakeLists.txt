@@ -14,7 +14,9 @@ if(NOT ONECCL_INCLUDE_DIR OR NOT ONECCL_LIBRARY)
 endif()
 
 add_executable(sycl_oneccl_vector_add vector_add.cpp)
+add_executable(sycl_oneccl_halo_1d halo_1d.cpp)
 target_include_directories(sycl_oneccl_vector_add PRIVATE ${ONECCL_INCLUDE_DIR})
+target_include_directories(sycl_oneccl_halo_1d PRIVATE ${ONECCL_INCLUDE_DIR})
 
 if(COMM_PLAYGROUND_ONECCL_USE_BUNDLED_MPI)
   find_path(ONECCL_BUNDLED_MPI_INCLUDE_DIR mpi.h
@@ -50,13 +52,20 @@ if(COMM_PLAYGROUND_ONECCL_USE_BUNDLED_MPI)
   find_package(Threads REQUIRED)
   get_filename_component(ONECCL_BUNDLED_MPI_LIBRARY_DIR "${ONECCL_BUNDLED_MPI_LIBRARY}" DIRECTORY)
   target_include_directories(sycl_oneccl_vector_add PRIVATE ${ONECCL_BUNDLED_MPI_INCLUDE_DIR})
+  target_include_directories(sycl_oneccl_halo_1d PRIVATE ${ONECCL_BUNDLED_MPI_INCLUDE_DIR})
   target_link_libraries(sycl_oneccl_vector_add PRIVATE comm_playground_common ${ONECCL_LIBRARY} ${ONECCL_BUNDLED_MPI_LIBRARY} ${CMAKE_DL_LIBS} Threads::Threads)
+  target_link_libraries(sycl_oneccl_halo_1d PRIVATE comm_playground_common ${ONECCL_LIBRARY} ${ONECCL_BUNDLED_MPI_LIBRARY} ${CMAKE_DL_LIBS} Threads::Threads)
   set_target_properties(sycl_oneccl_vector_add PROPERTIES
+    BUILD_RPATH "${ONECCL_BUNDLED_MPI_LIBRARY_DIR};$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib/release;$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib;$ENV{HOME}/oneCCL-nccl/deps/mpi/lib;$ENV{ONECCL_NCCL_ROOT}/lib;$ENV{DPCPP_INSTALL}/lib;$ENV{GCC12_LIB}"
+    INSTALL_RPATH "${ONECCL_BUNDLED_MPI_LIBRARY_DIR};$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib/release;$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib;$ENV{HOME}/oneCCL-nccl/deps/mpi/lib;$ENV{ONECCL_NCCL_ROOT}/lib;$ENV{DPCPP_INSTALL}/lib;$ENV{GCC12_LIB}")
+  set_target_properties(sycl_oneccl_halo_1d PROPERTIES
     BUILD_RPATH "${ONECCL_BUNDLED_MPI_LIBRARY_DIR};$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib/release;$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib;$ENV{HOME}/oneCCL-nccl/deps/mpi/lib;$ENV{ONECCL_NCCL_ROOT}/lib;$ENV{DPCPP_INSTALL}/lib;$ENV{GCC12_LIB}"
     INSTALL_RPATH "${ONECCL_BUNDLED_MPI_LIBRARY_DIR};$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib/release;$ENV{ONECCL_NCCL_ROOT}/opt/mpi/lib;$ENV{HOME}/oneCCL-nccl/deps/mpi/lib;$ENV{ONECCL_NCCL_ROOT}/lib;$ENV{DPCPP_INSTALL}/lib;$ENV{GCC12_LIB}")
 else()
   include(${PROJECT_SOURCE_DIR}/cmake/mpi.cmake)
   target_link_libraries(sycl_oneccl_vector_add PRIVATE comm_playground_common MPI::MPI_CXX ${ONECCL_LIBRARY})
+  target_link_libraries(sycl_oneccl_halo_1d PRIVATE comm_playground_common MPI::MPI_CXX ${ONECCL_LIBRARY})
 endif()
 
 comm_playground_enable_sycl(sycl_oneccl_vector_add)
+comm_playground_enable_sycl(sycl_oneccl_halo_1d)
