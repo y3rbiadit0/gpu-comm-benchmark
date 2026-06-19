@@ -14,7 +14,7 @@ set -euo pipefail
 
 CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
 CP_STACK=cuda
-CP_RUNTIME=nccl
+CP_RUNTIME=mpi-cuda
 CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-cuda-nccl/implementations/cuda_nccl/cuda_nccl_halo_1d}
 CP_RESULT_NAME=${CP_RESULT_NAME:-halo-1d-cuda-nccl-1n4g}
 CP_NODES=1

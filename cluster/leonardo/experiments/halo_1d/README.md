@@ -58,3 +58,18 @@ Notes:
 
 - SHMEM-related implementations intentionally use one-sided remote writes into ghost cells.
 - `sycl_oneccl` is included for completeness but is a collective emulation, not a natural halo exchange.
+
+## Comparability
+
+The implementations solve the same numerical stencil and validate the same output, but they are not all strict apples-to-apples communication benchmarks.
+
+Closest fair comparisons:
+
+- `cuda_mpi` vs `sycl_mpi`: both use host-side `MPI_Sendrecv` for boundary exchange, then accelerator stencil compute.
+- `cuda_nvshmem` vs `oshmpi`: both use SHMEM-style one-sided remote writes into neighbor ghost cells and report max elapsed across PEs.
+- `cuda_nccl` stands as the native NCCL point-to-point version: GPU-resident `ncclSend`/`ncclRecv` boundary exchange plus NCCL point-to-point gather.
+
+Important caveats:
+
+- The MPI variants are portable host-mediated baselines, not CUDA-aware/SYCL-aware device-buffer MPI halo implementations.
+- `sycl_oneccl` uses full-buffer collective emulation with `allreduce(sum)`, so it is useful for correctness and model coverage but should not be treated as a natural halo-exchange performance competitor.
