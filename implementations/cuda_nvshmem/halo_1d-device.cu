@@ -143,15 +143,14 @@ int main(int argc, char** argv) {
 
     halo_exchange_kernel<<<1, 1>>>(device_x, signals, local_offset, local_size, left, right);
     check_cuda(cudaGetLastError(), "halo_exchange_kernel");
-    check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(halo_exchange)");
 
     if (local_size > 0) {
       constexpr int block_size = 256;
       const auto grid_size = static_cast<int>((local_size + block_size - 1U) / block_size);
       halo_kernel<<<grid_size, block_size>>>(device_x, device_y, local_offset, local_size);
       check_cuda(cudaGetLastError(), "halo_kernel");
-      check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(kernel)");
     }
+    check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(kernel)");
 
     nvshmem_barrier_all();
     if (pe != 0 && local_size > 0) {

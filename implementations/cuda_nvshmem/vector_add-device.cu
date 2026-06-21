@@ -161,14 +161,12 @@ int main(int argc, char** argv) {
 
     distribute_inputs_kernel<<<1, 1>>>(device_a, device_b, ready, global_size, pe, pes);
     check_cuda(cudaGetLastError(), "distribute_inputs_kernel");
-    check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(distribute)");
 
     if (local_size > 0) {
       constexpr int block_size = 256;
       const auto grid_size = static_cast<int>((local_size + block_size - 1U) / block_size);
       vector_add_kernel<<<grid_size, block_size>>>(device_a, device_b, device_c, local_offset, local_size);
       check_cuda(cudaGetLastError(), "vector_add_kernel");
-      check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(vector_add)");
     }
 
     gather_results_kernel<<<1, 1>>>(device_c, gathered, local_offset, local_size, pe, pes);
