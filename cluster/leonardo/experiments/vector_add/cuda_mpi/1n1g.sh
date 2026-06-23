@@ -15,7 +15,7 @@ set -euo pipefail
 CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
 CP_STACK=cuda
 CP_RUNTIME=mpi-cuda
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-cuda-mpi/src/cuda_mpi/cuda_mpi_vector_add}
+CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-cuda-mpi/src/mpi/cuda/cuda_mpi_vector_add}
 CP_RESULT_NAME=${CP_RESULT_NAME:-vector-add-cuda-mpi-1n1g}
 CP_NODES=1
 CP_TASKS_PER_NODE=1

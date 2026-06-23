@@ -12,6 +12,6 @@ SYCL examples using oneCCL collectives.
 ## Run
 
 ```bash
-mpirun -np 4 ./build/leonardo-sycl-oneccl/src/sycl_oneccl/sycl_oneccl_vector_add 1048576
-mpirun -np 4 ./build/leonardo-sycl-oneccl/src/sycl_oneccl/sycl_oneccl_halo_1d 1048576
+mpirun -np 4 ./build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_vector_add 1048576
+mpirun -np 4 ./build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_halo_1d 1048576
 ```

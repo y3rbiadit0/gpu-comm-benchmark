@@ -15,7 +15,7 @@ set -euo pipefail
 CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
 CP_STACK=cuda
 CP_RUNTIME=oshmpi
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-oshmpi/src/oshmpi/oshmpi_halo_1d}
+CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_halo_1d}
 CP_RESULT_NAME=${CP_RESULT_NAME:-halo-1d-oshmpi-2n4g}
 CP_NODES=2
 CP_TASKS_PER_NODE=4

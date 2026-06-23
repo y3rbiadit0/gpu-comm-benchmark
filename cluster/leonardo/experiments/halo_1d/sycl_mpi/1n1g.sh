@@ -15,7 +15,7 @@ set -euo pipefail
 CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
 CP_STACK=sycl
 CP_RUNTIME=mpi-cuda
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-sycl-mpi/src/sycl_mpi/sycl_mpi_halo_1d}
+CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-sycl-mpi/src/mpi/sycl/sycl_mpi_halo_1d}
 CP_RESULT_NAME=${CP_RESULT_NAME:-halo-1d-sycl-mpi-1n1g}
 CP_NODES=1
 CP_TASKS_PER_NODE=1

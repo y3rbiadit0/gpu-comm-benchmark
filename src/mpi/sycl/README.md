@@ -12,6 +12,6 @@ SYCL examples using MPI for process launch, data movement, and result collection
 ## Run
 
 ```bash
-mpirun -np 4 ./build/sycl-mpi/src/sycl_mpi/sycl_mpi_vector_add 1048576
-mpirun -np 4 ./build/sycl-mpi/src/sycl_mpi/sycl_mpi_halo_1d 1048576
+mpirun -np 4 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_vector_add 1048576
+mpirun -np 4 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_halo_1d 1048576
 ```

@@ -102,7 +102,7 @@ Check linkage:
 
 ```bash
 source cluster/leonardo/runtime/oneccl-nccl.sh
-ldd build/leonardo-sycl-oneccl/src/sycl_oneccl/sycl_oneccl_vector_add \
+ldd build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_vector_add \
   | grep -E 'libmpi|libccl|libsycl|libnccl|libstdc'
 ```
 

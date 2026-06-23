@@ -16,7 +16,7 @@ CUDA examples using NVSHMEM symmetric buffers.
 ## Run
 
 ```bash
-mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/cuda_nvshmem/cuda_nvshmem_vector_add 1048576
-mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/cuda_nvshmem/cuda_nvshmem_halo_1d 1048576
-mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/cuda_nvshmem/cuda_nvshmem_halo_1d_iter 1048576 100
+mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_vector_add 1048576
+mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_halo_1d 1048576
+mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_halo_1d_iter 1048576 100
 ```

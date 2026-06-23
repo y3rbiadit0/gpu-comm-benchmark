@@ -13,7 +13,7 @@ CUDA examples using MPI for process launch, data movement, and result collection
 ## Run
 
 ```bash
-mpirun -np 4 ./build/cuda-mpi/src/cuda_mpi/cuda_mpi_vector_add 1048576
-mpirun -np 4 ./build/cuda-mpi/src/cuda_mpi/cuda_mpi_halo_1d 1048576
-mpirun -np 4 ./build/cuda-mpi/src/cuda_mpi/cuda_mpi_halo_1d_cuda_aware_iter 1048576 100
+mpirun -np 4 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_vector_add 1048576
+mpirun -np 4 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_halo_1d 1048576
+mpirun -np 4 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_halo_1d_cuda_aware_iter 1048576 100
 ```

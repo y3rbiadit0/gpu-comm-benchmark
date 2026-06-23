@@ -15,12 +15,12 @@ Planned problems are documented when they get an implementation.
 
 | Implementation | Targets | Details |
 | --- | --- |
-| `cuda_mpi` | `vector_add`, `halo_1d`, iterative CUDA-aware halo variants | [`src/cuda_mpi`](src/cuda_mpi/README.md) |
-| `sycl_mpi` | `vector_add`, `halo_1d` | [`src/sycl_mpi`](src/sycl_mpi/README.md) |
-| `cuda_nccl` | `vector_add`, `halo_1d` | [`src/cuda_nccl`](src/cuda_nccl/README.md) |
-| `cuda_nvshmem` | `vector_add`, `halo_1d`, host/device communication variants | [`src/cuda_nvshmem`](src/cuda_nvshmem/README.md) |
-| `sycl_oneccl` | `vector_add`, `halo_1d` collective emulation | [`src/sycl_oneccl`](src/sycl_oneccl/README.md) |
-| `oshmpi` | `vector_add`, `halo_1d` | [`src/oshmpi`](src/oshmpi/README.md) |
+| `cuda_mpi` | `vector_add`, `halo_1d`, iterative CUDA-aware halo variants | [`src/mpi/cuda`](src/mpi/cuda/README.md) |
+| `sycl_mpi` | `vector_add`, `halo_1d` | [`src/mpi/sycl`](src/mpi/sycl/README.md) |
+| `cuda_nccl` | `vector_add`, `halo_1d` | [`src/xccl/cuda`](src/xccl/cuda/README.md) |
+| `cuda_nvshmem` | `vector_add`, `halo_1d`, host/device communication variants | [`src/shmem/nvshmem`](src/shmem/nvshmem/README.md) |
+| `sycl_oneccl` | `vector_add`, `halo_1d` collective emulation | [`src/xccl/sycl`](src/xccl/sycl/README.md) |
+| `oshmpi` | `vector_add`, `halo_1d` | [`src/shmem/oshmpi`](src/shmem/oshmpi/README.md) |
 
 ## Local Build
 
@@ -43,11 +43,11 @@ Optional backends have additional dependencies and presets. See `CMakePresets.js
 ## Local Run
 
 ```bash
-mpirun -np 4 ./build/cuda-mpi/src/cuda_mpi/cuda_mpi_vector_add 1048576
-mpirun -np 4 ./build/cuda-mpi/src/cuda_mpi/cuda_mpi_halo_1d 1048576
+mpirun -np 4 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_vector_add 1048576
+mpirun -np 4 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_halo_1d 1048576
 
-mpirun -np 4 ./build/sycl-mpi/src/sycl_mpi/sycl_mpi_vector_add 1048576
-mpirun -np 4 ./build/sycl-mpi/src/sycl_mpi/sycl_mpi_halo_1d 1048576
+mpirun -np 4 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_vector_add 1048576
+mpirun -np 4 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_halo_1d 1048576
 ```
 
 Each binary accepts the global problem size as the first argument. Iterative halo variants also accept an iteration count as the second argument.
