@@ -4,6 +4,7 @@ SHELL := /bin/bash
 
 LEONARDO_CUDA_PRESETS := leonardo-cuda-mpi leonardo-cuda-nccl leonardo-cuda-nvshmem leonardo-oshmpi
 LEONARDO_SYCL_PRESETS := leonardo-sycl-mpi leonardo-sycl-oneccl
+LEONARDO_PRESETS := $(LEONARDO_CUDA_PRESETS) $(LEONARDO_SYCL_PRESETS)
 
 .PHONY: help configure build clean leonardo leonardo-cuda leonardo-sycl leonardo-clean
 
@@ -12,7 +13,8 @@ help:
 	  'Targets:' \
 	  '  make configure PRESET=<preset>  Configure one CMake preset' \
 	  '  make build PRESET=<preset>      Build one CMake preset' \
-	  '  make clean PRESET=<preset>      Remove one build directory' \
+	  '  make clean PRESET=<preset>      Remove one preset or group build directory' \
+	  '                                  Groups: leonardo, leonardo-cuda, leonardo-sycl' \
 	  '  make leonardo                   Build all Leonardo presets' \
 	  '  make leonardo-cuda              Build Leonardo CUDA-stack presets' \
 	  '  make leonardo-sycl              Build Leonardo SYCL-stack presets' \
@@ -28,7 +30,14 @@ build:
 
 clean:
 	@test -n "$(PRESET)" || { echo 'missing PRESET=<preset>'; exit 2; }
-	rm -rf "build/$(PRESET)"
+	case "$(PRESET)" in
+	  leonardo) paths="$(addprefix build/,$(LEONARDO_PRESETS))" ;;
+	  leonardo-cuda) paths="$(addprefix build/,$(LEONARDO_CUDA_PRESETS))" ;;
+	  leonardo-sycl) paths="$(addprefix build/,$(LEONARDO_SYCL_PRESETS))" ;;
+	  *) paths="build/$(PRESET)" ;;
+	esac
+	printf 'Removing:%s\n' " $${paths}"
+	rm -rf $${paths}
 
 leonardo: leonardo-cuda leonardo-sycl
 
@@ -47,4 +56,4 @@ leonardo-sycl:
 	done
 
 leonardo-clean:
-	rm -rf $(addprefix build/,$(LEONARDO_CUDA_PRESETS) $(LEONARDO_SYCL_PRESETS))
+	$(MAKE) clean PRESET=leonardo
