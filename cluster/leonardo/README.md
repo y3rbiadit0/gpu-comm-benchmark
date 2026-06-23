@@ -59,7 +59,6 @@ Halo 1D:
 ```bash
 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi_cuda_aware_iter/1n4g.sh
-sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi_cuda_aware_persistent_iter/1n4g.sh
 sbatch cluster/leonardo/experiments/halo_1d/cuda_nccl/1n4g.sh
 sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem/1n4g.sh
 sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem_device/1n4g.sh
