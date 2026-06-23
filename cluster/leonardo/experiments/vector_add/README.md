@@ -1,24 +1,6 @@
 # Leonardo Vector Add Experiments
 
-These jobs follow the same style as the Leonardo experiment scripts in `acg-sycl`: fixed topology launchers, Slurm logs under `logs/`, and per-trial benchmark output under `results/`.
-
-## Build
-
-CUDA + MPI:
-
-```bash
-source cluster/leonardo/environment.sh cuda
-cmake --preset leonardo-cuda-mpi
-cmake --build --preset leonardo-cuda-mpi
-```
-
-SYCL + MPI:
-
-```bash
-source cluster/leonardo/environment.sh sycl
-cmake --preset leonardo-sycl-mpi
-cmake --build --preset leonardo-sycl-mpi
-```
+These jobs benchmark distributed vector addition on Leonardo. Build setup is documented in [`cluster/leonardo/README.md`](../../README.md).
 
 ## Submit
 

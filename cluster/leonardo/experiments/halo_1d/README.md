@@ -2,6 +2,8 @@
 
 These jobs benchmark a one-step 1D halo stencil on Leonardo. Each rank or PE owns a contiguous interior segment, exchanges one boundary value with each neighbor, computes the stencil on an accelerator, and validates the gathered result on rank/PE 0.
 
+Build setup is documented in [`cluster/leonardo/README.md`](../../README.md).
+
 ## Communication Models
 
 | Backend | Halo Exchange Model |
