@@ -15,7 +15,7 @@ set -euo pipefail
 CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
 CP_STACK=sycl
 CP_RUNTIME=sycl-mpi
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-sycl-mpi/implementations/sycl_mpi/sycl_mpi_vector_add}
+CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-sycl-mpi/src/sycl_mpi/sycl_mpi_vector_add}
 CP_RESULT_NAME=${CP_RESULT_NAME:-vector-add-sycl-mpi-2n4g}
 CP_NODES=2
 CP_TASKS_PER_NODE=4

@@ -15,7 +15,7 @@ set -euo pipefail
 CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
 CP_STACK=cuda
 CP_RUNTIME=mpi-cuda
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-cuda-mpi/implementations/cuda_mpi/cuda_mpi_halo_1d_cuda_aware_iter}
+CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-cuda-mpi/src/cuda_mpi/cuda_mpi_halo_1d_cuda_aware_iter}
 CP_RESULT_NAME=${CP_RESULT_NAME:-halo-1d-cuda-mpi-cuda-aware-iter-2n4g}
 CP_EXTRA_ARGS=${CP_EXTRA_ARGS:-100}
 CP_NODES=2

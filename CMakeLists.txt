@@ -17,25 +17,25 @@ add_library(comm_playground_common INTERFACE)
 target_include_directories(comm_playground_common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if(ENABLE_CUDA_MPI)
-  add_subdirectory(implementations/cuda_mpi)
+  add_subdirectory(src/cuda_mpi)
 endif()
 
 if(ENABLE_SYCL_MPI)
-  add_subdirectory(implementations/sycl_mpi)
+  add_subdirectory(src/sycl_mpi)
 endif()
 
 if(ENABLE_SYCL_ONECCL)
-  add_subdirectory(implementations/sycl_oneccl)
+  add_subdirectory(src/sycl_oneccl)
 endif()
 
 if(ENABLE_CUDA_NCCL)
-  add_subdirectory(implementations/cuda_nccl)
+  add_subdirectory(src/cuda_nccl)
 endif()
 
 if(ENABLE_CUDA_NVSHMEM)
-  add_subdirectory(implementations/cuda_nvshmem)
+  add_subdirectory(src/cuda_nvshmem)
 endif()
 
 if(ENABLE_OSHMPI)
-  add_subdirectory(implementations/oshmpi)
+  add_subdirectory(src/oshmpi)
 endif()

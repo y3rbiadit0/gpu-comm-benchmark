@@ -15,7 +15,7 @@ set -euo pipefail
 CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
 CP_STACK=cuda
 CP_RUNTIME=nvshmem
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-cuda-nvshmem/implementations/cuda_nvshmem/cuda_nvshmem_halo_1d_device}
+CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-cuda-nvshmem/src/cuda_nvshmem/cuda_nvshmem_halo_1d_device}
 CP_RESULT_NAME=${CP_RESULT_NAME:-halo-1d-cuda-nvshmem-device-2n4g}
 CP_NODES=2
 CP_TASKS_PER_NODE=4

@@ -12,6 +12,6 @@ CUDA examples using OSHMPI/OpenSHMEM CUDA memory spaces.
 ## Run
 
 ```bash
-oshrun -np 4 ./build/leonardo-oshmpi/implementations/oshmpi/oshmpi_vector_add 1048576
-oshrun -np 4 ./build/leonardo-oshmpi/implementations/oshmpi/oshmpi_halo_1d 1048576
+oshrun -np 4 ./build/leonardo-oshmpi/src/oshmpi/oshmpi_vector_add 1048576
+oshrun -np 4 ./build/leonardo-oshmpi/src/oshmpi/oshmpi_halo_1d 1048576
 ```

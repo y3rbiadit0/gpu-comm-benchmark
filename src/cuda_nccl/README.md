@@ -12,6 +12,6 @@ CUDA examples using MPI for process launch and NCCL for GPU-resident communicati
 ## Run
 
 ```bash
-mpirun -np 4 ./build/leonardo-cuda-nccl/implementations/cuda_nccl/cuda_nccl_vector_add 1048576
-mpirun -np 4 ./build/leonardo-cuda-nccl/implementations/cuda_nccl/cuda_nccl_halo_1d 1048576
+mpirun -np 4 ./build/leonardo-cuda-nccl/src/cuda_nccl/cuda_nccl_vector_add 1048576
+mpirun -np 4 ./build/leonardo-cuda-nccl/src/cuda_nccl/cuda_nccl_halo_1d 1048576
 ```

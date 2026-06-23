@@ -15,7 +15,7 @@ set -euo pipefail
 CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
 CP_STACK=cuda
 CP_RUNTIME=oshmpi
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-oshmpi/implementations/oshmpi/oshmpi_vector_add}
+CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-oshmpi/src/oshmpi/oshmpi_vector_add}
 CP_RESULT_NAME=${CP_RESULT_NAME:-vector-add-oshmpi-1n4g}
 CP_NODES=1
 CP_TASKS_PER_NODE=4
