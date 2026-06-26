@@ -69,7 +69,72 @@ target_link_libraries(cuda_nvshmem_halo_1d_device_iter PRIVATE
   ${NVSHMEM_DEVICE_LIBRARY}
 )
 
+add_executable(cuda_nvshmem_dot_product dot_product.cu)
+target_include_directories(cuda_nvshmem_dot_product PRIVATE ${NVSHMEM_INCLUDE_DIR})
+target_link_libraries(cuda_nvshmem_dot_product PRIVATE
+  comm_playground_common
+  MPI::MPI_CXX
+  ${NVSHMEM_HOST_LIBRARY}
+  ${NVSHMEM_DEVICE_LIBRARY}
+)
+
+add_executable(cuda_nvshmem_pingpong pingpong.cu)
+target_include_directories(cuda_nvshmem_pingpong PRIVATE ${NVSHMEM_INCLUDE_DIR})
+target_link_libraries(cuda_nvshmem_pingpong PRIVATE
+  comm_playground_common
+  MPI::MPI_CXX
+  ${NVSHMEM_HOST_LIBRARY}
+  ${NVSHMEM_DEVICE_LIBRARY}
+)
+
+add_executable(cuda_nvshmem_halo_2d halo_2d.cu)
+target_include_directories(cuda_nvshmem_halo_2d PRIVATE ${NVSHMEM_INCLUDE_DIR})
+target_link_libraries(cuda_nvshmem_halo_2d PRIVATE
+  comm_playground_common
+  MPI::MPI_CXX
+  ${NVSHMEM_HOST_LIBRARY}
+  ${NVSHMEM_DEVICE_LIBRARY}
+)
+
+add_executable(cuda_nvshmem_alltoall alltoall.cu)
+target_include_directories(cuda_nvshmem_alltoall PRIVATE ${NVSHMEM_INCLUDE_DIR})
+target_link_libraries(cuda_nvshmem_alltoall PRIVATE
+  comm_playground_common
+  MPI::MPI_CXX
+  ${NVSHMEM_HOST_LIBRARY}
+  ${NVSHMEM_DEVICE_LIBRARY}
+)
+
+add_executable(cuda_nvshmem_cg_step cg_step.cu)
+target_include_directories(cuda_nvshmem_cg_step PRIVATE ${NVSHMEM_INCLUDE_DIR})
+target_link_libraries(cuda_nvshmem_cg_step PRIVATE
+  comm_playground_common
+  MPI::MPI_CXX
+  ${NVSHMEM_HOST_LIBRARY}
+  ${NVSHMEM_DEVICE_LIBRARY}
+)
+
 set_target_properties(cuda_nvshmem_vector_add PROPERTIES
+  CUDA_SEPARABLE_COMPILATION ON
+)
+
+set_target_properties(cuda_nvshmem_cg_step PROPERTIES
+  CUDA_SEPARABLE_COMPILATION ON
+)
+
+set_target_properties(cuda_nvshmem_alltoall PROPERTIES
+  CUDA_SEPARABLE_COMPILATION ON
+)
+
+set_target_properties(cuda_nvshmem_halo_2d PROPERTIES
+  CUDA_SEPARABLE_COMPILATION ON
+)
+
+set_target_properties(cuda_nvshmem_dot_product PROPERTIES
+  CUDA_SEPARABLE_COMPILATION ON
+)
+
+set_target_properties(cuda_nvshmem_pingpong PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )
 

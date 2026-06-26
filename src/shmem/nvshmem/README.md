@@ -12,6 +12,11 @@ CUDA examples using NVSHMEM symmetric buffers.
 | `cuda_nvshmem_halo_1d_iter` | Multi-iteration 1D halo stencil. | Host-side NVSHMEM orchestration repeats halo exchange and stencil compute. |
 | `cuda_nvshmem_halo_1d_device` | One-step 1D halo stencil. | Device-side NVSHMEM puts and signals exchange ghost cells from CUDA kernels. |
 | `cuda_nvshmem_halo_1d_device_iter` | Multi-iteration 1D halo stencil. | One collectively launched CUDA kernel repeats GPU-initiated halo exchange. |
+| `cuda_nvshmem_dot_product` | Double-precision global dot product (CG inner-product). | `nvshmem_double_sum_reduce` (NVSHMEM_TEAM_WORLD) reduces a device-resident symmetric scalar across PEs. |
+| `cuda_nvshmem_pingpong` | Two-endpoint one-way latency/bandwidth, internal size sweep. | Device-initiated kernel: `nvshmemx_float_put_block` + `nvshmemx_signal_op`/`nvshmem_signal_wait_until` round-trip between 2 PEs (NVSHMEM p2p sync is device-only). |
+| `cuda_nvshmem_halo_2d` | 2D 5-point Jacobi stencil, column-slab decomposition. | Host-driven `nvshmem_float_put` + `barrier_all` write packed (strided) halo columns into symmetric neighbor buffers. |
+| `cuda_nvshmem_alltoall` | All-to-all personalized exchange (bisection bandwidth). | Native `nvshmem_float_alltoall` team collective over symmetric buffers. |
+| `cuda_nvshmem_cg_step` | CG iteration skeleton (SpMV halo + two reductions). | Host-driven `nvshmem_float_put`+barrier halo + two `nvshmem_double_sum_reduce`. |
 
 ## Run
 
@@ -19,4 +24,9 @@ CUDA examples using NVSHMEM symmetric buffers.
 mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_vector_add 1048576
 mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_halo_1d 1048576
 mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_halo_1d_iter 1048576 100
+mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_dot_product 1048576 100 20
+mpirun -np 2 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_pingpong 4194304 100 20
+mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_halo_2d 4096 50 10
+mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_alltoall 65536 100 20
+mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_cg_step 512 50 10
 ```

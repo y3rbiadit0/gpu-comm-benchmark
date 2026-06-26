@@ -1,0 +1,289 @@
+#include <mpi.h>
+
+#include <cuda_runtime.h>
+#include <nccl.h>
+
+#include <algorithm>
+#include <cstddef>
+#include <exception>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+#include "cli.hpp"
+#include "partition.hpp"
+#include "report.hpp"
+#include "stencil2d.hpp"
+#include "timing.hpp"
+#include "validation.hpp"
+
+namespace {
+
+void check_cuda(cudaError_t status, const char* call) {
+  if (status != cudaSuccess) {
+    throw std::runtime_error(std::string(call) + ": " + cudaGetErrorString(status));
+  }
+}
+
+void check_nccl(ncclResult_t status, const char* call) {
+  if (status != ncclSuccess) {
+    throw std::runtime_error(std::string(call) + ": " + ncclGetErrorString(status));
+  }
+}
+
+// CG iteration communication skeleton (see src/mpi/cuda/cg_step.cu).
+
+__global__ void init_p_kernel(float* p, std::size_t side, std::size_t local_cols, std::size_t width) {
+  const auto jj = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  const auto i = static_cast<std::size_t>(blockIdx.y) * blockDim.y + threadIdx.y;
+  if (jj < local_cols && i < side) {
+    p[i * width + (jj + 1U)] = 1.0F;
+  }
+}
+
+__global__ void pack_column_kernel(const float* padded, float* contiguous, std::size_t side, std::size_t width,
+                                   std::size_t column) {
+  const auto i = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (i < side) {
+    contiguous[i] = padded[i * width + column];
+  }
+}
+
+__global__ void unpack_column_kernel(float* padded, const float* contiguous, std::size_t side, std::size_t width,
+                                     std::size_t column) {
+  const auto i = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (i < side) {
+    padded[i * width + column] = contiguous[i];
+  }
+}
+
+__global__ void spmv_kernel(const float* p, float* q, std::size_t side, std::size_t local_cols,
+                            std::size_t width) {
+  const auto jj = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  const auto i = static_cast<std::size_t>(blockIdx.y) * blockDim.y + threadIdx.y;
+  if (jj < local_cols && i < side) {
+    const auto j = jj + 1U;
+    const float north = i > 0 ? p[(i - 1U) * width + j] : 0.0F;
+    const float south = i + 1U < side ? p[(i + 1U) * width + j] : 0.0F;
+    const float west = p[i * width + (j - 1U)];
+    const float east = p[i * width + (j + 1U)];
+    q[i * width + j] = 0.25F * (north + south + west + east);
+  }
+}
+
+// Grid-stride dot over the interior with a per-block reduction, so each block
+// issues a single atomicAdd instead of one per element (avoids 16M-way
+// contention on a single scalar). Launch with a 1D block of 256 threads.
+__global__ void cg_dot_kernel(const float* p, const float* q, double* partial_pq, double* partial_qq,
+                              std::size_t side, std::size_t local_cols, std::size_t width) {
+  __shared__ double shared_pq[256];
+  __shared__ double shared_qq[256];
+  const std::size_t total = side * local_cols;
+  const std::size_t stride = static_cast<std::size_t>(gridDim.x) * blockDim.x;
+  double thread_pq = 0.0;
+  double thread_qq = 0.0;
+  for (auto idx = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x; idx < total; idx += stride) {
+    const auto off = (idx / local_cols) * width + (idx % local_cols + 1U);
+    const double pv = p[off];
+    const double qv = q[off];
+    thread_pq += pv * qv;
+    thread_qq += qv * qv;
+  }
+  shared_pq[threadIdx.x] = thread_pq;
+  shared_qq[threadIdx.x] = thread_qq;
+  __syncthreads();
+  for (unsigned s = blockDim.x / 2U; s > 0U; s >>= 1U) {
+    if (threadIdx.x < s) {
+      shared_pq[threadIdx.x] += shared_pq[threadIdx.x + s];
+      shared_qq[threadIdx.x] += shared_qq[threadIdx.x + s];
+    }
+    __syncthreads();
+  }
+  if (threadIdx.x == 0U) {
+    atomicAdd(partial_pq, shared_pq[0]);
+    atomicAdd(partial_qq, shared_qq[0]);
+  }
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  MPI_Init(&argc, &argv);
+
+  int rank = 0;
+  int ranks = 1;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &ranks);
+
+  ncclComm_t comm = nullptr;
+  cudaStream_t stream = nullptr;
+
+  try {
+    const auto side = comm_playground::parse_size_arg(argc, argv, 1U << 9U);
+    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 50);
+    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 10);
+    const auto local_cols = comm_playground::local_count(side, rank, ranks);
+    const auto col_offset = comm_playground::local_offset(side, rank, ranks);
+    const auto width = local_cols + 2U;
+    const int left = rank == 0 ? -1 : rank - 1;
+    const int right = rank + 1 == ranks ? -1 : rank + 1;
+
+    int device_count = 0;
+    check_cuda(cudaGetDeviceCount(&device_count), "cudaGetDeviceCount");
+    if (device_count == 0) {
+      throw std::runtime_error("no CUDA devices available");
+    }
+    check_cuda(cudaSetDevice(rank % device_count), "cudaSetDevice");
+    check_cuda(cudaStreamCreate(&stream), "cudaStreamCreate");
+
+    ncclUniqueId id;
+    if (rank == 0) {
+      check_nccl(ncclGetUniqueId(&id), "ncclGetUniqueId");
+    }
+    MPI_Bcast(&id, sizeof(id), MPI_BYTE, 0, MPI_COMM_WORLD);
+    check_nccl(ncclCommInitRank(&comm, ranks, id, rank), "ncclCommInitRank");
+
+    float* p_field = nullptr;
+    float* q_field = nullptr;
+    float* send_west = nullptr;
+    float* send_east = nullptr;
+    float* recv_west = nullptr;
+    float* recv_east = nullptr;
+    double* partial_pq = nullptr;
+    double* partial_qq = nullptr;
+    double* result_pq = nullptr;
+    double* result_qq = nullptr;
+    check_cuda(cudaMalloc(reinterpret_cast<void**>(&p_field), side * width * sizeof(float)), "cudaMalloc(p)");
+    check_cuda(cudaMalloc(reinterpret_cast<void**>(&q_field), side * width * sizeof(float)), "cudaMalloc(q)");
+    check_cuda(cudaMalloc(reinterpret_cast<void**>(&send_west), side * sizeof(float)), "cudaMalloc(send_west)");
+    check_cuda(cudaMalloc(reinterpret_cast<void**>(&send_east), side * sizeof(float)), "cudaMalloc(send_east)");
+    check_cuda(cudaMalloc(reinterpret_cast<void**>(&recv_west), side * sizeof(float)), "cudaMalloc(recv_west)");
+    check_cuda(cudaMalloc(reinterpret_cast<void**>(&recv_east), side * sizeof(float)), "cudaMalloc(recv_east)");
+    check_cuda(cudaMalloc(reinterpret_cast<void**>(&partial_pq), sizeof(double)), "cudaMalloc(partial_pq)");
+    check_cuda(cudaMalloc(reinterpret_cast<void**>(&partial_qq), sizeof(double)), "cudaMalloc(partial_qq)");
+    check_cuda(cudaMalloc(reinterpret_cast<void**>(&result_pq), sizeof(double)), "cudaMalloc(result_pq)");
+    check_cuda(cudaMalloc(reinterpret_cast<void**>(&result_qq), sizeof(double)), "cudaMalloc(result_qq)");
+
+    check_cuda(cudaMemset(p_field, 0, side * width * sizeof(float)), "cudaMemset(p)");
+    check_cuda(cudaMemset(q_field, 0, side * width * sizeof(float)), "cudaMemset(q)");
+    check_cuda(cudaMemset(recv_west, 0, side * sizeof(float)), "cudaMemset(recv_west)");
+    check_cuda(cudaMemset(recv_east, 0, side * sizeof(float)), "cudaMemset(recv_east)");
+
+    const dim3 block2d(16, 16);
+    const dim3 grid2d(static_cast<unsigned>((local_cols + block2d.x - 1U) / block2d.x),
+                      static_cast<unsigned>((side + block2d.y - 1U) / block2d.y));
+    constexpr int block1d = 256;
+    const auto grid1d = static_cast<int>((side + block1d - 1) / block1d);
+    const auto dot_grid =
+        static_cast<int>(std::min<std::size_t>((side * local_cols + 255U) / 256U, 4096U));
+
+    if (local_cols > 0) {
+      init_p_kernel<<<grid2d, block2d>>>(p_field, side, local_cols, width);
+      check_cuda(cudaGetLastError(), "init_p_kernel");
+    }
+    check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(init)");
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      if (local_cols > 0) {
+        pack_column_kernel<<<grid1d, block1d, 0, stream>>>(p_field, send_west, side, width, 1U);
+        pack_column_kernel<<<grid1d, block1d, 0, stream>>>(p_field, send_east, side, width, local_cols);
+      }
+      check_nccl(ncclGroupStart(), "ncclGroupStart(halo)");
+      if (left >= 0) {
+        check_nccl(ncclSend(send_west, side, ncclFloat, left, comm, stream), "ncclSend(west)");
+        check_nccl(ncclRecv(recv_west, side, ncclFloat, left, comm, stream), "ncclRecv(west)");
+      }
+      if (right >= 0) {
+        check_nccl(ncclSend(send_east, side, ncclFloat, right, comm, stream), "ncclSend(east)");
+        check_nccl(ncclRecv(recv_east, side, ncclFloat, right, comm, stream), "ncclRecv(east)");
+      }
+      check_nccl(ncclGroupEnd(), "ncclGroupEnd(halo)");
+      check_cuda(cudaMemsetAsync(partial_pq, 0, sizeof(double), stream), "cudaMemset(partial_pq)");
+      check_cuda(cudaMemsetAsync(partial_qq, 0, sizeof(double), stream), "cudaMemset(partial_qq)");
+      if (local_cols > 0) {
+        unpack_column_kernel<<<grid1d, block1d, 0, stream>>>(p_field, recv_west, side, width, 0U);
+        unpack_column_kernel<<<grid1d, block1d, 0, stream>>>(p_field, recv_east, side, width, local_cols + 1U);
+        spmv_kernel<<<grid2d, block2d, 0, stream>>>(p_field, q_field, side, local_cols, width);
+        cg_dot_kernel<<<dot_grid, block1d, 0, stream>>>(p_field, q_field, partial_pq, partial_qq, side, local_cols,
+                                                      width);
+      }
+      check_nccl(ncclAllReduce(partial_pq, result_pq, 1, ncclDouble, ncclSum, comm, stream), "ncclAllReduce(pq)");
+      check_nccl(ncclAllReduce(partial_qq, result_qq, 1, ncclDouble, ncclSum, comm, stream), "ncclAllReduce(qq)");
+      check_cuda(cudaStreamSynchronize(stream), "cudaStreamSynchronize(step)");
+    });
+
+    double time_per_iter = 0.0;
+    double min_time = 0.0;
+    double max_time = 0.0;
+    MPI_Reduce(&stats.avg_s, &time_per_iter, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&stats.min_s, &min_time, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&stats.max_s, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+    const auto ones = [](std::size_t, std::size_t) { return 1.0F; };
+    const auto qval = [&](std::size_t i, std::size_t jg) { return comm_playground::stencil5(i, jg, side, ones); };
+    double ref_pq = 0.0;
+    double ref_qq = 0.0;
+    for (std::size_t i = 0; i < side; ++i) {
+      for (std::size_t jg = 0; jg < side; ++jg) {
+        const double q = qval(i, jg);
+        ref_pq += q;
+        ref_qq += q * q;
+      }
+    }
+    double host_pq = 0.0;
+    double host_qq = 0.0;
+    check_cuda(cudaMemcpy(&host_pq, result_pq, sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy(pq)");
+    check_cuda(cudaMemcpy(&host_qq, result_qq, sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy(qq)");
+    int local_ok = comm_playground::nearly_equal(host_pq, ref_pq) && comm_playground::nearly_equal(host_qq, ref_qq)
+                       ? 1
+                       : 0;
+    if (local_cols > 0) {
+      std::vector<float> host_q(side * width);
+      check_cuda(cudaMemcpy(host_q.data(), q_field, side * width * sizeof(float), cudaMemcpyDeviceToHost),
+                 "cudaMemcpy(q)");
+      if (!comm_playground::validate_columns(host_q.data(), side, local_cols, width, col_offset, qval)) {
+        local_ok = 0;
+      }
+    }
+    int global_ok = 1;
+    MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+
+    check_cuda(cudaFree(p_field), "cudaFree(p)");
+    check_cuda(cudaFree(q_field), "cudaFree(q)");
+    check_cuda(cudaFree(send_west), "cudaFree(send_west)");
+    check_cuda(cudaFree(send_east), "cudaFree(send_east)");
+    check_cuda(cudaFree(recv_west), "cudaFree(recv_west)");
+    check_cuda(cudaFree(recv_east), "cudaFree(recv_east)");
+    check_cuda(cudaFree(partial_pq), "cudaFree(partial_pq)");
+    check_cuda(cudaFree(partial_qq), "cudaFree(partial_qq)");
+    check_cuda(cudaFree(result_pq), "cudaFree(result_pq)");
+    check_cuda(cudaFree(result_qq), "cudaFree(result_qq)");
+    check_nccl(ncclCommDestroy(comm), "ncclCommDestroy");
+    check_cuda(cudaStreamDestroy(stream), "cudaStreamDestroy");
+
+    if (rank == 0) {
+      comm_playground::bench_report report;
+      report.name = "cuda_nccl_cg_step";
+      report.n = side;
+      report.ranks = ranks;
+      report.bytes_per_iter = 2U * side * sizeof(float);
+      report.iterations = iterations;
+      report.warmup = warmup;
+      report.time_per_iter_s = time_per_iter;
+      report.min_s = min_time;
+      report.max_s = max_time;
+      report.valid = global_ok != 0;
+      comm_playground::print_report(report);
+    }
+
+    MPI_Finalize();
+    return global_ok ? 0 : 1;
+  } catch (const std::exception& error) {
+    std::cerr << "rank " << rank << ": " << error.what() << '\n';
+    if (comm != nullptr) ncclCommAbort(comm);
+    if (stream != nullptr) cudaStreamDestroy(stream);
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+}
