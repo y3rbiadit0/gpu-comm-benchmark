@@ -25,10 +25,12 @@ void check_cuda(cudaError_t status, const char* call) {
   }
 }
 
-// Device-initiated ping-pong: NVSHMEM point-to-point synchronization
-// (signal_wait_until) is device-only, so the round-trip loop runs inside one
-// kernel. A single block cooperatively issues the bulk put; thread 0 drives the
-// signal handshake. Launched on both PEs; PE 0 is the initiator.
+//Device Initiated - PingPong
+// Following Best Practices for NVSHMEM APIs
+// https://docs.nvidia.com/nvshmem/release-notes-install-guide/best-practice-guide/apis.html
+// --> Sending data: https://docs.nvidia.com/nvshmem/api/gen/api/rma.html#nvshmem-put
+// --> Signaling: https://docs.nvidia.com/nvshmem/api/gen/api/signal.html#nvshmem-signal
+// --> Point-to-point synchronization: https://docs.nvidia.com/nvshmem/api/gen/api/sync.html#
 __global__ void pingpong_kernel(float* send, float* recv, std::uint64_t* flag, std::size_t count,
                                 int iterations, int pe, int peer, std::uint64_t base) {
   for (int it = 0; it < iterations; ++it) {
