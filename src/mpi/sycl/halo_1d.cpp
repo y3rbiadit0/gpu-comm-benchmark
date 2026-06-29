@@ -1,32 +1,36 @@
 #include <mpi.h>
 #include <sycl/sycl.hpp>
 
-#include <algorithm>
 #include <cstddef>
 #include <exception>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "cli.hpp"
+#include "report.hpp"
 #include "timing.hpp"
 #include "validation.hpp"
 
+// Comm-only 1D halo exchange benchmark, SYCL-aware MPI.
+//
+// Periodic ring: every rank exchanges a width-H halo with its left and right
+// neighbour. Buffers are slice-local and device-resident:
+//
+//   [ left_halo(cap) | interior(2*cap) | right_halo(cap) ]   cap = max halo width
+//
+// The interior's first half is tagged with a "left boundary" marker and its
+// second half with a "right boundary" marker, both exactly representable in
+// float. After the exchange each rank validates its received halos locally
+// against the markers its neighbours must have sent - no gather required.
+//
+// Send pointers are SYCL device pointers, so this measures SYCL-aware MPI, not
+// host staging. Halo width H is swept; the reported GB/s is send+receive
+// ("bus") bandwidth: 4 * H * sizeof(float) per rank per iteration.
+
 namespace {
-
-std::size_t local_size_for_rank(std::size_t global_size, int rank, int ranks) {
-  const auto base = global_size / static_cast<std::size_t>(ranks);
-  const auto remainder = global_size % static_cast<std::size_t>(ranks);
-  return base + (static_cast<std::size_t>(rank) < remainder ? 1U : 0U);
-}
-
-std::size_t offset_for_rank(std::size_t global_size, int rank, int ranks) {
-  const auto base = global_size / static_cast<std::size_t>(ranks);
-  const auto remainder = global_size % static_cast<std::size_t>(ranks);
-  const auto rank_value = static_cast<std::size_t>(rank);
-  return rank_value * base + std::min(rank_value, remainder);
-}
 
 int mpi_count(std::size_t value) {
   if (value > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
@@ -39,95 +43,111 @@ int mpi_count(std::size_t value) {
 
 int main(int argc, char** argv) {
   MPI_Init(&argc, &argv);
+
   int rank = 0;
   int ranks = 1;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &ranks);
 
   try {
-    const auto global_size = comm_playground::parse_size_arg(argc, argv, 1U << 20U);
-    const auto local_size = local_size_for_rank(global_size, rank, ranks);
-    const auto local_offset = offset_for_rank(global_size, rank, ranks);
-    const int left = rank == 0 ? MPI_PROC_NULL : rank - 1;
-    const int right = rank + 1 == ranks ? MPI_PROC_NULL : rank + 1;
-
-    std::vector<int> counts;
-    std::vector<int> displacements;
-    std::vector<float> global_y;
-    if (rank == 0) {
-      counts.resize(static_cast<std::size_t>(ranks));
-      displacements.resize(static_cast<std::size_t>(ranks));
-      for (int target_rank = 0; target_rank < ranks; ++target_rank) {
-        counts[static_cast<std::size_t>(target_rank)] = mpi_count(local_size_for_rank(global_size, target_rank, ranks));
-        displacements[static_cast<std::size_t>(target_rank)] = mpi_count(offset_for_rank(global_size, target_rank, ranks));
-      }
-      global_y.resize(global_size, 0.0F);
+    if (ranks < 2) {
+      throw std::runtime_error("ring halo exchange requires at least 2 ranks");
     }
+
+    const auto max_halo = comm_playground::parse_size_arg(argc, argv, 1U << 20U);
+    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto halo_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_halo);
+
+    const int left = (rank - 1 + ranks) % ranks;
+    const int right = (rank + 1) % ranks;
 
     sycl::queue queue{sycl::default_selector_v};
-    std::vector<float> host_x(local_size + 2U, 0.0F);
-    std::vector<float> host_y(local_size, 0.0F);
-    for (std::size_t i = 0; i < local_size; ++i) {
-      host_x[i + 1U] = static_cast<float>(local_offset + i);
-    }
 
-    float* device_x = nullptr;
-    float* device_y = nullptr;
-    if (local_size > 0) {
-      device_x = sycl::malloc_device<float>(local_size + 2U, queue);
-      device_y = sycl::malloc_device<float>(local_size, queue);
-      if (device_x == nullptr || device_y == nullptr) {
-        throw std::runtime_error("failed to allocate SYCL device memory");
+    const std::size_t cap = max_halo;
+    const std::size_t n_local = 2U * cap;
+    const std::size_t total = n_local + 2U * cap;
+    const float left_marker = static_cast<float>(2 * (rank + 1));
+    const float right_marker = static_cast<float>(2 * (rank + 1) + 1);
+    const float expect_left = static_cast<float>(2 * (left + 1) + 1);
+    const float expect_right = static_cast<float>(2 * (right + 1));
+
+    float* buf = sycl::malloc_device<float>(total, queue);
+    if (buf == nullptr) {
+      throw std::runtime_error("failed to allocate SYCL device memory");
+    }
+    queue.memset(buf, 0, total * sizeof(float)).wait();
+    float* interior = buf + cap;
+    queue.parallel_for(sycl::range<1>{n_local}, [=](sycl::id<1> id) {
+      const auto i = id[0];
+      interior[i] = i < cap ? left_marker : right_marker;
+    }).wait();
+
+    std::vector<float> host_left;
+    std::vector<float> host_right;
+
+    for (const std::size_t halo : halo_sizes) {
+      const int count = mpi_count(halo);
+      float* send_left = interior;
+      float* send_right = interior + n_local - halo;
+      float* recv_left = interior - halo;
+      float* recv_right = interior + n_local;
+
+      MPI_Barrier(MPI_COMM_WORLD);
+      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+        MPI_Request reqs[4];
+        // tag 0: messages travelling right; tag 1: messages travelling left.
+        MPI_Irecv(recv_left, count, MPI_FLOAT, left, 0, MPI_COMM_WORLD, &reqs[0]);
+        MPI_Irecv(recv_right, count, MPI_FLOAT, right, 1, MPI_COMM_WORLD, &reqs[1]);
+        MPI_Isend(send_right, count, MPI_FLOAT, right, 0, MPI_COMM_WORLD, &reqs[2]);
+        MPI_Isend(send_left, count, MPI_FLOAT, left, 1, MPI_COMM_WORLD, &reqs[3]);
+        MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
+      });
+
+      host_left.assign(halo, 0.0F);
+      host_right.assign(halo, 0.0F);
+      queue.copy(recv_left, host_left.data(), halo).wait();
+      queue.copy(recv_right, host_right.data(), halo).wait();
+      int local_ok = 1;
+      for (std::size_t i = 0; i < halo; ++i) {
+        if (!comm_playground::nearly_equal(host_left[i], expect_left) ||
+            !comm_playground::nearly_equal(host_right[i], expect_right)) {
+          local_ok = 0;
+          break;
+        }
+      }
+
+      int global_ok = 1;
+      double max_avg = 0.0;
+      double min_min = 0.0;
+      double max_max = 0.0;
+      MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
+      MPI_Reduce(&stats.avg_s, &max_avg, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&stats.min_s, &min_min, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&stats.max_s, &max_max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+      if (rank == 0) {
+        comm_playground::bench_report report;
+        report.name = "sycl_mpi_halo_1d";
+        report.n = halo;
+        report.ranks = ranks;
+        report.bytes_per_iter = 4U * halo * sizeof(float);  // 2 sends + 2 recvs per rank
+        report.iterations = iterations;
+        report.warmup = warmup;
+        report.time_per_iter_s = max_avg;
+        report.min_s = min_min;
+        report.max_s = max_max;
+        report.valid = global_ok != 0;
+        report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv device=\"" +
+                       queue.get_device().get_info<sycl::info::device::name>() + "\"";
+        comm_playground::print_report(report);
       }
     }
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    comm_playground::wall_timer timer;
-
-    float send_left = local_size > 0 ? host_x[1] : 0.0F;
-    float send_right = local_size > 0 ? host_x[local_size] : 0.0F;
-    MPI_Sendrecv(&send_left, 1, MPI_FLOAT, left, 0, &host_x[local_size + 1U], 1, MPI_FLOAT, right, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Sendrecv(&send_right, 1, MPI_FLOAT, right, 1, &host_x[0], 1, MPI_FLOAT, left, 1, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
-
-    if (local_size > 0) {
-      queue.copy(host_x.data(), device_x, local_size + 2U).wait();
-      queue.parallel_for(sycl::range<1>{local_size}, [=](sycl::id<1> id) {
-        const auto i = id[0];
-        const auto j = i + 1U;
-        device_y[i] = 0.25F * device_x[j - 1U] + 0.5F * device_x[j] + 0.25F * device_x[j + 1U];
-      }).wait();
-      queue.copy(device_y, host_y.data(), local_size).wait();
-    }
-
-    MPI_Gatherv(host_y.data(), mpi_count(local_size), MPI_FLOAT, rank == 0 ? global_y.data() : nullptr,
-                rank == 0 ? counts.data() : nullptr, rank == 0 ? displacements.data() : nullptr, MPI_FLOAT, 0,
-                MPI_COMM_WORLD);
-    const auto elapsed = timer.seconds();
-
-    int global_ok = 1;
-    if (rank == 0) {
-      global_ok = comm_playground::validate_halo_1d(global_y.data(), global_size, 0, global_size) ? 1 : 0;
-    }
-    MPI_Bcast(&global_ok, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-    double max_elapsed = 0.0;
-    MPI_Reduce(&elapsed, &max_elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-
-    if (local_size > 0) {
-      sycl::free(device_y, queue);
-      sycl::free(device_x, queue);
-    }
-
-    if (rank == 0) {
-      std::cout << "sycl_mpi_halo_1d n=" << global_size << " ranks=" << ranks
-                << " device=\"" << queue.get_device().get_info<sycl::info::device::name>() << "\""
-                << " time_s=" << max_elapsed << " validation=" << (global_ok ? "PASS" : "FAIL") << '\n';
-    }
+    sycl::free(buf, queue);
 
     MPI_Finalize();
-    return global_ok ? 0 : 1;
+    return 0;
   } catch (const std::exception& error) {
     std::cerr << "rank " << rank << ": " << error.what() << '\n';
     MPI_Abort(MPI_COMM_WORLD, 1);
