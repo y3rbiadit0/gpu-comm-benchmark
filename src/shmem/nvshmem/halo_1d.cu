@@ -57,12 +57,19 @@ __global__ void fill_interior_kernel(float* interior, std::size_t n_local, std::
 
 // One block performs the full exchange. recv_left/recv_right are symmetric
 // addresses, so they name the right slot on the neighbour too.
+//  API: --> https://docs.nvidia.com/nvshmem/api/gen/api/signal.html
 __global__ void halo_exchange_kernel(float* recv_left, float* recv_right, const float* send_left,
                                      const float* send_right, std::uint64_t* signals, std::size_t halo,
                                      std::uint64_t value, int left, int right) {
-  // Send my right boundary into the right neighbour's left halo and raise its
-  // sig_left; send my left boundary into the left neighbour's right halo and
-  // raise its sig_right.
+  // Approach:
+  //  Send my right boundary into the right neighbour's left halo and raise its
+  //  sig_left; send my left boundary into the left neighbour's right halo and
+  //  raise its sig_right.
+  
+  // Note:
+  //  For a very small halo, a valid mental model also could be put + signal, but to make it consistent
+  //  across all halo sizes, we use _block format.
+
   nvshmemx_float_put_signal_nbi_block(recv_left, send_right, halo, signals + sig_left, value,
                                       NVSHMEM_SIGNAL_SET, right);
   nvshmemx_float_put_signal_nbi_block(recv_right, send_left, halo, signals + sig_right, value,
