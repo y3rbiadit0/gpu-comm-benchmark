@@ -20,9 +20,33 @@ python3 tools/benchscribe --format csv > summary.csv
 # Override the primary metric used for ranking/comparison
 python3 tools/benchscribe --metric gbytes_per_s --format csv > bandwidth.csv
 
+# Latency/bandwidth characterization of a message-size sweep
+python3 tools/benchscribe results --benchmark halo_1d --fit
+
 # Save a Markdown report
 python3 tools/benchscribe > RESULTS.md
 ```
+
+### `--fit`: latency floor, peak bandwidth, and the knee
+
+For benchmarks that sweep message size (e.g. `halo_1d`, `pingpong`), `--fit`
+collapses each backend's whole sweep into the α–β model numbers, read straight off
+the curve (no regression):
+
+- **α** — latency floor: the fastest per-iteration time in the sweep (the flat,
+  small-message part).
+- **B∞** — peak bandwidth: the best `gbytes_per_s` reached.
+- **n½ = α·B∞** — the message size at which you hit half of peak bandwidth.
+- **peak @** / **tail** — message size at peak bandwidth, and bandwidth at the
+  largest message (exposes a large-message plateau/cliff).
+
+Bandwidth is whatever each binary reports: **bus** (send+receive) for `halo_1d`,
+**one-way** (½ round-trip) for `pingpong`. α and B∞ inherit that convention, so
+compare like with like.
+
+Works with `--format csv`. See
+[`docs/analysis/halo_1d-crossover.md`](../docs/analysis/halo_1d-crossover.md) for
+the model and how to read the result.
 
 ### What it does
 

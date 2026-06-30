@@ -38,6 +38,22 @@ results/<result-name>/halo_1d/<job-name>-<job-id>-<trial>-stdout.txt
 results/<result-name>/halo_1d/<job-name>-<job-id>-<trial>-stderr.txt
 ```
 
+## Profiling & Analysis
+
+Set `CP_PROFILE=nsys` to wrap each rank in Nsight Systems and drop one
+`.nsys-rep` per rank under `results/<result-name>/halo_1d/profiles/`. Profiling
+perturbs timing, so use a dedicated single-trial run and do not report its
+numbers:
+
+```bash
+CP_PROFILE=nsys CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem/2n4g.sh
+```
+
+`CP_NSYS_TRACE` overrides the trace set (default `cuda,nvtx,mpi`; add `ucx` for
+the inter-node IB path). The latency/bandwidth (α–β) model, the
+NVSHMEM-vs-NCCL-vs-MPI crossover analysis, and a guide to reading the timelines
+are in [`docs/analysis/halo_1d-crossover.md`](../../../../docs/analysis/halo_1d-crossover.md).
+
 ## Validated Results
 
 > **Note:** The tables below predate the comm-only ring rewrite of the halo_1d benchmarks (all backends). They reflect the old one-step stencil (single halo width, gathered validation) and are kept only for historical reference. Re-run on Leonardo to regenerate numbers for the new comm-only benchmark.

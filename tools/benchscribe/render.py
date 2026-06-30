@@ -4,6 +4,7 @@ import csv
 import datetime as dt
 from typing import TextIO
 
+from characterize import Characterization
 from model import SummaryRow
 from summary import SummaryTable
 
@@ -16,6 +17,16 @@ def format_number(value: float | None, digits: int = 3) -> str:
     if abs(value) >= 1000 or abs(value) < 1e-3:
         return f"{value:.{digits}e}"
     return f"{value:.{digits}f}"
+
+
+def format_bytes(value: float | None) -> str:
+    if value is None:
+        return "-"
+    for unit in ("B", "KB", "MB", "GB"):
+        if abs(value) < 1024 or unit == "GB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} GB"
 
 
 def format_delta(row: SummaryRow, baseline: str) -> str:
@@ -65,6 +76,54 @@ def render_markdown(table: SummaryTable, out: TextIO) -> None:
                         f"| {row.trials} | {'PASS' if row.valid_all else 'FAIL'} |\n"
                     )
             out.write("\n")
+
+
+def render_fit_markdown(chars: list[Characterization], out: TextIO) -> None:
+    stamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    out.write("# Latency / Bandwidth Characterization\n\n")
+    out.write(f"_Generated {stamp}._\n\n")
+    out.write(
+        "α = latency floor (fastest iteration = smallest message). "
+        "B∞ = peak bandwidth. n½ = α·B∞ (message at half of peak). "
+        "Tail = bandwidth at the largest message.\n\n"
+    )
+    by_bench: dict[str, list[Characterization]] = {}
+    for char in chars:
+        by_bench.setdefault(char.benchmark, []).append(char)
+    for benchmark in sorted(by_bench):
+        out.write(f"## {benchmark}\n\n")
+        out.write("| Topology | Backend | α | B∞ (GB/s) | peak @ | n½ | tail (GB/s) | pts |\n")
+        out.write("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+        for char in sorted(by_bench[benchmark], key=lambda item: (item.topology, item.backend)):
+            out.write(
+                f"| {char.topology} | `{char.backend}` | {format_number(char.alpha)} {char.unit} "
+                f"| {format_number(char.binf_gbs)} | {format_bytes(char.peak_bytes)} "
+                f"| {format_bytes(char.nhalf_bytes)} | {format_number(char.tail_gbs)} | {char.points} |\n"
+            )
+        out.write("\n")
+
+
+def render_fit_csv(chars: list[Characterization], out: TextIO) -> None:
+    writer = csv.writer(out)
+    writer.writerow(
+        ["benchmark", "topology", "backend", "alpha", "alpha_unit",
+         "binf_gbytes_per_s", "peak_bytes", "nhalf_bytes", "tail_gbytes_per_s", "points"]
+    )
+    for char in chars:
+        writer.writerow(
+            [
+                char.benchmark,
+                char.topology,
+                char.backend,
+                "" if char.alpha is None else f"{char.alpha:.9g}",
+                char.unit,
+                "" if char.binf_gbs is None else f"{char.binf_gbs:.9g}",
+                "" if char.peak_bytes is None else char.peak_bytes,
+                "" if char.nhalf_bytes is None else f"{char.nhalf_bytes:.9g}",
+                "" if char.tail_gbs is None else f"{char.tail_gbs:.9g}",
+                char.points,
+            ]
+        )
 
 
 def render_csv(table: SummaryTable, out: TextIO) -> None:
