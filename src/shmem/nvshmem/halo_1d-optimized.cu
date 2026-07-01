@@ -73,13 +73,13 @@ __global__ void halo_persistent_kernel(float* recv_left, float* recv_right,
                                         const float* send_left, const float* send_right,
                                         std::uint64_t* signals, std::size_t halo,
                                         std::size_t chunk, unsigned active,
-                                        int left, int right, int iters) {
+                                        int left, int right, int iters, std::uint64_t base) {
   cg::grid_group grid = cg::this_grid();
   const std::size_t off = static_cast<std::size_t>(blockIdx.x) * chunk;
   const std::size_t len = off < halo ? (halo - off < chunk ? halo - off : chunk) : 0U;
 
   for (int it = 1; it <= iters; ++it) {
-    const std::uint64_t threshold = static_cast<std::uint64_t>(it) * active;
+    const std::uint64_t threshold = base + static_cast<std::uint64_t>(it) * active;
     if (len != 0U) {
       // My right boundary chunk -> right neighbour's left halo (+1 to its sig_left).
       nvshmemx_float_put_signal_nbi_block(recv_left + off, send_right + off, len,
@@ -204,6 +204,7 @@ int main(int argc, char** argv) {
 
     std::vector<float> host_left;
     std::vector<float> host_right;
+    std::uint64_t base = 0;  // running signal total; never reset (see launch note)
 
     for (const std::size_t halo : halo_sizes) {
       float* send_left = interior;
@@ -228,14 +229,20 @@ int main(int argc, char** argv) {
       int left_v = left;
       int right_v = right;
       int launch_iters = warmup;
+      std::uint64_t base_v = base;
       void* args[] = {&recv_left, &recv_right, &send_left, &send_right, &signals,
                       &halo_v,    &chunk_v,    &active_v,   &left_v,     &right_v,
-                      &launch_iters};
+                      &launch_iters, &base_v};
       const dim3 grid(static_cast<unsigned>(nblocks));
       const dim3 block(block_size);
 
+      // The signal counters are never reset -- a memset races with in-flight
+      // proxied puts and can drop a signal, deadlocking the wait. Instead each
+      // launch waits for a monotonic threshold base + it*active; base is the
+      // running total every PE has sent, so it stays identical across PEs.
       auto launch = [&](int iters) {
         launch_iters = iters;
+        base_v = base;
         const int status = nvshmemx_collective_launch(
             reinterpret_cast<const void*>(halo_persistent_kernel), grid, block, args, 0, 0);
         if (status != 0) {
@@ -243,23 +250,19 @@ int main(int argc, char** argv) {
         }
       };
 
-      // Warmup: reset the signal counters, run untimed.
-      check_cuda(cudaMemset(signals, 0, 2U * sizeof(std::uint64_t)), "cudaMemset(signals warmup)");
-      check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(reset warmup)");
-      nvshmem_barrier_all();
+      // Warmup (untimed).
       launch(warmup);
       check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(warmup)");
+      base += static_cast<std::uint64_t>(warmup) * active;
 
-      // Timed: reset again so the counter threshold restarts at zero, then time
-      // the single persistent-kernel launch and divide by the iteration count.
-      check_cuda(cudaMemset(signals, 0, 2U * sizeof(std::uint64_t)), "cudaMemset(signals timed)");
-      check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(reset timed)");
+      // Timed: one persistent-kernel launch, divided by the iteration count.
       nvshmem_barrier_all();
       comm_playground::wall_timer timer;
       launch(iterations);
       check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(timed)");
       const double elapsed = timer.seconds();
       const double avg = iterations > 0 ? elapsed / static_cast<double>(iterations) : 0.0;
+      base += static_cast<std::uint64_t>(iterations) * active;
 
       host_left.assign(halo, 0.0F);
       host_right.assign(halo, 0.0F);
