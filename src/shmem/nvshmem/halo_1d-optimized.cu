@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
@@ -179,8 +180,25 @@ int main(int argc, char** argv) {
     check_cuda(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
                    &blocks_per_sm, halo_persistent_kernel, block_size, 0),
                "cudaOccupancyMaxActiveBlocksPerMultiprocessor");
-    const std::size_t max_grid =
+    std::size_t max_grid =
         static_cast<std::size_t>(blocks_per_sm > 0 ? blocks_per_sm : 1) * static_cast<std::size_t>(sm_count);
+
+    // Transport-aware block cap. Without IBGDA, every block's remote put_signal is
+    // a separate proxied IB operation, so many blocks flood the host proxy and the
+    // multi-block optimization backfires inter-node. Cap the grid when the job
+    // spans nodes (8 by default); CP_NVSHMEM_MAX_BLOCKS overrides for sweeping the
+    // optimum. Intra-node (IPC) the cap is unset, so bandwidth still scales.
+    std::size_t block_cap = 0;
+    if (const char* cap_env = std::getenv("CP_NVSHMEM_MAX_BLOCKS")) {
+      block_cap = std::strtoull(cap_env, nullptr, 10);
+    } else if (const char* nodes_env = std::getenv("COMM_PLAYGROUND_JOB_NODES")) {
+      if (std::strtol(nodes_env, nullptr, 10) > 1) {
+        block_cap = 8;
+      }
+    }
+    if (block_cap > 0 && block_cap < max_grid) {
+      max_grid = block_cap;
+    }
 
     nvshmem_barrier_all();
 
