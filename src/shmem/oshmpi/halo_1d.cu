@@ -23,9 +23,11 @@
 // Comm-only 1D halo exchange benchmark, OSHMPI (OpenSHMEM over MPI).
 //
 // Periodic ring with a swept halo width H, host-initiated. Each PE puts its
-// boundary into the neighbour's halo, fences, then raises a remote flag;
-// synchronisation is point-to-point (flag wait_until), not barrier_all, so the
-// timed loop reflects neighbour latency rather than barrier scalability.
+// boundary into both neighbours' halos, then synchronises with shmem_barrier_all.
+// Point-to-point waits (shmem_*_wait_until on a spin flag) can deadlock inter-node
+// when passive RMA needs target-side progress, so we use a barrier handshake (a
+// collective that always makes progress), as the other OSHMPI binaries do. The
+// timed loop therefore reflects neighbour latency plus barrier overhead.
 //
 // Symmetric device buffer (via the OSHMPI CUDA memory space), identical layout
 // on every PE:
@@ -38,9 +40,6 @@
 // send+receive ("bus") bandwidth: 4 * H * sizeof(float).
 
 namespace {
-
-constexpr int sig_left = 0;   // raised by my left neighbour when my left halo is ready
-constexpr int sig_right = 1;  // raised by my right neighbour when my right halo is ready
 
 void check_cuda(cudaError_t status, const char* call) {
   if (status != cudaSuccess) {
@@ -105,17 +104,13 @@ int main(int argc, char** argv) {
     if (buf == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI CUDA symmetric memory");
     }
-    auto* flags = static_cast<long*>(shmem_malloc(2U * sizeof(long)));
     auto* stat_avg = static_cast<double*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(double)));
     auto* stat_min = static_cast<double*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(double)));
     auto* stat_max = static_cast<double*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(double)));
     auto* oks = static_cast<int*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(int)));
-    if (flags == nullptr || stat_avg == nullptr || stat_min == nullptr || stat_max == nullptr ||
-        oks == nullptr) {
+    if (stat_avg == nullptr || stat_min == nullptr || stat_max == nullptr || oks == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI symmetric scratch");
     }
-    flags[sig_left] = 0;
-    flags[sig_right] = 0;
 
     check_cuda(cudaMemset(buf, 0, total * sizeof(float)), "cudaMemset(buf)");
     float* interior = buf + cap;
@@ -130,7 +125,6 @@ int main(int argc, char** argv) {
 
     std::vector<float> host_left;
     std::vector<float> host_right;
-    long value = 0;
 
     for (const std::size_t halo : halo_sizes) {
       float* send_left = interior;
@@ -141,16 +135,12 @@ int main(int argc, char** argv) {
 
       shmem_barrier_all();
       const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
-        ++value;
         // Put my right boundary into the right neighbour's left halo, and my
         // left boundary into the left neighbour's right halo.
         shmem_putmem(recv_left, send_right, halo_bytes, right);
         shmem_putmem(recv_right, send_left, halo_bytes, left);
-        shmem_fence();  // order the data before the flags
-        shmem_long_atomic_set(&flags[sig_left], value, right);
-        shmem_long_atomic_set(&flags[sig_right], value, left);
-        shmem_long_wait_until(&flags[sig_left], SHMEM_CMP_GE, value);
-        shmem_long_wait_until(&flags[sig_right], SHMEM_CMP_GE, value);
+        shmem_quiet();        // complete my puts before the barrier releases
+        shmem_barrier_all();  // neighbours' halos have arrived once this returns
       });
 
       host_left.assign(halo, 0.0F);
@@ -198,7 +188,7 @@ int main(int argc, char** argv) {
         report.min_s = min_min;
         report.max_s = max_max;
         report.valid = global_ok != 0;
-        report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv sync=flag";
+        report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv sync=barrier";
         comm_playground::print_report(report);
       }
       shmem_barrier_all();
@@ -208,7 +198,6 @@ int main(int argc, char** argv) {
     shmem_free(stat_max);
     shmem_free(stat_min);
     shmem_free(stat_avg);
-    shmem_free(flags);
     comm_playground_oshmpi_space_destroy(space);
     space_created = false;
 
