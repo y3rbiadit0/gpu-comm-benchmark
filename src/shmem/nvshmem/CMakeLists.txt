@@ -69,15 +69,6 @@ target_link_libraries(cuda_nvshmem_pingpong PRIVATE
   ${NVSHMEM_DEVICE_LIBRARY}
 )
 
-add_executable(cuda_nvshmem_halo_2d halo_2d.cu)
-target_include_directories(cuda_nvshmem_halo_2d PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_halo_2d PRIVATE
-  comm_playground_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
 add_executable(cuda_nvshmem_alltoall alltoall.cu)
 target_include_directories(cuda_nvshmem_alltoall PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_alltoall PRIVATE
@@ -105,10 +96,6 @@ set_target_properties(cuda_nvshmem_cg_step PROPERTIES
 )
 
 set_target_properties(cuda_nvshmem_alltoall PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
-
-set_target_properties(cuda_nvshmem_halo_2d PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )
 

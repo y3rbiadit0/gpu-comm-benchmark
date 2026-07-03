@@ -96,20 +96,6 @@ sbatch cluster/leonardo/experiments/pingpong/sycl_oneccl/2n1g.sh
 Only the `1n2g` (intra-node NVLink) and `2n1g` (inter-node InfiniBand) topologies exist for
 `pingpong`; see [`experiments/pingpong/README.md`](experiments/pingpong/README.md).
 
-Halo 2D (5-point Jacobi stencil, strided column halo exchange):
-
-```bash
-sbatch cluster/leonardo/experiments/halo_2d/cuda_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/halo_2d/cuda_nccl/1n4g.sh
-sbatch cluster/leonardo/experiments/halo_2d/cuda_nvshmem/1n4g.sh
-sbatch cluster/leonardo/experiments/halo_2d/oshmpi/1n4g.sh
-sbatch cluster/leonardo/experiments/halo_2d/sycl_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/halo_2d/sycl_oneccl/1n4g.sh
-```
-
-Each `halo_2d` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers; see
-[`experiments/halo_2d/README.md`](experiments/halo_2d/README.md).
-
 All-to-all (personalized exchange / bisection bandwidth):
 
 ```bash

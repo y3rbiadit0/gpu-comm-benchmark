@@ -19,7 +19,6 @@ src/
 | `halo_1d` | Neighbor communication and one-sided models ([guide](docs/halo_1d.md)) |
 | `dot_product` | Global reduction / allreduce latency (CG inner-product motif) |
 | `pingpong` | Point-to-point one-way latency and bandwidth (message-size sweep) |
-| `halo_2d` | 2D 5-point Jacobi stencil with strided column halo exchange |
 | `alltoall` | All-to-all personalized exchange (bisection bandwidth) |
 | `cg_step` | Conjugate-gradient iteration skeleton (SpMV halo + two reductions) |
 
@@ -59,14 +58,13 @@ mpirun -np 4 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_halo_1d 1048576 100 20
 mpirun -np 4 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_dot_product 1048576 100 20
 mpirun -np 2 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_pingpong 4194304 100 20
 mpirun -np 2 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_pingpong 4194304 100 20 1,8,64,1024
-mpirun -np 4 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_halo_2d 4096 50 10
 mpirun -np 4 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_alltoall 65536 100 20
 mpirun -np 4 ./build/cuda-mpi/src/mpi/cuda/cuda_mpi_cg_step 512 50 10
 mpirun -np 4 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_vector_add 1048576
 mpirun -np 4 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_halo_1d 1048576 100 20
 ```
 
-Each binary accepts the global problem size as the first argument. Iterative halo variants also accept an iteration count as the second argument. `dot_product` binaries accept `<global_size> [iterations] [warmup]`. `pingpong` binaries require exactly 2 ranks, accept `<max_elements> [iterations] [warmup] [message_sizes]`, and sweep message sizes internally (one report line per size). If `[message_sizes]` is omitted, pingpong uses powers of two from 1 to `<max_elements>`; otherwise pass comma-separated element counts such as `1,8,64,1024`. `halo_2d` binaries accept `<side> [iterations] [warmup]` for a square `side × side` grid (column-slab decomposition, strided column halo). `alltoall` binaries accept `<count_per_peer> [iterations] [warmup]`; each rank exchanges `count_per_peer` elements with every rank (send/recv buffers are `ranks × count_per_peer`). `cg_step` binaries accept `<side> [iterations] [warmup]` and run one CG-iteration communication skeleton per step: an SpMV (column-slab halo exchange + 5-point stencil) followed by two global reductions — combining the `halo_2d` and `dot_product` patterns.
+Each binary accepts the global problem size as the first argument. Iterative halo variants also accept an iteration count as the second argument. `dot_product` binaries accept `<global_size> [iterations] [warmup]`. `pingpong` binaries require exactly 2 ranks, accept `<max_elements> [iterations] [warmup] [message_sizes]`, and sweep message sizes internally (one report line per size). If `[message_sizes]` is omitted, pingpong uses powers of two from 1 to `<max_elements>`; otherwise pass comma-separated element counts such as `1,8,64,1024`. `alltoall` binaries accept `<count_per_peer> [iterations] [warmup]`; each rank exchanges `count_per_peer` elements with every rank (send/recv buffers are `ranks × count_per_peer`). `cg_step` binaries accept `<side> [iterations] [warmup]` and run one CG-iteration communication skeleton per step: an SpMV (column-slab halo exchange + 5-point stencil) followed by two global reductions — combining the column-slab halo-exchange and `dot_product` patterns.
 
 ## Benchmark Output Schema
 
