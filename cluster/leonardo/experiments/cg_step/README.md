@@ -5,7 +5,7 @@ These jobs benchmark the **communication skeleton of a conjugate-gradient iterat
 in one step:
 
 1. **SpMV** `q = A·p` — a column-slab halo exchange of `p` (strided column, packed) followed
-   by the 5-point stencil (same machinery as `halo_2d`).
+   by the 5-point stencil (column-slab halo exchange).
 2. **Two global reductions** `dot(p,q)` and `dot(q,q)` — the dot products a CG iteration needs
    for its `alpha`/`beta` coefficients (same machinery as `dot_product`).
 
@@ -61,7 +61,7 @@ NVSHMEM's device-initiated model vs. host-driven collectives).
 
 ## Notes
 
-- Same per-backend mechanisms as `halo_2d` (the SpMV halo) and `dot_product` (the two
+- Same per-backend mechanisms as the column-slab SpMV halo and `dot_product` (the two
   reductions): MPI uses CUDA-aware `Sendrecv` + `MPI_Allreduce`; NCCL uses grouped
   `ncclSend`/`ncclRecv` + `ncclAllReduce`; NVSHMEM uses host-driven `put`+barrier +
   `nvshmem_double_sum_reduce`; OSHMPI uses `putmem`+barrier + `shmem_double_sum_to_all`.

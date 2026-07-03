@@ -6,8 +6,7 @@
 
 namespace comm_playground {
 
-// Host-side helpers shared by the column-slab 2D stencil benchmarks (halo_2d,
-// cg_step). A square S x S grid is split by columns; each rank stores its slab
+// Host-side helpers shared by the column-slab 2D stencil benchmarks (cg_step). A square S x S grid is split by columns; each rank stores its slab
 // in a padded row-major array of width (local_cols + 2) with ghost columns at
 // j = 0 and j = local_cols + 1.
 

@@ -42,27 +42,9 @@ target_link_libraries(cuda_nvshmem_halo_1d PRIVATE
   ${NVSHMEM_DEVICE_LIBRARY}
 )
 
-add_executable(cuda_nvshmem_halo_1d_iter halo_1d-iter.cu)
-target_include_directories(cuda_nvshmem_halo_1d_iter PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_halo_1d_iter PRIVATE
-  comm_playground_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
-add_executable(cuda_nvshmem_halo_1d_device halo_1d-device.cu)
-target_include_directories(cuda_nvshmem_halo_1d_device PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_halo_1d_device PRIVATE
-  comm_playground_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
-add_executable(cuda_nvshmem_halo_1d_device_iter halo_1d-device-iter.cu)
-target_include_directories(cuda_nvshmem_halo_1d_device_iter PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_halo_1d_device_iter PRIVATE
+add_executable(cuda_nvshmem_halo_1d_optimized halo_1d-optimized.cu)
+target_include_directories(cuda_nvshmem_halo_1d_optimized PRIVATE ${NVSHMEM_INCLUDE_DIR})
+target_link_libraries(cuda_nvshmem_halo_1d_optimized PRIVATE
   comm_playground_common
   MPI::MPI_CXX
   ${NVSHMEM_HOST_LIBRARY}
@@ -81,15 +63,6 @@ target_link_libraries(cuda_nvshmem_dot_product PRIVATE
 add_executable(cuda_nvshmem_pingpong pingpong.cu)
 target_include_directories(cuda_nvshmem_pingpong PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_pingpong PRIVATE
-  comm_playground_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
-add_executable(cuda_nvshmem_halo_2d halo_2d.cu)
-target_include_directories(cuda_nvshmem_halo_2d PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_halo_2d PRIVATE
   comm_playground_common
   MPI::MPI_CXX
   ${NVSHMEM_HOST_LIBRARY}
@@ -126,10 +99,6 @@ set_target_properties(cuda_nvshmem_alltoall PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )
 
-set_target_properties(cuda_nvshmem_halo_2d PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
-
 set_target_properties(cuda_nvshmem_dot_product PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )
@@ -146,14 +115,6 @@ set_target_properties(cuda_nvshmem_halo_1d PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )
 
-set_target_properties(cuda_nvshmem_halo_1d_iter PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
-
-set_target_properties(cuda_nvshmem_halo_1d_device PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
-
-set_target_properties(cuda_nvshmem_halo_1d_device_iter PROPERTIES
+set_target_properties(cuda_nvshmem_halo_1d_optimized PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )

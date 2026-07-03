@@ -4,8 +4,9 @@ import argparse
 import sys
 from pathlib import Path
 
+from characterize import characterize
 from model import MetricName, OutputFormat
-from render import render_csv, render_markdown
+from render import render_csv, render_fit_csv, render_fit_markdown, render_markdown
 from scan import scan_results
 from summary import SummaryTable
 
@@ -24,6 +25,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--format", choices=[item.value for item in OutputFormat], default=OutputFormat.MARKDOWN.value)
     parser.add_argument("--benchmark", help="only summarize this benchmark (e.g. dot_product)")
     parser.add_argument("--metric", choices=[item.value for item in MetricName], help="override the primary metric")
+    parser.add_argument(
+        "--fit",
+        action="store_true",
+        help="report per-backend latency floor (α), peak bandwidth (B∞), and n½ = α·B∞ across the sweep",
+    )
     return parser.parse_args(argv)
 
 
@@ -43,6 +49,13 @@ def main(argv: list[str] | None = None) -> int:
 
     metric_override = MetricName(args.metric) if args.metric else None
     table = SummaryTable.from_measurements(measurements, metric_override=metric_override)
+    if args.fit:
+        chars = characterize(table)
+        if args.format == OutputFormat.CSV.value:
+            render_fit_csv(chars, sys.stdout)
+        else:
+            render_fit_markdown(chars, sys.stdout)
+        return 0
     if args.format == OutputFormat.CSV.value:
         render_csv(table, sys.stdout)
     else:

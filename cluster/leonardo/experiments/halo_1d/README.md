@@ -1,6 +1,8 @@
 # Leonardo Halo 1D Experiments
 
-These jobs benchmark a one-step 1D halo stencil on Leonardo. Each rank or PE owns a contiguous interior segment, exchanges one boundary value with each neighbor, computes the stencil on an accelerator, and validates the gathered result on rank/PE 0.
+All backends benchmark a **comm-only** 1D halo exchange on Leonardo: a periodic ring where each rank/PE exchanges a halo with both neighbors over a swept halo width, with GPU-resident buffers and slice-local allocation. Timing uses the shared warmup/iteration harness and reports the slowest-rank average per halo width (`print_report` format).
+
+Args: `<max_halo_elems> <iterations> <warmup> [comma-separated halo sizes]` (e.g. `1048576 100 20`).
 
 Build setup is documented in [`cluster/leonardo/README.md`](../../README.md).
 
@@ -8,12 +10,12 @@ Build setup is documented in [`cluster/leonardo/README.md`](../../README.md).
 
 | Backend | Halo Exchange Model |
 | --- | --- |
-| `cuda_mpi` | MPI two-sided neighbor exchange with `MPI_Sendrecv` |
-| `sycl_mpi` | MPI two-sided neighbor exchange with `MPI_Sendrecv` |
-| `cuda_nccl` | NCCL point-to-point `ncclSend`/`ncclRecv` with neighbors |
-| `cuda_nvshmem` | One-sided NVSHMEM puts into neighbor ghost cells |
-| `oshmpi` | One-sided OSHMPI `shmem_putmem` into neighbor ghost cells |
-| `sycl_oneccl` | Collective emulation with `allreduce(sum)` because oneCCL/NCCL has no natural neighbor halo primitive |
+| `cuda_mpi` | CUDA-aware `MPI_Isend`/`MPI_Irecv`/`MPI_Waitall` neighbor exchange (comm-only ring) |
+| `cuda_nccl` | Grouped `ncclSend`/`ncclRecv` with both neighbors (comm-only ring) |
+| `cuda_nvshmem` | Device-initiated `nvshmemx_float_put_signal_nbi_block` + `nvshmem_signal_wait_until` P2P sync (comm-only ring) |
+| `oshmpi` | One-sided `shmem_putmem` + `shmem_long_wait_until` flag P2P sync (comm-only ring) |
+| `sycl_mpi` | SYCL-aware `MPI_Isend`/`MPI_Irecv`/`MPI_Waitall` neighbor exchange (comm-only ring) |
+| `sycl_oneccl` | Point-to-point `ccl::send`/`ccl::recv` with both neighbors (comm-only ring) |
 
 ## Submit
 
@@ -36,7 +38,25 @@ results/<result-name>/halo_1d/<job-name>-<job-id>-<trial>-stdout.txt
 results/<result-name>/halo_1d/<job-name>-<job-id>-<trial>-stderr.txt
 ```
 
+## Profiling & Analysis
+
+Set `CP_PROFILE=nsys` to wrap each rank in Nsight Systems and drop one
+`.nsys-rep` per rank under `results/<result-name>/halo_1d/profiles/`. Profiling
+perturbs timing, so use a dedicated single-trial run and do not report its
+numbers:
+
+```bash
+CP_PROFILE=nsys CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem/2n4g.sh
+```
+
+`CP_NSYS_TRACE` overrides the trace set (default `cuda,nvtx,mpi`; add `ucx` for
+the inter-node IB path). The latency/bandwidth (α–β) model, the
+NVSHMEM-vs-NCCL-vs-MPI crossover analysis, and a guide to reading the timelines
+are in [`docs/analysis/halo_1d-crossover.md`](../../../../docs/analysis/halo_1d-crossover.md).
+
 ## Validated Results
+
+> **Note:** The tables below predate the comm-only ring rewrite of the halo_1d benchmarks (all backends). They reflect the old one-step stencil (single halo width, gathered validation) and are kept only for historical reference. Re-run on Leonardo to regenerate numbers for the new comm-only benchmark.
 
 Validated on Leonardo A100 boost nodes with `CP_N=1048576`. Times are the mean over successful trial stdout files.
 

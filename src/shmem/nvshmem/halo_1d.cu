@@ -4,8 +4,8 @@
 #include <nvshmem.h>
 #include <nvshmemx.h>
 
-#include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
@@ -13,10 +13,33 @@
 #include <vector>
 
 #include "cli.hpp"
+#include "report.hpp"
 #include "timing.hpp"
 #include "validation.hpp"
 
+// Comm-only 1D halo exchange benchmark, NVSHMEM (device-initiated).
+//
+// Periodic ring with a swept halo width H. Unlike the MPI/NCCL backends, the
+// exchange is issued from *inside a kernel*: each PE writes its boundary
+// directly into the neighbour's halo with a block-scoped put, then sets a remote
+// signal. Synchronisation is point-to-point (signal wait), not a global
+// barrier_all, so the timed loop reflects neighbour latency rather than barrier
+// scalability.
+//
+// Symmetric buffer, identical layout on every PE:
+//
+//   [ left_halo(cap) | interior(2*cap) | right_halo(cap) ]   cap = max halo width
+//
+// Because the layout is symmetric, the destination address on a neighbour is the
+// same pointer we use locally (recv_left / recv_right); only the target PE
+// differs. Interior markers (exact in float) let each PE validate locally. MPI
+// is used for init and cross-PE reductions. Reported GB/s is send+receive
+// ("bus") bandwidth: 4 * H * sizeof(float).
+
 namespace {
+
+constexpr int sig_left = 0;   // raised by my left neighbour when my left halo is ready
+constexpr int sig_right = 1;  // raised by my right neighbour when my right halo is ready
 
 void check_cuda(cudaError_t status, const char* call) {
   if (status != cudaSuccess) {
@@ -24,33 +47,38 @@ void check_cuda(cudaError_t status, const char* call) {
   }
 }
 
-__global__ void init_interior_kernel(float* x, std::size_t global_offset, std::size_t n) {
+__global__ void fill_interior_kernel(float* interior, std::size_t n_local, std::size_t half,
+                                     float left_marker, float right_marker) {
   const auto i = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-  if (i < n) {
-    const auto global_i = global_offset + i;
-    x[global_i + 1U] = static_cast<float>(global_i);
+  if (i < n_local) {
+    interior[i] = i < half ? left_marker : right_marker;
   }
 }
 
-__global__ void halo_kernel(const float* x, float* y, std::size_t global_offset, std::size_t n) {
-  const auto i = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
-  if (i < n) {
-    const auto global_i = global_offset + i;
-    y[global_i] = 0.25F * x[global_i] + 0.5F * x[global_i + 1U] + 0.25F * x[global_i + 2U];
+// One block performs the full exchange. recv_left/recv_right are symmetric
+// addresses, so they name the right slot on the neighbour too.
+//  API: --> https://docs.nvidia.com/nvshmem/api/gen/api/signal.html
+__global__ void halo_exchange_kernel(float* recv_left, float* recv_right, const float* send_left,
+                                     const float* send_right, std::uint64_t* signals, std::size_t halo,
+                                     std::uint64_t value, int left, int right) {
+  // Approach:
+  //  Send my right boundary into the right neighbour's left halo and raise its
+  //  sig_left; send my left boundary into the left neighbour's right halo and
+  //  raise its sig_right.
+  
+  // Note:
+  //  For a very small halo, a valid mental model also could be put + signal, but to make it consistent
+  //  across all halo sizes, we use _block format.
+
+  nvshmemx_float_put_signal_nbi_block(recv_left, send_right, halo, signals + sig_left, value,
+                                      NVSHMEM_SIGNAL_SET, right);
+  nvshmemx_float_put_signal_nbi_block(recv_right, send_left, halo, signals + sig_right, value,
+                                      NVSHMEM_SIGNAL_SET, left);
+  __syncthreads();
+  if (threadIdx.x == 0) {
+    nvshmem_signal_wait_until(signals + sig_left, NVSHMEM_CMP_GE, value);
+    nvshmem_signal_wait_until(signals + sig_right, NVSHMEM_CMP_GE, value);
   }
-}
-
-std::size_t local_size_for_rank(std::size_t global_size, int rank, int ranks) {
-  const auto base = global_size / static_cast<std::size_t>(ranks);
-  const auto remainder = global_size % static_cast<std::size_t>(ranks);
-  return base + (static_cast<std::size_t>(rank) < remainder ? 1U : 0U);
-}
-
-std::size_t offset_for_rank(std::size_t global_size, int rank, int ranks) {
-  const auto base = global_size / static_cast<std::size_t>(ranks);
-  const auto remainder = global_size % static_cast<std::size_t>(ranks);
-  const auto rank_value = static_cast<std::size_t>(rank);
-  return rank_value * base + std::min(rank_value, remainder);
 }
 
 }  // namespace
@@ -83,84 +111,113 @@ int main(int argc, char** argv) {
     if (pe != mpi_rank || pes != mpi_ranks) {
       throw std::runtime_error("NVSHMEM PE layout does not match MPI rank layout");
     }
+    if (pes < 2) {
+      throw std::runtime_error("ring halo exchange requires at least 2 PEs");
+    }
 
-    const auto global_size = comm_playground::parse_size_arg(argc, argv, 1U << 20U);
-    const auto local_size = local_size_for_rank(global_size, pe, pes);
-    const auto local_offset = offset_for_rank(global_size, pe, pes);
-    const int left = pe == 0 ? -1 : pe - 1;
-    const int right = pe + 1 == pes ? -1 : pe + 1;
+    const auto max_halo = comm_playground::parse_size_arg(argc, argv, 1U << 20U);
+    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto halo_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_halo);
 
-    auto* device_x = static_cast<float*>(nvshmem_malloc((global_size + 2U) * sizeof(float)));
-    auto* device_y = static_cast<float*>(nvshmem_malloc(global_size * sizeof(float)));
-    if (device_x == nullptr || device_y == nullptr) {
+    const int left = (pe - 1 + pes) % pes;
+    const int right = (pe + 1) % pes;
+
+    const std::size_t cap = max_halo;
+    const std::size_t n_local = 2U * cap;
+    const std::size_t total = n_local + 2U * cap;
+    const float left_marker = static_cast<float>(2 * (pe + 1));
+    const float right_marker = static_cast<float>(2 * (pe + 1) + 1);
+    const float expect_left = static_cast<float>(2 * (left + 1) + 1);
+    const float expect_right = static_cast<float>(2 * (right + 1));
+
+    auto* buf = static_cast<float*>(nvshmem_malloc(total * sizeof(float)));
+    auto* signals = static_cast<std::uint64_t*>(nvshmem_malloc(2U * sizeof(std::uint64_t)));
+    if (buf == nullptr || signals == nullptr) {
       throw std::runtime_error("failed to allocate NVSHMEM symmetric memory");
     }
+    check_cuda(cudaMemset(buf, 0, total * sizeof(float)), "cudaMemset(buf)");
+    check_cuda(cudaMemset(signals, 0, 2U * sizeof(std::uint64_t)), "cudaMemset(signals)");
 
-    check_cuda(cudaMemset(device_x, 0, (global_size + 2U) * sizeof(float)), "cudaMemset(device_x)");
-    check_cuda(cudaMemset(device_y, 0, global_size * sizeof(float)), "cudaMemset(device_y)");
-    if (local_size > 0) {
+    float* interior = buf + cap;
+    {
       constexpr int block_size = 256;
-      const auto grid_size = static_cast<int>((local_size + block_size - 1U) / block_size);
-      init_interior_kernel<<<grid_size, block_size>>>(device_x, local_offset, local_size);
-      check_cuda(cudaGetLastError(), "init_interior_kernel");
-      check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(init)");
+      const auto grid_size = static_cast<int>((n_local + block_size - 1U) / block_size);
+      fill_interior_kernel<<<grid_size, block_size>>>(interior, n_local, cap, left_marker, right_marker);
+      check_cuda(cudaGetLastError(), "fill_interior_kernel");
+      check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(fill)");
     }
-
-    nvshmem_barrier_all();
-    MPI_Barrier(MPI_COMM_WORLD);
-    comm_playground::wall_timer timer;
-
-    if (local_size > 0) {
-      if (left >= 0) {
-        nvshmem_float_put(device_x + local_offset + 1U, device_x + local_offset + 1U, 1, left);
-      }
-      if (right >= 0) {
-        nvshmem_float_put(device_x + local_offset + local_size, device_x + local_offset + local_size, 1, right);
-      }
-    }
-    nvshmem_quiet();
     nvshmem_barrier_all();
 
-    if (local_size > 0) {
+    std::vector<float> host_left;
+    std::vector<float> host_right;
+    std::uint64_t value = 0;
+
+    for (const std::size_t halo : halo_sizes) {
+      float* send_left = interior;
+      float* send_right = interior + n_local - halo;
+      float* recv_left = interior - halo;
+      float* recv_right = interior + n_local;
+
       constexpr int block_size = 256;
-      const auto grid_size = static_cast<int>((local_size + block_size - 1U) / block_size);
-      halo_kernel<<<grid_size, block_size>>>(device_x, device_y, local_offset, local_size);
-      check_cuda(cudaGetLastError(), "halo_kernel");
-      check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(kernel)");
+      MPI_Barrier(MPI_COMM_WORLD);
+      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+        ++value;
+        halo_exchange_kernel<<<1, block_size>>>(recv_left, recv_right, send_left, send_right, signals,
+                                                halo, value, left, right);
+        check_cuda(cudaGetLastError(), "halo_exchange_kernel");
+        check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(halo)");
+      });
+
+      host_left.assign(halo, 0.0F);
+      host_right.assign(halo, 0.0F);
+      check_cuda(cudaMemcpy(host_left.data(), recv_left, halo * sizeof(float), cudaMemcpyDeviceToHost),
+                 "cudaMemcpy(recv_left)");
+      check_cuda(cudaMemcpy(host_right.data(), recv_right, halo * sizeof(float), cudaMemcpyDeviceToHost),
+                 "cudaMemcpy(recv_right)");
+      int local_ok = 1;
+      for (std::size_t i = 0; i < halo; ++i) {
+        if (!comm_playground::nearly_equal(host_left[i], expect_left) ||
+            !comm_playground::nearly_equal(host_right[i], expect_right)) {
+          local_ok = 0;
+          break;
+        }
+      }
+
+      int global_ok = 1;
+      double max_avg = 0.0;
+      double min_min = 0.0;
+      double max_max = 0.0;
+      MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
+      MPI_Reduce(&stats.avg_s, &max_avg, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&stats.min_s, &min_min, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&stats.max_s, &max_max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+      if (pe == 0) {
+        comm_playground::bench_report report;
+        report.name = "cuda_nvshmem_halo_1d";
+        report.n = halo;
+        report.ranks = pes;
+        report.bytes_per_iter = 4U * halo * sizeof(float);
+        report.iterations = iterations;
+        report.warmup = warmup;
+        report.time_per_iter_s = max_avg;
+        report.min_s = min_min;
+        report.max_s = max_max;
+        report.valid = global_ok != 0;
+        report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv sync=signal";
+        comm_playground::print_report(report);
+      }
+      nvshmem_barrier_all();
     }
 
-    nvshmem_barrier_all();
-    if (pe != 0 && local_size > 0) {
-      nvshmem_float_put(device_y + local_offset, device_y + local_offset, local_size, 0);
-    }
-    nvshmem_quiet();
-    nvshmem_barrier_all();
-    const auto elapsed = timer.seconds();
-
-    int global_ok = 1;
-    if (pe == 0) {
-      std::vector<float> host_y(global_size, 0.0F);
-      check_cuda(cudaMemcpy(host_y.data(), device_y, global_size * sizeof(float), cudaMemcpyDeviceToHost),
-                 "cudaMemcpy(host_y)");
-      global_ok = comm_playground::validate_halo_1d(host_y.data(), global_size, 0, global_size) ? 1 : 0;
-    }
-    MPI_Bcast(&global_ok, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-    double max_elapsed = 0.0;
-    MPI_Reduce(&elapsed, &max_elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-
-    nvshmem_free(device_y);
-    nvshmem_free(device_x);
+    nvshmem_free(signals);
+    nvshmem_free(buf);
     nvshmem_finalize();
     nvshmem_initialized = false;
 
-    if (pe == 0) {
-      std::cout << "cuda_nvshmem_halo_1d n=" << global_size << " pes=" << pes << " time_s=" << max_elapsed
-                << " validation=" << (global_ok ? "PASS" : "FAIL") << '\n';
-    }
-
     MPI_Finalize();
-    return global_ok ? 0 : 1;
+    return 0;
   } catch (const std::exception& error) {
     std::cerr << "rank " << mpi_rank << ": " << error.what() << '\n';
     if (nvshmem_initialized) {
