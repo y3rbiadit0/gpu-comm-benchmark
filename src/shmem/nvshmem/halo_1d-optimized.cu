@@ -35,12 +35,13 @@ namespace cg = cooperative_groups;
 //     warmup+timed loop runs INSIDE one persistent cooperative kernel; grid.sync()
 //     carries the ring dependency between iterations, so the launch is paid once.
 //
-// Because the payload is split across blocks, a single put+SIGNAL_SET would be
-// unsafe: one block's SET could arrive before another block's data. Instead each
-// block puts with SIGNAL_ADD(+1), and the waiter proceeds only once the counter
-// reaches (iteration * active_blocks) -- i.e. every block's data for this
-// iteration has landed. NVSHMEM delivers each block's signal after its own data,
-// so the count is a correct "all blocks done" barrier.
+// The payload is split across blocks as plain (signal-less) puts. After a
+// grid.sync() confirms every block has issued its puts, block 0 drains them
+// PE-wide with nvshmem_quiet() and raises a SINGLE signal per direction, which the
+// waiter gates on. Earlier this used a per-block SIGNAL_ADD counted up to
+// (iteration * active_blocks); on the IBGDA-less proxy path those many concurrent
+// signal-adds could be dropped and deadlock the wait, so it was collapsed to one
+// signal per direction per iteration (see the kernel comment for the full story).
 //
 // Launched with nvshmemx_collective_launch so that both grid.sync() and in-kernel
 // NVSHMEM point-to-point sync are legal across PEs.
@@ -65,34 +66,48 @@ __global__ void fill_interior_kernel(float* interior, std::size_t n_local, std::
 }
 
 // Persistent, multi-block ring exchange. Block b owns the contiguous chunk
-// [b*chunk, min((b+1)*chunk, halo)) of each boundary. Blocks with an empty chunk
-// still participate in grid.sync() but issue no put and no signal. Only block 0 /
-// thread 0 performs the wait (the timing gate); grid.sync() then opens the next
-// iteration for every block.
+// [b*chunk, min((b+1)*chunk, halo)) of each boundary and moves it with a plain
+// (signal-less) block put. Blocks with an empty chunk still take part in the
+// grid.sync() barriers but issue nothing.
+//
+// Robustness fix vs. the per-block SIGNAL_ADD design: without IBGDA every block's
+// remote signal is a separate proxied op, and many concurrent signal-adds per
+// iteration can be dropped on the proxy path, leaving signal_wait_until spinning
+// forever (the intermittent hang). Here the data goes as N plain puts, then --
+// after grid.sync() guarantees every block has *issued* its puts -- ONLY block 0
+// completes them PE-wide with nvshmem_quiet() and raises ONE signal per direction.
+// One signal per direction per iteration (not one per block) removes the race.
+// The single writer per counter means SIGNAL_ADD(+1) is safe; the threshold is
+// base + it. Data correctness is still checked by the host-side halo validation.
 __global__ void halo_persistent_kernel(float* recv_left, float* recv_right,
                                         const float* send_left, const float* send_right,
                                         std::uint64_t* signals, std::size_t halo,
-                                        std::size_t chunk, unsigned active,
-                                        int left, int right, int iters, std::uint64_t base) {
+                                        std::size_t chunk, int left, int right,
+                                        int iters, std::uint64_t base) {
   cg::grid_group grid = cg::this_grid();
   const std::size_t off = static_cast<std::size_t>(blockIdx.x) * chunk;
   const std::size_t len = off < halo ? (halo - off < chunk ? halo - off : chunk) : 0U;
 
   for (int it = 1; it <= iters; ++it) {
-    const std::uint64_t threshold = base + static_cast<std::uint64_t>(it) * active;
+    const std::uint64_t threshold = base + static_cast<std::uint64_t>(it);
     if (len != 0U) {
-      // My right boundary chunk -> right neighbour's left halo (+1 to its sig_left).
-      nvshmemx_float_put_signal_nbi_block(recv_left + off, send_right + off, len,
-                                          signals + sig_left, 1U, NVSHMEM_SIGNAL_ADD, right);
-      // My left boundary chunk -> left neighbour's right halo (+1 to its sig_right).
-      nvshmemx_float_put_signal_nbi_block(recv_right + off, send_left + off, len,
-                                          signals + sig_right, 1U, NVSHMEM_SIGNAL_ADD, left);
+      // My right boundary chunk -> right neighbour's left halo; my left chunk ->
+      // left neighbour's right halo. Data only -- the signal is raised once, below.
+      nvshmemx_float_put_nbi_block(recv_left + off, send_right + off, len, right);
+      nvshmemx_float_put_nbi_block(recv_right + off, send_left + off, len, left);
     }
+    grid.sync();  // every block has now issued its data puts for this iteration
     if (blockIdx.x == 0 && threadIdx.x == 0) {
+      nvshmem_quiet();  // PE-wide completion: all blocks' puts have landed remotely
+      // One signal per direction, after the data is complete. sig_left on the right
+      // neighbour = "its left halo is ready"; sig_right on the left neighbour = "its
+      // right halo is ready".
+      nvshmemx_signal_op(signals + sig_left, 1U, NVSHMEM_SIGNAL_ADD, right);
+      nvshmemx_signal_op(signals + sig_right, 1U, NVSHMEM_SIGNAL_ADD, left);
       nvshmem_signal_wait_until(signals + sig_left, NVSHMEM_CMP_GE, threshold);
       nvshmem_signal_wait_until(signals + sig_right, NVSHMEM_CMP_GE, threshold);
     }
-    grid.sync();
+    grid.sync();  // reopen the next iteration only after this one's signal + wait
   }
 }
 
@@ -221,25 +236,23 @@ int main(int argc, char** argv) {
       if (chunk == 0U) {
         chunk = 1U;
       }
-      const auto active = static_cast<unsigned>((halo + chunk - 1U) / chunk);
 
       std::size_t halo_v = halo;
       std::size_t chunk_v = chunk;
-      unsigned active_v = active;
       int left_v = left;
       int right_v = right;
       int launch_iters = warmup;
       std::uint64_t base_v = base;
       void* args[] = {&recv_left, &recv_right, &send_left, &send_right, &signals,
-                      &halo_v,    &chunk_v,    &active_v,   &left_v,     &right_v,
+                      &halo_v,    &chunk_v,    &left_v,     &right_v,
                       &launch_iters, &base_v};
       const dim3 grid(static_cast<unsigned>(nblocks));
       const dim3 block(block_size);
 
       // The signal counters are never reset -- a memset races with in-flight
-      // proxied puts and can drop a signal, deadlocking the wait. Instead each
-      // launch waits for a monotonic threshold base + it*active; base is the
-      // running total every PE has sent, so it stays identical across PEs.
+      // proxied signals and can drop one, deadlocking the wait. Instead each launch
+      // waits for a monotonic threshold base + it; base is the running signal total
+      // (one per direction per iteration) every PE has sent, identical across PEs.
       auto launch = [&](int iters) {
         launch_iters = iters;
         base_v = base;
@@ -253,7 +266,7 @@ int main(int argc, char** argv) {
       // Warmup (untimed).
       launch(warmup);
       check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(warmup)");
-      base += static_cast<std::uint64_t>(warmup) * active;
+      base += static_cast<std::uint64_t>(warmup);
 
       // Timed: one persistent-kernel launch, divided by the iteration count.
       nvshmem_barrier_all();
@@ -262,7 +275,7 @@ int main(int argc, char** argv) {
       check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(timed)");
       const double elapsed = timer.seconds();
       const double avg = iterations > 0 ? elapsed / static_cast<double>(iterations) : 0.0;
-      base += static_cast<std::uint64_t>(iterations) * active;
+      base += static_cast<std::uint64_t>(iterations);
 
       host_left.assign(halo, 0.0F);
       host_right.assign(halo, 0.0F);
@@ -299,7 +312,7 @@ int main(int argc, char** argv) {
         report.max_s = max_avg;
         report.valid = global_ok != 0;
         report.extra = "halo_elems=" + std::to_string(halo) +
-                       " topology=ring bw=sendrecv sync=signal-add variant=persistent-multiblock" +
+                       " topology=ring bw=sendrecv sync=quiet-signal variant=persistent-multiblock" +
                        " blocks=" + std::to_string(nblocks);
         comm_playground::print_report(report);
       }
