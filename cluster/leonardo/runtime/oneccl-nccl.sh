@@ -46,6 +46,8 @@ export CCL_WORKER_AFFINITY=${CCL_WORKER_AFFINITY:-auto}
 
 export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
 export NCCL_SOCKET_IFNAME=${NCCL_SOCKET_IFNAME:-ib0}
+# Service level 1 enables adaptive routing on Leonardo's Dragonfly+ fabric.
+export NCCL_IB_SL=${NCCL_IB_SL:-1}
 
 if [[ ${COMM_PLAYGROUND_JOB_NODES:-1} -gt 1 ]]; then
   export I_MPI_HYDRA_BOOTSTRAP=${I_MPI_HYDRA_BOOTSTRAP:-slurm}

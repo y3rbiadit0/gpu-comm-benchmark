@@ -47,8 +47,8 @@ cp_halo_1d_print_summary() {
   echo "launcher path: $(command -v "$CP_LAUNCHER" 2>/dev/null || true)"
   echo "stack: $CP_STACK"
   echo "runtime: $CP_RUNTIME"
-  echo "UCX_TLS: ${UCX_TLS:-unset}"
   echo "profile: ${CP_PROFILE:-off}"
+  cp_leonardo_print_env
   nvidia-smi || true
 }
 
@@ -104,6 +104,12 @@ cp_halo_1d_run_trials() {
         >"${outfile}.tmp" 2>"${errfile}.tmp" \
       && mv --verbose "${outfile}.tmp" "$outfile" \
       && mv --verbose "${errfile}.tmp" "$errfile"
+    fi
+
+    # Back-to-back job steps can stall on Leonardo while the previous step
+    # finalizes; give it a moment before launching the next srun.
+    if [[ "$trial" -lt "$CP_NTRIALS" ]]; then
+      sleep 1
     fi
   done
 }

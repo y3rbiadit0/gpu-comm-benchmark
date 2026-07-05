@@ -20,6 +20,10 @@ export SHMEM_SYMMETRIC_SIZE=${SHMEM_SYMMETRIC_SIZE:-1G}
 if [[ ${COMM_PLAYGROUND_JOB_NODES:-1} -gt 1 ]]; then
   export OMPI_MCA_pml=${OMPI_MCA_pml:-ucx}
   export UCX_TLS=${COMM_PLAYGROUND_NVSHMEM_UCX_TLS:-sm,cuda_copy,cuda_ipc,rc,self}
+  # Service level 1 enables adaptive routing on Leonardo's Dragonfly+ fabric.
+  # UCX covers the MPI bootstrap; the ibrc data plane needs NVSHMEM's own knob.
+  export UCX_IB_SL=${UCX_IB_SL:-1}
+  export NVSHMEM_IB_SL=${NVSHMEM_IB_SL:-1}
 else
   export UCX_TLS=${COMM_PLAYGROUND_NVSHMEM_UCX_TLS:-sm,cuda_copy,cuda_ipc,self}
 fi

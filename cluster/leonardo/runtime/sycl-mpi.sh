@@ -17,6 +17,10 @@ export OMPI_MCA_mpi_cuda_support=${OMPI_MCA_mpi_cuda_support:-1}
 if [[ ${COMM_PLAYGROUND_JOB_NODES:-1} -gt 1 ]]; then
   export OMPI_MCA_pml=${OMPI_MCA_pml:-ucx}
   export UCX_TLS=${COMM_PLAYGROUND_SYCL_UCX_TLS:-sm,cuda_copy,cuda_ipc,rc,self}
+  # Service level 1 enables adaptive routing on Leonardo's Dragonfly+ fabric.
+  export UCX_IB_SL=${UCX_IB_SL:-1}
+  # Pin the rail count (UCX default is 2) so multi-rail behavior is explicit.
+  export UCX_MAX_RNDV_RAILS=${UCX_MAX_RNDV_RAILS:-2}
 else
   export UCX_TLS=${COMM_PLAYGROUND_SYCL_UCX_TLS:-sm,cuda_copy,cuda_ipc,self}
 fi

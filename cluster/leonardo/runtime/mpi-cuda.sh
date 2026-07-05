@@ -16,6 +16,11 @@ if [[ ${COMM_PLAYGROUND_JOB_NODES:-1} -gt 1 ]]; then
   export UCX_TLS=${COMM_PLAYGROUND_CUDA_UCX_TLS:-sm,cuda_copy,cuda_ipc,rc,self}
   export UCX_RNDV_SCHEME=${COMM_PLAYGROUND_CUDA_UCX_RNDV_SCHEME:-get_zcopy}
   export UCX_RNDV_THRESH=${COMM_PLAYGROUND_CUDA_UCX_RNDV_THRESH:-16384}
+  # Service level 1 enables adaptive routing on Leonardo's Dragonfly+ fabric.
+  export UCX_IB_SL=${UCX_IB_SL:-1}
+  export NCCL_IB_SL=${NCCL_IB_SL:-1}
+  # Pin the rail count (UCX default is 2) so multi-rail behavior is explicit.
+  export UCX_MAX_RNDV_RAILS=${UCX_MAX_RNDV_RAILS:-2}
 else
   export UCX_TLS=${COMM_PLAYGROUND_CUDA_UCX_TLS:-sm,cuda_copy,cuda_ipc,self}
 fi

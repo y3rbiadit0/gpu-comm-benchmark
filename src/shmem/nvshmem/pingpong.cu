@@ -41,6 +41,7 @@ __global__ void pingpong_kernel(float* send, float* recv, std::uint64_t* flag, s
     if (pe == 0) {
       nvshmemx_float_put_block(recv, send, count, peer);
       __syncthreads();
+      
       if (threadIdx.x == 0) {
         nvshmem_fence();
         nvshmemx_signal_op(flag, signal, NVSHMEM_SIGNAL_SET, peer);
