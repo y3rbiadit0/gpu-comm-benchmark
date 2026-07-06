@@ -13,7 +13,48 @@ set -euo pipefail
 #   cp_<name>_main             wrapper around cp_experiment_main, called by the
 #                              sbatch job scripts
 
-cp_experiment_launch_prefix() { :; }
+# Opt-in per-rank profiling, shared by all experiments. CP_PROFILE=nsys wraps
+# each rank in Nsight Systems (timeline: kernels, comm calls, overlap);
+# CP_PROFILE=ncu wraps each rank in Nsight Compute collecting the roofline
+# section for every kernel launch. One report per rank+trial lands under
+# $CP_RUN_DIR/profiles. Profiling perturbs timing: use a dedicated
+# CP_NTRIALS=1 run and never report numbers from a profiled run.
+#
+# Each rank gets its own report via the launcher's per-rank env (SLURM_PROCID
+# under srun, OMPI_COMM_WORLD_RANK under mpirun); the profilers substitute
+# %q{VAR} at runtime, so the token must stay unquoted.
+#
+# ncu knobs: CP_NCU_SET (default roofline), CP_NCU_LAUNCH_COUNT (default 3,
+# profiled launches per kernel), CP_NCU_KERNELS (regex, no spaces; limits
+# which kernels are profiled). ncu replays each kernel several times, so a
+# kernel that waits on another rank (device-initiated comm) can hang under
+# replay -- exclude such kernels via CP_NCU_KERNELS or profile a 1n1g run.
+cp_experiment_launch_prefix() {
+  [[ -n "${CP_PROFILE:-}" ]] || return 0
+
+  local rank_token='%q{SLURM_PROCID}'
+  [[ "$CP_LAUNCHER" == "mpirun" ]] && rank_token='%q{OMPI_COMM_WORLD_RANK}'
+
+  mkdir -p "$CP_RUN_DIR/profiles"
+  local out="$CP_RUN_DIR/profiles/${SLURM_JOB_NAME:-manual}-${SLURM_JOB_ID:-manual}-${trial}-rank${rank_token}"
+
+  case "$CP_PROFILE" in
+    nsys)
+      printf '%s ' nsys profile --force-overwrite=true --trace="${CP_NSYS_TRACE:-cuda,nvtx,mpi}" \
+        --sample=none --cpuctxsw=none --output="$out"
+      ;;
+    ncu)
+      printf '%s ' ncu --set "${CP_NCU_SET:-roofline}" \
+        --launch-count "${CP_NCU_LAUNCH_COUNT:-3}" \
+        ${CP_NCU_KERNELS:+--kernel-name regex:${CP_NCU_KERNELS}} \
+        --force-overwrite --export "$out"
+      ;;
+    *)
+      echo "unknown CP_PROFILE: $CP_PROFILE (expected nsys or ncu)" >&2
+      return 1
+      ;;
+  esac
+}
 
 cp_experiment_setup() {
   : "${CP_EXPERIMENT:?missing CP_EXPERIMENT}"
@@ -39,6 +80,11 @@ cp_experiment_setup() {
 
   cp_experiment_defaults
 
+  case "${CP_PROFILE:-}" in
+    '' | nsys | ncu) ;;
+    *) echo "unknown CP_PROFILE: $CP_PROFILE (expected nsys or ncu)" >&2; exit 1 ;;
+  esac
+
   [ -x "$CP_BINARY" ] || { echo "no executable: $CP_BINARY" >&2; exit 1; }
 }
 
@@ -60,6 +106,7 @@ cp_experiment_print_summary() {
   echo "launcher path: $(command -v "$CP_LAUNCHER" 2>/dev/null || true)"
   echo "stack: $CP_STACK"
   echo "runtime: $CP_RUNTIME"
+  echo "profile: ${CP_PROFILE:-off}"
   if declare -F cp_experiment_extra_summary >/dev/null; then
     cp_experiment_extra_summary
   fi
