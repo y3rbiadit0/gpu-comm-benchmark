@@ -104,6 +104,9 @@ int main(int argc, char** argv) {
     nvshmem_barrier_all();
     MPI_Barrier(MPI_COMM_WORLD);
     const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      // Compute the global dot product by summing the partial results across all PEs.
+      // TEAM_WORLD is used to include all PEs in the reduction. https://docs.nvidia.com/nvshmem/api/gen/api/teams.html#subsec-team
+      //   sum_reduce -> https://docs.nvidia.com/nvshmem/api/gen/api/collectives.html#subsec-coll
       nvshmem_double_sum_reduce(NVSHMEM_TEAM_WORLD, device_result, device_partial, 1);
     });
 
