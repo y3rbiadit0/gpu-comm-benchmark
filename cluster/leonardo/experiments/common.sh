@@ -24,9 +24,15 @@ set -euo pipefail
 # under srun, OMPI_COMM_WORLD_RANK under mpirun); the profilers substitute
 # %q{VAR} at runtime, so the token must stay unquoted.
 #
-# ncu knobs: CP_NCU_SET (default roofline), CP_NCU_LAUNCH_COUNT (default 3,
-# profiled launches per kernel), CP_NCU_KERNELS (regex, no spaces; limits
-# which kernels are profiled). ncu replays each kernel several times, so a
+# ncu knobs: CP_NCU_BIN (default: nvhpc/25.3's ncu -- the nvhpc/24.5 ncu
+# 2024.1.1 in PATH fails to attach with "Failed to connect to process";
+# NVIDIA fixed the launch path in later releases), CP_NCU_SET (default
+# roofline), CP_NCU_LAUNCH_COUNT (default 3,
+# total profiled launches -- GLOBAL across all kernels in launch order, not
+# per kernel, counted after the CP_NCU_KERNELS filter; multi-kernel binaries
+# need a filter or a larger count to reach later kernels), CP_NCU_KERNELS
+# (regex, no spaces; limits which kernels are profiled). ncu replays each
+# profiled launch several times to collect its metric set, so a
 # kernel that waits on another rank (device-initiated comm) can hang under
 # replay -- exclude such kernels via CP_NCU_KERNELS or profile a 1n1g run.
 cp_experiment_launch_prefix() {
@@ -44,7 +50,10 @@ cp_experiment_launch_prefix() {
         --sample=none --cpuctxsw=none --output="$out"
       ;;
     ncu)
-      printf '%s ' ncu --set "${CP_NCU_SET:-roofline}" \
+      # MPI_Init fails when ncu sits between srun and the binary (the rank
+      # loses its PMI bootstrap); profiled ncu runs need CP_LAUNCHER=mpirun.
+      printf '%s ' "${CP_NCU_BIN:-/leonardo/prod/opt/compilers/nvhpc/25.3/binary/Linux_x86_64/25.3/compilers/bin/ncu}" \
+        --set "${CP_NCU_SET:-roofline}" \
         --launch-count "${CP_NCU_LAUNCH_COUNT:-3}" \
         ${CP_NCU_KERNELS:+--kernel-name regex:${CP_NCU_KERNELS}} \
         --force-overwrite --export "$out"
