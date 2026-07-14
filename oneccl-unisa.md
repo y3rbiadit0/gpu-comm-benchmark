@@ -20,7 +20,7 @@ ONECCL_NCCL_ROOT=$HOME/opt/oneccl-nccl-leonardo
 
 The NCCL-enabled oneCCL fork is used with its bundled Intel MPI, not Leonardo OpenMPI, for `sycl_oneccl`.
 
-The `sycl_oneccl_vector_add` executable calls MPI directly for setup and validation, so its linked MPI and oneCCL's dynamically loaded MPI must match. Mixing an OpenMPI-linked executable with oneCCL loading Intel MPI fails during transport initialization.
+The `sycl_oneccl` executables call MPI directly for setup and validation, so their linked MPI and oneCCL's dynamically loaded MPI must match. Mixing an OpenMPI-linked executable with oneCCL loading Intel MPI fails during transport initialization.
 
 The Leonardo `leonardo-sycl-oneccl` preset enables bundled MPI mode and uses:
 
@@ -36,7 +36,7 @@ At runtime, `cluster/leonardo/runtime/oneccl-nccl.sh` discovers bundled `libmpi.
 CCL_MPI_LIBRARY_PATH=/path/to/bundled/libmpi.so
 ```
 
-The oneCCL vector-add jobs use `mpirun` rather than direct `srun` so the launcher also comes from the bundled MPI stack when available.
+The oneCCL jobs use `mpirun` rather than direct `srun` so the launcher also comes from the bundled MPI stack when available.
 
 ## Multi-Node Intel MPI Startup
 
@@ -77,15 +77,14 @@ The oneCCL NCCL backend used here does not implement `broadcast`:
 oneCCL: nccl_comm.cpp:355 broadcast_impl: EXCEPTION: broadcast is not implemented for NCCL backend yet
 ```
 
-For `sycl_oneccl_vector_add`, rank-0 input distribution therefore uses NCCL-supported `allreduce(sum)` as a broadcast substitute:
+The active benchmark suite does not require this unsupported collective. Any future
+broadcast benchmark must either wait for backend support or report the capability gap
+explicitly rather than silently changing the operation.
 
-1. Every rank initializes the full input buffers to zero.
-2. Rank 0 writes the real input arrays.
-3. `allreduce(sum)` over the full input buffer propagates rank 0's data because all other ranks contribute zeros.
-4. The local partition is computed on each rank.
-5. A final `allreduce(sum)` collects the sparse per-rank output into the full result.
-
-This keeps the example on the oneCCL NCCL backend without relying on unsupported collectives.
+Point-to-point support is also required by halo, pingpong, CG halo exchange, and MoE.
+The MoE benchmark treats a recognized missing `ccl::send`/`ccl::recv` implementation as a
+capability result and emits `status=NOT_IMPLEMENTED reason=point_to_point validation=SKIP`.
+It never falls back to MPI, leaving the missing oneCCL operation visible for contribution.
 
 ## Rebuild And Smoke Test
 
@@ -102,18 +101,18 @@ Check linkage:
 
 ```bash
 source cluster/leonardo/runtime/oneccl-nccl.sh
-ldd build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_vector_add \
+ldd build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_allreduce \
   | grep -E 'libmpi|libccl|libsycl|libnccl|libstdc'
 ```
 
-Run the uneven-size smoke test:
+Run an explicit-size smoke test:
 
 ```bash
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/vector_add/sycl_oneccl/1n4g.sh
+CP_MSG_SIZES=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/allreduce/sycl_oneccl/1n4g.sh
 ```
 
 Expected result:
 
 ```text
-sycl_oneccl_vector_add n=17 ranks=4 ... validation=PASS
+sycl_oneccl_allreduce n=17 ranks=4 ... validation=PASS
 ```
