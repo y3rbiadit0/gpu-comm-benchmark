@@ -4,7 +4,7 @@ set -euo pipefail
 # Shared engine for all Leonardo experiments. Each experiment's common.sh is a
 # thin shim that sources this file and provides:
 #
-#   CP_EXPERIMENT              results subdirectory name (e.g. dot_product)
+#   CP_EXPERIMENT              results subdirectory name (e.g. allreduce)
 #   CP_N_LABEL                 summary label for CP_N (e.g. "problem size")
 #   cp_experiment_defaults     required; sets CP_N/CP_ITERS/CP_EXTRA_ARGS defaults
 #   cp_experiment_extra_summary  optional; extra summary lines
