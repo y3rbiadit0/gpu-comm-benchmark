@@ -3,7 +3,7 @@
 #
 # Usage:
 #   tools/submit_all.sh                      # submit every benchmark, every backend, every topology
-#   tools/submit_all.sh dot_product pingpong # only these benchmarks
+#   tools/submit_all.sh allreduce pingpong    # only these benchmarks
 #
 # Filters (env, space-separated globs):
 #   CP_ONLY_BACKENDS="cuda_mpi cuda_nccl"    # restrict backends
@@ -13,7 +13,7 @@
 #
 # Pass-through overrides (CP_N, CP_ITERS, CP_WARMUP, CP_NTRIALS, CP_MSG_SIZES, ...) are exported
 # here and inherited by every job, e.g.:
-#   CP_NTRIALS=5 tools/submit_all.sh dot_product
+#   CP_NTRIALS=5 tools/submit_all.sh allreduce
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

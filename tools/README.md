@@ -12,7 +12,7 @@ summary where **every backend is normalized to the `cuda_mpi` baseline**.
 python3 tools/benchscribe
 
 # A specific results directory, or a single benchmark
-python3 tools/benchscribe results --benchmark dot_product
+python3 tools/benchscribe results --benchmark allreduce
 
 # Machine-readable CSV (for plotting / spreadsheets)
 python3 tools/benchscribe --format csv > summary.csv
@@ -53,15 +53,25 @@ the model and how to read the result.
 - Walks `results/**/*-stdout.txt` and reads each benchmark report line. The line
   format is documented in the [root README](../README.md#benchmark-output-schema).
 - Recovers the topology (`1n4g`, `2n1g`, …) from the result path.
-- Groups by **(benchmark, topology, problem size `n`)** and aggregates the metric
-  across trials (mean + min).
+- Groups by **(benchmark, case, topology, problem size `n`)** and aggregates the metric
+  across trials (mean + min). For records with `hidden`, the displayed/grouping case is
+  `<case>,hidden=<width>` (for example `uniform,hidden=256`), keeping MoE routing
+  distributions and hidden widths separate. Records without `hidden` retain their plain case.
 - Within each group, reports each backend relative to `cuda_mpi`:
   - **Δ%** — relative difference (negative = faster than baseline).
   - **Speedup** — `cuda_mpi` / backend for latency metrics (>1 = faster).
 - Sorts backend rows by speedup descending within each benchmark/topology/size group.
-- Parses both the new schema (`usec`, `gbytes_per_s`, …) and the legacy
-  `time_s=` lines (`vector_add`, `halo_1d`). For latency benchmarks compare `usec`;
+- Parses both the new schema (`usec`, `gbytes_per_s`, …) and legacy `time_s=` lines.
+  For latency benchmarks compare `usec`;
   for `pingpong` the `GB/s` column is one-way bandwidth per swept message size.
+- Uses only `status=OK validation=PASS` records for metrics, bandwidth,
+  baselines, deltas, speedups, and α–β fits. `ERROR`, validation-failed, and
+  contradictory `status=OK validation=FAIL` records are excluded from numeric
+  results.
+- Preserves `status=NOT_IMPLEMENTED validation=SKIP` capability results as
+  `N/I`. `NOT_IMPLEMENTED` paired with `PASS` or `FAIL` is contradictory, becomes
+  `ERROR`, and is excluded. Mixed OK/N/I groups count only timing-contributing OK
+  trials, while N/I-only groups retain their observed trial count.
 - Supports `--metric usec`, `--metric time_per_iter_s`, `--metric time_s`, and
   `--metric gbytes_per_s` when you want to force a specific comparison metric.
 

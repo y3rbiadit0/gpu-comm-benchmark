@@ -1,12 +1,30 @@
 #pragma once
 
+#include <cerrno>
+#include <cctype>
+#include <climits>
 #include <cstddef>
 #include <cstdlib>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace comm_playground {
+
+inline bool has_leading_minus(const char* value) {
+  while (std::isspace(static_cast<unsigned char>(*value)) != 0) {
+    ++value;
+  }
+  return *value == '-';
+}
+
+inline std::size_t checked_size_multiply(std::size_t lhs, std::size_t rhs, const char* description) {
+  if (rhs != 0 && lhs > std::numeric_limits<std::size_t>::max() / rhs) {
+    throw std::overflow_error(std::string(description) + " size overflow");
+  }
+  return lhs * rhs;
+}
 
 inline std::size_t parse_size_arg(int argc, char** argv, std::size_t default_value) {
   if (argc < 2) {
@@ -14,8 +32,10 @@ inline std::size_t parse_size_arg(int argc, char** argv, std::size_t default_val
   }
 
   char* end = nullptr;
+  errno = 0;
   const auto value = std::strtoull(argv[1], &end, 10);
-  if (end == argv[1] || *end != '\0' || value == 0) {
+  if (has_leading_minus(argv[1]) || errno == ERANGE || end == argv[1] || *end != '\0' || value == 0 ||
+      value > std::numeric_limits<std::size_t>::max()) {
     throw std::invalid_argument("expected a positive vector size");
   }
 
@@ -39,8 +59,10 @@ inline std::size_t parse_size_token(const std::string& token, std::size_t max_va
   }
 
   char* end = nullptr;
+  errno = 0;
   const auto value = std::strtoull(token.c_str(), &end, 10);
-  if (end == token.c_str() || *end != '\0' || value == 0) {
+  if (has_leading_minus(token.c_str()) || errno == ERANGE || end == token.c_str() || *end != '\0' ||
+      value == 0 || value > std::numeric_limits<std::size_t>::max()) {
     throw std::invalid_argument("expected a comma-separated list of positive message sizes");
   }
   if (value > max_value) {
@@ -80,8 +102,10 @@ inline int parse_positive_int_arg(int argc, char** argv, int index, int default_
   }
 
   char* end = nullptr;
+  errno = 0;
   const auto value = std::strtol(argv[index], &end, 10);
-  if (end == argv[index] || *end != '\0' || value <= 0) {
+  if (has_leading_minus(argv[index]) || errno == ERANGE || end == argv[index] || *end != '\0' || value <= 0 ||
+      value > INT_MAX) {
     throw std::invalid_argument("expected a positive integer argument");
   }
 
