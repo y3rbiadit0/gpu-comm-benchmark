@@ -35,6 +35,9 @@ The active suite contains six communication patterns:
 | SHMEM | NVSHMEM | [`src/shmem/nvshmem`](src/shmem/nvshmem/README.md) |
 | SHMEM | OSHMPI | [`src/shmem/oshmpi`](src/shmem/oshmpi/README.md) |
 
+Known backend capability gaps, explicit workarounds, and pending validation are
+tracked in [`docs/unsupported-operations.md`](docs/unsupported-operations.md).
+
 ## Build
 
 Build one preset directly:

@@ -133,6 +133,21 @@ class BenchscribeTest(unittest.TestCase):
         self.assertIsNone(failed.speedup_vs_base)
         self.assertNotIn("oshmpi", {item.backend for item in characterize(table)})
 
+    def test_characterize_uses_small_message_median_for_alpha(self):
+        measurements = self.scan_lines(
+            "cuda_mpi_pingpong n=1 usec=15 bytes=4 gbytes_per_s=0.001 validation=PASS status=OK",
+            "cuda_mpi_pingpong n=16 usec=14 bytes=64 gbytes_per_s=0.005 validation=PASS status=OK",
+            "cuda_mpi_pingpong n=1024 usec=16 bytes=4096 gbytes_per_s=0.25 validation=PASS status=OK",
+            "cuda_mpi_pingpong n=4096 usec=9 bytes=16384 gbytes_per_s=1.8 validation=PASS status=OK",
+            "cuda_mpi_pingpong n=262144 usec=100 bytes=1048576 gbytes_per_s=10 validation=PASS status=OK",
+        )
+
+        result = characterize(SummaryTable.from_measurements(measurements))[0]
+
+        self.assertEqual(result.alpha, 15.0)
+        self.assertEqual(result.binf_gbs, 10.0)
+        self.assertEqual(result.nhalf_bytes, 150000.0)
+
     def test_old_format_infers_status_and_keeps_default_case_output(self):
         measurements = self.scan_lines(
             "cuda_mpi_allreduce n=4 usec=3 validation=PASS",

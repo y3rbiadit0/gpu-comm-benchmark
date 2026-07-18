@@ -22,6 +22,11 @@ SYCL examples using oneCCL collectives.
 > emits `status=NOT_IMPLEMENTED reason=point_to_point validation=SKIP` for the affected and
 > remaining routing cases, and exits successfully so unsupported capability is not reported
 > as a failed benchmark.
+>
+> On the validated Leonardo fork, the grouped `halo_1d` ring stalls whenever a
+> node hosts more than one participating rank. The `1n2g`, `1n4g`, and `2n4g`
+> jobs therefore report `NOT_IMPLEMENTED`; `2n1g` remains supported. See the
+> [unsupported operations tracker](../../../docs/unsupported-operations.md).
 
 ## Run
 

@@ -40,6 +40,32 @@ sycl::device device_for_rank(int rank) {
   return devices[static_cast<std::size_t>(rank) % devices.size()];
 }
 
+bool has_intra_node_peers() {
+  MPI_Comm local_comm = MPI_COMM_NULL;
+  MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &local_comm);
+
+  int local_ranks = 0;
+  MPI_Comm_size(local_comm, &local_ranks);
+  MPI_Comm_free(&local_comm);
+
+  int local_unsupported = local_ranks > 1 ? 1 : 0;
+  int global_unsupported = 0;
+  MPI_Allreduce(&local_unsupported, &global_unsupported, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+  return global_unsupported != 0;
+}
+
+void print_intra_node_not_implemented(const std::vector<std::size_t>& halo_sizes, int ranks,
+                                      int iterations, int warmup) {
+  for (const std::size_t halo : halo_sizes) {
+    std::cout << "sycl_oneccl_halo_1d n=" << halo << " ranks=" << ranks
+              << " bytes=" << (4U * halo * sizeof(float)) << " iters=" << iterations
+              << " warmup=" << warmup
+              << " time_per_iter_s=0 usec=0 min_usec=0 max_usec=0 gbytes_per_s=0"
+              << " halo_elems=" << halo << " topology=ring bw=sendrecv"
+              << " status=NOT_IMPLEMENTED reason=intra_node_ring_point_to_point validation=SKIP\n";
+  }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -59,6 +85,14 @@ int main(int argc, char** argv) {
     const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
     const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
     const auto halo_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_halo);
+
+    if (has_intra_node_peers()) {
+      if (rank == 0) {
+        print_intra_node_not_implemented(halo_sizes, ranks, iterations, warmup);
+      }
+      MPI_Finalize();
+      return 0;
+    }
 
     const int left = (rank - 1 + ranks) % ranks;
     const int right = (rank + 1) % ranks;

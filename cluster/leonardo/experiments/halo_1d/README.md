@@ -27,7 +27,7 @@ topologies. Each launch starts at least two ranks/PEs.
 | `cuda_nvshmem` | Device-initiated `nvshmemx_float_put_signal_nbi_block` + `nvshmem_signal_wait_until` P2P sync (comm-only ring) |
 | `oshmpi` | One-sided `shmem_putmem` + `shmem_quiet` + global barrier completion (comm-only ring) |
 | `sycl_mpi` | SYCL-aware `MPI_Isend`/`MPI_Irecv`/`MPI_Waitall` neighbor exchange (comm-only ring) |
-| `sycl_oneccl` | Grouped point-to-point `ccl::send`/`ccl::recv` with both neighbors (comm-only ring) |
+| `sycl_oneccl` | Grouped point-to-point `ccl::send`/`ccl::recv` with both neighbors; supported on `2n1g`, explicit `NOT_IMPLEMENTED` on topologies with multiple ranks per node |
 
 ## Submit
 

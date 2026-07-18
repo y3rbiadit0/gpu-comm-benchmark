@@ -86,6 +86,14 @@ The MoE benchmark treats a recognized missing `ccl::send`/`ccl::recv` implementa
 capability result and emits `status=NOT_IMPLEMENTED reason=point_to_point validation=SKIP`.
 It never falls back to MPI, leaving the missing oneCCL operation visible for contribution.
 
+Point-to-point availability is not sufficient for every communication pattern.
+The grouped `halo_1d` ring is validated on `2n1g`, but the installed backend
+stalls before its first report on `1n2g`, `1n4g`, and `2n4g`. The benchmark now
+detects multiple participating ranks per node before oneCCL initialization and
+reports `status=NOT_IMPLEMENTED`, `reason=intra_node_ring_point_to_point`, and
+`validation=SKIP`. Follow-up work is tracked in
+[`docs/unsupported-operations.md`](docs/unsupported-operations.md).
+
 ## Rebuild And Smoke Test
 
 Use a clean configure after changing MPI linkage mode:
