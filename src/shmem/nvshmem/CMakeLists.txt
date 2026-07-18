@@ -15,24 +15,6 @@ if(NOT NVSHMEM_INCLUDE_DIR OR NOT NVSHMEM_HOST_LIBRARY OR NOT NVSHMEM_DEVICE_LIB
   message(FATAL_ERROR "NVSHMEM not found. Set NVSHMEM_INCLUDE_DIR/NVSHMEM_LIBRARY_PATH or NVSHMEM_HOME")
 endif()
 
-add_executable(cuda_nvshmem_vector_add vector_add.cu)
-target_include_directories(cuda_nvshmem_vector_add PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_vector_add PRIVATE
-  comm_playground_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
-add_executable(cuda_nvshmem_vector_add_device vector_add-device.cu)
-target_include_directories(cuda_nvshmem_vector_add_device PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_vector_add_device PRIVATE
-  comm_playground_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
 add_executable(cuda_nvshmem_halo_1d halo_1d.cu)
 target_include_directories(cuda_nvshmem_halo_1d PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_halo_1d PRIVATE
@@ -45,15 +27,6 @@ target_link_libraries(cuda_nvshmem_halo_1d PRIVATE
 add_executable(cuda_nvshmem_halo_1d_optimized halo_1d-optimized.cu)
 target_include_directories(cuda_nvshmem_halo_1d_optimized PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_halo_1d_optimized PRIVATE
-  comm_playground_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
-add_executable(cuda_nvshmem_dot_product dot_product.cu)
-target_include_directories(cuda_nvshmem_dot_product PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_dot_product PRIVATE
   comm_playground_common
   MPI::MPI_CXX
   ${NVSHMEM_HOST_LIBRARY}
@@ -78,6 +51,15 @@ target_link_libraries(cuda_nvshmem_alltoall PRIVATE
   ${NVSHMEM_DEVICE_LIBRARY}
 )
 
+add_executable(cuda_nvshmem_allreduce allreduce.cu)
+target_include_directories(cuda_nvshmem_allreduce PRIVATE ${NVSHMEM_INCLUDE_DIR})
+target_link_libraries(cuda_nvshmem_allreduce PRIVATE
+  comm_playground_common
+  MPI::MPI_CXX
+  ${NVSHMEM_HOST_LIBRARY}
+  ${NVSHMEM_DEVICE_LIBRARY}
+)
+
 add_executable(cuda_nvshmem_cg_step cg_step.cu)
 target_include_directories(cuda_nvshmem_cg_step PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_cg_step PRIVATE
@@ -87,7 +69,16 @@ target_link_libraries(cuda_nvshmem_cg_step PRIVATE
   ${NVSHMEM_DEVICE_LIBRARY}
 )
 
-set_target_properties(cuda_nvshmem_vector_add PROPERTIES
+add_executable(cuda_nvshmem_moe moe.cu)
+target_include_directories(cuda_nvshmem_moe PRIVATE ${NVSHMEM_INCLUDE_DIR})
+target_link_libraries(cuda_nvshmem_moe PRIVATE
+  comm_playground_common
+  MPI::MPI_CXX
+  ${NVSHMEM_HOST_LIBRARY}
+  ${NVSHMEM_DEVICE_LIBRARY}
+)
+
+set_target_properties(cuda_nvshmem_moe PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )
 
@@ -99,15 +90,11 @@ set_target_properties(cuda_nvshmem_alltoall PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )
 
-set_target_properties(cuda_nvshmem_dot_product PROPERTIES
+set_target_properties(cuda_nvshmem_allreduce PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )
 
 set_target_properties(cuda_nvshmem_pingpong PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
-
-set_target_properties(cuda_nvshmem_vector_add_device PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )
 

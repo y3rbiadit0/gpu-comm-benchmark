@@ -29,7 +29,7 @@ void check_cuda(cudaError_t status, const char* call) {
 // Laplacian: an SpMV (column-slab halo exchange of p + stencil -> q) followed by
 // two global reductions dot(p,q) and dot(q,q). p == 1 everywhere, so the
 // reductions have exact references and q validates the halo (see reference()).
-// Combines the column-slab halo-exchange and dot_product patterns in one step.
+// Combines the column-slab halo exchange and global reductions in one step.
 
 __global__ void init_p_kernel(float* p, std::size_t side, std::size_t local_cols, std::size_t width) {
   const auto jj = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;

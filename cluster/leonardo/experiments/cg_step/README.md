@@ -7,7 +7,7 @@ in one step:
 1. **SpMV** `q = A·p` — a column-slab halo exchange of `p` (strided column, packed) followed
    by the 5-point stencil (column-slab halo exchange).
 2. **Two global reductions** `dot(p,q)` and `dot(q,q)` — the dot products a CG iteration needs
-   for its `alpha`/`beta` coefficients (same machinery as `dot_product`).
+   for its `alpha`/`beta` coefficients.
 
 So each timed iteration is `1 halo exchange + 2 allreduces`, the real CG bottleneck. `p ≡ 1`,
 which makes both reductions exactly checkable (`dot(p,q) = S(S-1)`) and makes `q` validate the
@@ -61,10 +61,10 @@ NVSHMEM's device-initiated model vs. host-driven collectives).
 
 ## Notes
 
-- Same per-backend mechanisms as the column-slab SpMV halo and `dot_product` (the two
-  reductions): MPI uses CUDA-aware `Sendrecv` + `MPI_Allreduce`; NCCL uses grouped
-  `ncclSend`/`ncclRecv` + `ncclAllReduce`; NVSHMEM uses host-driven `put`+barrier +
-  `nvshmem_double_sum_reduce`; OSHMPI uses `putmem`+barrier + `shmem_double_sum_to_all`.
+- Each backend uses its native communication mechanisms: MPI uses CUDA-aware `Sendrecv` +
+  `MPI_Allreduce`; NCCL uses grouped `ncclSend`/`ncclRecv` + `ncclAllReduce`; NVSHMEM uses
+  host-driven `put`+barrier + `nvshmem_double_sum_reduce`; OSHMPI uses `putmem`+barrier +
+  `shmem_double_sum_to_all`.
 - The two reductions are issued **separately** (as a real CG iteration does), so the
   benchmark reflects two reduction latencies per step, not one fused reduction.
 - **oneCCL caveat:** `sycl_oneccl_cg_step` uses `ccl::send`/`ccl::recv` for the halo. If the
