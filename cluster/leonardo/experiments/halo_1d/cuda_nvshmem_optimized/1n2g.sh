@@ -1,24 +1,24 @@
 #!/bin/bash -l
 #SBATCH -A IscrC_HIGRAPH_0
 #SBATCH -p boost_usr_prod
-#SBATCH --job-name=halo_1d_sycl_mpi_1n4g
+#SBATCH --job-name=halo_1d_cuda_nvshmem_optimized_1n2g
 #SBATCH --error=./logs/%x-%j-stderr.txt
 #SBATCH --output=./logs/%x-%j-stdout.txt
 #SBATCH --time=00:10:00
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
-#SBATCH --gres=gpu:4
+#SBATCH --ntasks-per-node=2
+#SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=8
 
 set -euo pipefail
 
 CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
-CP_STACK=sycl
-CP_RUNTIME=sycl-mpi
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-sycl-mpi/src/mpi/sycl/sycl_mpi_halo_1d}
-CP_RESULT_NAME=${CP_RESULT_NAME:-halo-1d-sycl-mpi-1n4g}
+CP_STACK=cuda
+CP_RUNTIME=nvshmem
+CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_halo_1d_optimized}
+CP_RESULT_NAME=${CP_RESULT_NAME:-halo-1d-cuda-nvshmem-optimized-1n2g}
 CP_NODES=1
-CP_TASKS_PER_NODE=4
+CP_TASKS_PER_NODE=2
 
 source "$CP_PROJECT_ROOT/cluster/leonardo/experiments/halo_1d/common.sh"
 cp_halo_1d_main

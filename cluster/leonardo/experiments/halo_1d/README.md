@@ -6,6 +6,18 @@ Args: `<max_halo_elems> <iterations> <warmup> [comma-separated halo sizes]` (e.g
 
 Build setup is documented in [`cluster/leonardo/README.md`](../../README.md).
 
+## Topologies
+
+Every backend, including `cuda_nvshmem_optimized`, provides these valid ring
+topologies. Each launch starts at least two ranks/PEs.
+
+| Script | Nodes | GPUs/node | Path |
+| --- | ---: | ---: | --- |
+| `1n2g.sh` | 1 | 2 | intra-node NVLink |
+| `1n4g.sh` | 1 | 4 | intra-node NVLink |
+| `2n1g.sh` | 2 | 1 | inter-node InfiniBand |
+| `2n4g.sh` | 2 | 4 | mixed intra- and inter-node |
+
 ## Communication Models
 
 | Backend | Halo Exchange Model |
@@ -13,23 +25,24 @@ Build setup is documented in [`cluster/leonardo/README.md`](../../README.md).
 | `cuda_mpi` | CUDA-aware `MPI_Isend`/`MPI_Irecv`/`MPI_Waitall` neighbor exchange (comm-only ring) |
 | `cuda_nccl` | Grouped `ncclSend`/`ncclRecv` with both neighbors (comm-only ring) |
 | `cuda_nvshmem` | Device-initiated `nvshmemx_float_put_signal_nbi_block` + `nvshmem_signal_wait_until` P2P sync (comm-only ring) |
-| `oshmpi` | One-sided `shmem_putmem` + `shmem_long_wait_until` flag P2P sync (comm-only ring) |
+| `oshmpi` | One-sided `shmem_putmem` + `shmem_quiet` + global barrier completion (comm-only ring) |
 | `sycl_mpi` | SYCL-aware `MPI_Isend`/`MPI_Irecv`/`MPI_Waitall` neighbor exchange (comm-only ring) |
 | `sycl_oneccl` | Point-to-point `ccl::send`/`ccl::recv` with both neighbors (comm-only ring) |
 
 ## Submit
 
-```bash
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem/1n4g.sh
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/oshmpi/1n4g.sh
-```
+Choose a backend directory and one of the four topology scripts. For example:
 
 ```bash
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/sycl_mpi/1n4g.sh
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/sycl_oneccl/1n4g.sh
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_nccl/1n4g.sh
+CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n2g.sh
+CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
+CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/2n1g.sh
+CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/2n4g.sh
 ```
+
+Backend directories are `cuda_mpi`, `cuda_nccl`, `cuda_nvshmem`,
+`cuda_nvshmem_optimized`, `oshmpi`, `sycl_mpi`, and `sycl_oneccl`. oneCCL
+scripts use `mpirun`; all other launchers use the shared default launcher.
 
 Outputs are written to:
 

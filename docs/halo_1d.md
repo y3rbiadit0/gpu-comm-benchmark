@@ -30,11 +30,11 @@ timing reflects the communication layer alone.
   message-size sweep.
 - **GPU-resident buffers:** all sends/receives use device pointers — no host
   staging.
-- **Point-to-point synchronization in the timed loop** — never a global
-  `barrier_all`. A neighbor exchange should cost neighbor latency, not barrier
-  latency that grows with `P`. This is the single most important methodological
-  choice and the reason the SHMEM backends use signals/flags rather than
-  barriers.
+- **Backend-specific completion in the timed loop.** MPI, NCCL, oneCCL, and
+  NVSHMEM use point-to-point completion. OSHMPI completes its two remote writes
+  with `shmem_quiet` followed by `shmem_barrier_all`; the barrier guarantees
+  progress for its passive RMA path, so OSHMPI timings include global barrier
+  overhead.
 
 ---
 
@@ -161,7 +161,7 @@ the whole point.
 | `cuda_mpi_halo_1d` | `src/mpi/cuda/halo_1d.cu` | CUDA-aware `MPI_Isend`/`MPI_Irecv` + `MPI_Waitall` | host two-sided |
 | `cuda_nccl_halo_1d` | `src/xccl/cuda/halo_1d.cu` | grouped `ncclSend`/`ncclRecv` on a stream | host two-sided |
 | `cuda_nvshmem_halo_1d` | `src/shmem/nvshmem/halo_1d.cu` | `nvshmemx_float_put_signal_nbi_block` + `nvshmem_signal_wait_until` | **device** one-sided |
-| `oshmpi_halo_1d` | `src/shmem/oshmpi/halo_1d.cu` | `shmem_putmem` + `shmem_fence` + `shmem_long_atomic_set`/`shmem_long_wait_until` | host one-sided |
+| `oshmpi_halo_1d` | `src/shmem/oshmpi/halo_1d.cu` | `shmem_putmem` + `shmem_quiet` + `shmem_barrier_all` | host one-sided |
 | `sycl_mpi_halo_1d` | `src/mpi/sycl/halo_1d.cpp` | SYCL-aware `MPI_Isend`/`MPI_Irecv` + `MPI_Waitall` (USM) | host two-sided |
 | `sycl_oneccl_halo_1d` | `src/xccl/sycl/halo_1d.cpp` | point-to-point `ccl::send`/`ccl::recv` (events) | host two-sided |
 
@@ -196,15 +196,16 @@ threads issuing communication directly, with no host round-trip per exchange.
 (The target is built with `CUDA_SEPARABLE_COMPILATION ON` for the device NVSHMEM
 calls.)
 
-### oshmpi — host-initiated one-sided, flag sync
+### oshmpi — host-initiated one-sided, barrier completion
 
 Two `shmem_putmem`s write the boundaries into the neighbors' halos (on
-device-symmetric memory from the OSHMPI CUDA memory space), a `shmem_fence`
-orders the data before the flags, then `shmem_long_atomic_set` raises a counter
-flag on each neighbor and `shmem_long_wait_until` waits for the two incoming
-flags. Same point-to-point philosophy as NVSHMEM but host-driven, and the flags
-live in the host symmetric heap. Per-PE timings are reduced to PE 0 through the
-symmetric heap (there is no MPI here). Launch with `oshrun`.
+device-symmetric memory from the OSHMPI CUDA memory space). `shmem_quiet`
+completes the outgoing puts before `shmem_barrier_all` confirms that every PE's
+incoming halos have arrived. Point-to-point flag waits are not used because
+passive RMA can require target-side progress on inter-node paths. The timed loop
+therefore includes one global barrier per exchange. Per-PE timings are reduced
+to PE 0 through the symmetric heap (there is no direct MPI use here). Launch
+with `oshrun`.
 
 ### sycl_oneccl — oneCCL point-to-point
 
@@ -270,11 +271,11 @@ wrap these (including an `nsys` profiling mode).
   send-left / send-right regions for every swept `H`.
 - **Bus bandwidth**: `gbytes_per_s` counts 4 messages/rank/iteration. Keep that
   in mind when comparing to unidirectional link figures.
-- **Not all backends are strict equals.** Closest fair pairs: `cuda_mpi` vs
-  `sycl_mpi` (same two-sided algorithm), and `cuda_nvshmem` vs `oshmpi` (both
-  one-sided remote-write-into-neighbor with P2P sync — but one is
-  device-initiated, the other host-initiated). NCCL/oneCCL are point-to-point
-  over collective libraries.
+- **Not all backends are strict equals.** `cuda_mpi` vs `sycl_mpi` is the
+  closest fair pair because both use the same two-sided algorithm.
+  `cuda_nvshmem` and `oshmpi` both use one-sided remote writes, but NVSHMEM uses
+  neighbor signals while OSHMPI uses a global barrier, so their synchronization
+  costs differ. NCCL/oneCCL are point-to-point over collective libraries.
 - These sources are validated on Leonardo (A100); they are not built locally.
   The α–β model and crossover analysis live in
   [`docs/analysis/halo_1d-crossover.md`](analysis/halo_1d-crossover.md).

@@ -15,10 +15,12 @@ Nsight Systems timelines instead of just wall-clock numbers.
 ## 1. What is measured
 
 Each backend runs the same kernel: a **periodic ring** where rank `r` exchanges a
-halo of width `H` with `left=(r-1+P)%P` and `right=(r+1)%P`, GPU-resident
-buffers, **point-to-point synchronisation in the timed loop (never a global
-barrier)**. `H` is swept; for each `H` the harness reports the slowest-rank
-average per-iteration time via `print_report`.
+halo of width `H` with `left=(r-1+P)%P` and `right=(r+1)%P`, using GPU-resident
+buffers. Synchronisation in the timed loop is point-to-point for the MPI, NCCL,
+oneCCL, and NVSHMEM implementations; OSHMPI instead completes each exchange with
+`shmem_quiet` followed by a global `shmem_barrier_all`. `H` is swept; for each
+`H` the harness reports the slowest-rank average per-iteration time via
+`print_report`.
 
 The bytes accounted per iteration are **bus bytes** — both sends and both
 receives:
@@ -89,7 +91,7 @@ while NCCL hit 30%."
 | Backend | Mechanism | Predicted α | Predicted B∞ | Where it wins |
 | --- | --- | --- | --- | --- |
 | `cuda_nvshmem` | device-initiated `put_signal_nbi_block`, in-kernel signal wait | **lowest** — no host, no MPI match, IPC/IBGDA path | possibly **capped** at large H (single-block put) | small/medium H, especially inter-node |
-| `oshmpi` | host one-sided `putmem` + `wait_until` flag | low–moderate | moderate | small H, when device-kernel issue isn't available |
+| `oshmpi` | host one-sided `putmem` + `quiet` + global barrier | low–moderate | moderate | small H, when device-kernel issue isn't available |
 | `cuda_mpi` | CUDA-aware `Isend`/`Irecv`/`Waitall` | moderate (host + UCX) | good | the baseline; large H |
 | `sycl_mpi` | SYCL-aware `Isend`/`Irecv` | ≈ `cuda_mpi` | ≈ `cuda_mpi` | sanity check vs `cuda_mpi` |
 | `cuda_nccl` | grouped `ncclSend`/`ncclRecv` | **high** — kernel launch + proxy thread per exchange | high once amortised | only large H |
