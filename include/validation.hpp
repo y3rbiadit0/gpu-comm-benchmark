@@ -13,16 +13,6 @@ inline bool nearly_equal(double lhs, double rhs, double tolerance = 1.0e-9) {
   return std::fabs(lhs - rhs) <= tolerance * std::fmax(1.0, std::fmax(std::fabs(lhs), std::fabs(rhs)));
 }
 
-inline bool validate_vector_add(const float* values, std::size_t count, std::size_t global_offset) {
-  for (std::size_t i = 0; i < count; ++i) {
-    const auto index = static_cast<float>(global_offset + i);
-    if (!nearly_equal(values[i], 3.0F * index)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 // All-to-all permutation check. On rank `r` the block destined for rank `s` is
 // filled with r*ranks + s; after the exchange rank `r`'s block received from rank
 // `s` must equal s*ranks + r. Buffers hold ranks * count elements.
