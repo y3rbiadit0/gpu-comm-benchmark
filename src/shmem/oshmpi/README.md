@@ -6,20 +6,20 @@ CUDA examples using OSHMPI/OpenSHMEM CUDA memory spaces.
 
 | Target | Problem | Communication model |
 | --- | --- | --- |
-| `oshmpi_vector_add` | Each PE computes `c[i] = a[i] + b[i]` for a contiguous global slice. | `shmem_putmem` distributes inputs and collects local results. |
 | `oshmpi_halo_1d` | Comm-only 1D halo exchange, periodic ring, swept halo width. | One-sided `shmem_putmem` writes halos into symmetric neighbor buffers; `shmem_quiet` + `shmem_barrier_all` handshake (point-to-point `wait_until` can deadlock inter-node when passive RMA needs target-side progress, so the timed loop includes barrier overhead). |
-| `oshmpi_dot_product` | Double-precision global dot product (CG inner-product). | `shmem_double_sum_to_all` reduces a host-resident scalar (local dot computed on GPU) across PEs. |
 | `oshmpi_pingpong` | Two-endpoint one-way latency/bandwidth, internal size sweep. | One-sided `shmem_putmem` on device symmetric memory + `shmem_barrier_all` handshake between 2 PEs (barrier sync avoids an inter-node passive-progress deadlock; latency includes barrier overhead). |
+| `oshmpi_allreduce` | Float32 sum allreduce latency/bandwidth, internal size sweep. | `shmem_float_sum_to_all` over host-symmetric buffers. |
 | `oshmpi_alltoall` | All-to-all personalized exchange (bisection bandwidth). | One-sided `shmem_putmem` loop to every PE + `barrier_all` (no native device alltoall assumed). |
 | `oshmpi_cg_step` | CG iteration skeleton (SpMV halo + two reductions). | `shmem_putmem`+barrier halo + two `shmem_double_sum_to_all` (host-resident scalars). |
+| `oshmpi_moe` | Top-1 MoE dispatch + combine with variable expert loads. | Variable-byte `shmem_putmem` loops over CUDA symmetric memory, with `quiet` + `barrier_all` after dispatch and inverse combine. |
 
 ## Run
 
 ```bash
-oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_vector_add 1048576
 oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_halo_1d 1048576 100 20
-oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_dot_product 1048576 100 20
 oshrun -np 2 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_pingpong 4194304 100 20
+oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_allreduce 4194304 100 20
 oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_alltoall 65536 100 20
 oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_cg_step 512 50 10
+oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_moe 16384 256 100 20 uniform,locality80,hotspot80
 ```

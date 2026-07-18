@@ -40,46 +40,32 @@ cmake --build --preset leonardo-sycl-oneccl
 ## Experiments
 
 Experiment scripts are fixed-topology Slurm launchers. They write Slurm logs under `logs/` and benchmark outputs under `results/<result-name>/<problem>/`.
-
-Vector add:
-
-```bash
-sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/1n1g.sh
-sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/2n4g.sh
-sbatch cluster/leonardo/experiments/vector_add/cuda_nccl/1n4g.sh
-sbatch cluster/leonardo/experiments/vector_add/cuda_nvshmem/1n4g.sh
-sbatch cluster/leonardo/experiments/vector_add/oshmpi/1n4g.sh
-sbatch cluster/leonardo/experiments/vector_add/sycl_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/vector_add/sycl_oneccl/1n4g.sh
-```
+The active suite is `pingpong`, `halo_1d`, `allreduce`, `alltoall`, `cg_step`, and `moe`.
 
 Halo 1D:
 
 ```bash
 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi_cuda_aware_iter/1n4g.sh
 sbatch cluster/leonardo/experiments/halo_1d/cuda_nccl/1n4g.sh
 sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem/1n4g.sh
-sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem_device/1n4g.sh
 sbatch cluster/leonardo/experiments/halo_1d/oshmpi/1n4g.sh
 sbatch cluster/leonardo/experiments/halo_1d/sycl_mpi/1n4g.sh
 sbatch cluster/leonardo/experiments/halo_1d/sycl_oneccl/1n4g.sh
 ```
 
-Dot product (global reduction / allreduce latency):
+Allreduce (collective sum latency/bandwidth, internal size sweep):
 
 ```bash
-sbatch cluster/leonardo/experiments/dot_product/cuda_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/dot_product/cuda_nccl/1n4g.sh
-sbatch cluster/leonardo/experiments/dot_product/cuda_nvshmem/1n4g.sh
-sbatch cluster/leonardo/experiments/dot_product/oshmpi/1n4g.sh
-sbatch cluster/leonardo/experiments/dot_product/sycl_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/dot_product/sycl_oneccl/1n4g.sh
+sbatch cluster/leonardo/experiments/allreduce/cuda_mpi/1n4g.sh
+sbatch cluster/leonardo/experiments/allreduce/cuda_nccl/1n4g.sh
+sbatch cluster/leonardo/experiments/allreduce/cuda_nvshmem/1n4g.sh
+sbatch cluster/leonardo/experiments/allreduce/oshmpi/1n4g.sh
+sbatch cluster/leonardo/experiments/allreduce/sycl_mpi/1n4g.sh
+sbatch cluster/leonardo/experiments/allreduce/sycl_oneccl/1n4g.sh
 ```
 
-Each `dot_product` backend also has `1n1g`, `1n2g` (NVLink), `2n1g` (InfiniBand), and `2n4g`
-launchers; see [`experiments/dot_product/README.md`](experiments/dot_product/README.md).
+Each `allreduce` backend also has `1n1g`, `1n2g` (NVLink), `2n1g` (InfiniBand), and `2n4g`
+launchers; see [`experiments/allreduce/README.md`](experiments/allreduce/README.md).
 
 Ping-pong (point-to-point one-way latency/bandwidth, 2 endpoints, internal size sweep):
 
@@ -110,6 +96,22 @@ sbatch cluster/leonardo/experiments/alltoall/sycl_oneccl/1n4g.sh
 Each `alltoall` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers; see
 [`experiments/alltoall/README.md`](experiments/alltoall/README.md).
 
+MoE (top-1 variable-count dispatch + combine under uniform, local, and hotspot routing):
+
+```bash
+sbatch cluster/leonardo/experiments/moe/cuda_mpi/1n4g.sh
+sbatch cluster/leonardo/experiments/moe/cuda_nccl/1n4g.sh
+sbatch cluster/leonardo/experiments/moe/cuda_nvshmem/1n4g.sh
+sbatch cluster/leonardo/experiments/moe/oshmpi/1n4g.sh
+sbatch cluster/leonardo/experiments/moe/sycl_mpi/1n4g.sh
+sbatch cluster/leonardo/experiments/moe/sycl_oneccl/1n4g.sh
+```
+
+MoE is a skew-sensitive global personalized application pattern: unlike dense `alltoall`,
+its per-peer operation sizes and expert receive loads vary with routing. Each backend has
+`1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers; see
+[`experiments/moe/README.md`](experiments/moe/README.md). oneCCL launchers use `mpirun`.
+
 CG step (conjugate-gradient iteration skeleton: SpMV halo + two reductions):
 
 ```bash
@@ -127,9 +129,10 @@ Each `cg_step` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers;
 Useful overrides:
 
 ```bash
-CP_N=16777216 CP_NTRIALS=5 sbatch cluster/leonardo/experiments/vector_add/cuda_mpi/1n4g.sh
-CP_RESULT_NAME=vector-add-sycl-test sbatch cluster/leonardo/experiments/vector_add/sycl_mpi/1n4g.sh
-CP_ITERS=500 CP_WARMUP=100 sbatch cluster/leonardo/experiments/dot_product/cuda_nccl/2n1g.sh
+CP_N=16777216 CP_NTRIALS=5 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
+CP_RESULT_NAME=halo-sycl-test sbatch cluster/leonardo/experiments/halo_1d/sycl_mpi/1n4g.sh
+CP_ITERS=500 CP_WARMUP=100 sbatch cluster/leonardo/experiments/allreduce/cuda_nccl/2n1g.sh
+CP_HIDDEN=512 CP_ROUTINGS=uniform,hotspot80 sbatch cluster/leonardo/experiments/moe/cuda_nccl/2n4g.sh
 ```
 
 Per-problem notes and validated results live in `cluster/leonardo/experiments/<problem>/README.md`.
