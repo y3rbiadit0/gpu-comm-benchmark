@@ -6,7 +6,7 @@ SYCL examples using oneCCL collectives.
 
 | Target | Problem | Communication model |
 | --- | --- | --- |
-| `sycl_oneccl_halo_1d` | Comm-only 1D halo exchange, periodic ring, swept halo width. | Point-to-point `ccl::send`/`ccl::recv` exchange device-buffer halos with both neighbors (see caveat). |
+| `sycl_oneccl_halo_1d` | Comm-only 1D halo exchange, periodic ring, swept halo width. | Grouped point-to-point `ccl::send`/`ccl::recv` exchange device-buffer halos with both neighbors (see caveat). |
 | `sycl_oneccl_pingpong` | Two-endpoint one-way latency/bandwidth, internal size sweep. | `ccl::send`/`ccl::recv` round-trip device buffers between 2 ranks (see caveat). |
 | `sycl_oneccl_allreduce` | Float32 sum allreduce latency/bandwidth, internal size sweep. | `ccl::allreduce(sum)` over device buffers. |
 | `sycl_oneccl_alltoall` | All-to-all personalized exchange (bisection bandwidth). | `ccl::alltoall` collective (see caveat). |

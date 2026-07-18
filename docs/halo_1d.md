@@ -210,8 +210,10 @@ with `oshrun`.
 ### sycl_oneccl — oneCCL point-to-point
 
 Models the ring with oneCCL `ccl::recv`/`ccl::send` (the natural analog of
-`ncclSend`/`ncclRecv`): post both receives and both sends as async operations,
-then wait on all four events — async posting avoids a ring deadlock. **Caveat:**
+`ncclSend`/`ncclRecv`): group both receives and both sends with
+`ccl::group_start()`/`ccl::group_end()`, then wait on all four events. Grouping
+ensures every operation is enqueued before execution and avoids an in-order
+stream deadlock. **Caveat:**
 not every oneCCL build implements point-to-point send/recv (the UNISA
 NCCL-backed fork in particular); if they are missing this binary reports a
 backend error instead of results. See the

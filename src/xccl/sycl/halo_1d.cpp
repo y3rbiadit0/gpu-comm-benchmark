@@ -19,8 +19,9 @@
 //
 // Periodic ring with a swept halo width H. The exchange is modelled with
 // oneCCL point-to-point ccl::send/ccl::recv (the natural analog of NCCL
-// ncclSend/ncclRecv) - a true neighbour exchange rather than a collective
-// emulation. Buffers are slice-local and device-resident:
+// ncclSend/ncclRecv), grouped so all neighbour operations are enqueued before
+// execution - a true neighbour exchange rather than a collective emulation.
+// Buffers are slice-local and device-resident:
 //
 //   [ left_halo(cap) | interior(2*cap) | right_halo(cap) ]   cap = max halo width
 //
@@ -113,12 +114,14 @@ int main(int argc, char** argv) {
 
       MPI_Barrier(MPI_COMM_WORLD);
       const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
-        // Post both receives and both sends, then wait: async events avoid a
-        // deadlock in the ring.
+        // Grouping prevents an in-order stream from blocking on the first
+        // unmatched receive before its matching sends have been enqueued.
+        ccl::group_start();
         auto er = ccl::recv(recv_left, halo, ccl::datatype::float32, left, comm, stream);
         auto el = ccl::recv(recv_right, halo, ccl::datatype::float32, right, comm, stream);
         auto sr = ccl::send(send_right, halo, ccl::datatype::float32, right, comm, stream);
         auto sl = ccl::send(send_left, halo, ccl::datatype::float32, left, comm, stream);
+        ccl::group_end();
         er.wait();
         el.wait();
         sr.wait();
