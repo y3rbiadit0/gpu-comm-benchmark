@@ -228,7 +228,7 @@ int main(int argc, char** argv) {
       throw std::runtime_error("oneCCL point-to-point probe reported inconsistent capability across ranks");
     }
 
-    auto exchange_phase_unchecked = [&](const float* send_buffer, const std::vector<int>& send_counts,
+    auto exchange_phase_unchecked = [&](float* send_buffer, const std::vector<int>& send_counts,
                                         const std::vector<int>& send_displacements, float* recv_buffer,
                                         const std::vector<int>& recv_counts,
                                         const std::vector<int>& recv_displacements) {
