@@ -8,6 +8,7 @@ from summary import SummaryTable
 @dataclass(frozen=True)
 class Characterization:
     benchmark: str
+    case: str
     topology: str
     backend: str
     unit: str                  # unit of alpha as reported (us or s)
@@ -22,21 +23,21 @@ class Characterization:
 def characterize(table: SummaryTable) -> list[Characterization]:
     # Gather each backend's swept points, reusing the trial-averaged summaries
     # SummaryTable already computed. One point = (bytes, mean latency, mean GB/s).
-    sweeps: dict[tuple[str, str, str], list[tuple[int, float, float]]] = {}
-    units: dict[str, str] = {}
+    sweeps: dict[tuple[str, str, str, str], list[tuple[int, float, float]]] = {}
+    units: dict[tuple[str, str], str] = {}
     for key, summaries in table.groups.items():
-        units[key.benchmark] = table.metric_by_benchmark[key.benchmark].unit
+        units[(key.benchmark, key.case)] = table.metric_by_benchmark[key.benchmark].unit
         for backend, summary in summaries.items():
             if summary.nbytes is None or summary.metric_value is None or summary.bandwidth is None:
                 continue
-            sweeps.setdefault((key.benchmark, key.topology, backend), []).append(
+            sweeps.setdefault((key.benchmark, key.case, key.topology, backend), []).append(
                 (summary.nbytes, summary.metric_value, summary.bandwidth)
             )
 
     results: list[Characterization] = []
-    for (benchmark, topology, backend), points in sorted(sweeps.items()):
+    for (benchmark, case, topology, backend), points in sorted(sweeps.items()):
         points.sort()  # by message size ascending
-        unit = units[benchmark]
+        unit = units[(benchmark, case)]
 
         alpha = min(latency for _bytes, latency, _bw in points)   # the flat floor
         peak = max(range(len(points)), key=lambda i: points[i][2])
@@ -51,7 +52,7 @@ def characterize(table: SummaryTable) -> list[Characterization]:
         nhalf = alpha * binf * scale
 
         results.append(
-            Characterization(benchmark, topology, backend, unit,
+            Characterization(benchmark, case, topology, backend, unit,
                              alpha, binf, peak_bytes, nhalf, tail_gbs, len(points))
         )
     return results

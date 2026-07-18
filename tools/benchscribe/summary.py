@@ -15,6 +15,7 @@ from model import (
     MetricSpec,
     SummaryGroups,
     SummaryRow,
+    Status,
 )
 
 
@@ -30,6 +31,7 @@ def mean_or_none(values: list[float]) -> float | None:
 
 
 def preferred_metric(records: list[Measurement]) -> MetricSpec:
+    records = [record for record in records if record.status == Status.OK and record.valid]
     for metric in (MetricName.USEC, MetricName.TIME_PER_ITER_S, MetricName.TIME_S):
         if any(metric.value in record.fields for record in records):
             return METRIC_SPECS[metric]
@@ -84,70 +86,102 @@ class SummaryTable:
     def _group_measurements(measurements: list[Measurement]) -> GroupedMeasurements:
         grouped: GroupedMeasurements = defaultdict(list)
         for measurement in measurements:
-            key = (measurement.benchmark, measurement.topology, measurement.n, measurement.backend)
+            key = (
+                measurement.benchmark,
+                measurement.topology,
+                measurement.n,
+                measurement.case,
+                measurement.backend,
+            )
             grouped[key].append(measurement)
         return dict(grouped)
 
     @staticmethod
     def _select_metrics(grouped: GroupedMeasurements, metric_override: MetricName | None) -> dict[str, MetricSpec]:
         if metric_override is not None:
-            benchmarks = {benchmark for benchmark, _topology, _n, _backend in grouped}
+            benchmarks = {benchmark for benchmark, _topology, _n, _case, _backend in grouped}
             return {benchmark: METRIC_SPECS[metric_override] for benchmark in benchmarks}
 
         records_by_benchmark: dict[str, list[Measurement]] = defaultdict(list)
-        for (benchmark, _topology, _n, _backend), records in grouped.items():
+        for (benchmark, _topology, _n, _case, _backend), records in grouped.items():
             records_by_benchmark[benchmark].extend(records)
         return {benchmark: preferred_metric(records) for benchmark, records in records_by_benchmark.items()}
 
     @staticmethod
     def _aggregate_groups(grouped: GroupedMeasurements, metric_by_benchmark: dict[str, MetricSpec]) -> SummaryGroups:
         groups: SummaryGroups = defaultdict(dict)
-        for (benchmark, topology, n, backend), records in grouped.items():
+        for (benchmark, topology, n, case, backend), records in grouped.items():
             metric = metric_by_benchmark[benchmark]
+            supported_records = [record for record in records if record.status == Status.OK and record.valid]
             metric_values = [
                 value
-                for value in (parse_float(record.fields.get(metric.name.value)) for record in records)
+                for value in (parse_float(record.fields.get(metric.name.value)) for record in supported_records)
                 if value is not None
             ]
             bandwidths = [
                 value
-                for value in (parse_float(record.fields.get(MetricName.GBYTES_PER_S.value)) for record in records)
+                for value in (
+                    parse_float(record.fields.get(MetricName.GBYTES_PER_S.value)) for record in supported_records
+                )
                 if value is not None and value > 0.0
             ]
             nbytes = next(
-                (int(value) for value in (parse_float(record.fields.get("bytes")) for record in records) if value is not None),
+                (
+                    int(value)
+                    for value in (parse_float(record.fields.get("bytes")) for record in supported_records)
+                    if value is not None
+                ),
                 None,
             )
-            groups[GroupKey(benchmark, topology, n)][backend] = BackendSummary(
+            if any(
+                record.status == Status.ERROR
+                or (record.status != Status.NOT_IMPLEMENTED and not record.valid)
+                for record in records
+            ):
+                status = Status.ERROR
+            elif supported_records:
+                status = Status.OK
+            else:
+                status = Status.NOT_IMPLEMENTED
+            groups[GroupKey(benchmark, topology, n, case)][backend] = BackendSummary(
                 backend=backend,
                 metric_value=mean_or_none(metric_values),
                 metric_min=min(metric_values) if metric_values else None,
                 bandwidth=mean_or_none(bandwidths),
                 nbytes=nbytes,
-                trials=len(records),
-                valid_all=all(record.valid for record in records),
+                trials=len(supported_records) if supported_records else len(records),
+                valid_all=status != Status.ERROR,
+                status=status,
             )
         return {key: dict(value) for key, value in groups.items()}
 
     def benchmarks(self) -> list[str]:
         return sorted({key.benchmark for key in self.groups})
 
-    def topologies_for(self, benchmark: str) -> list[str]:
-        return sorted({key.topology for key in self.groups if key.benchmark == benchmark})
+    def cases_for(self, benchmark: str) -> list[str]:
+        return sorted({key.case for key in self.groups if key.benchmark == benchmark})
 
-    def sizes_for(self, benchmark: str, topology: str) -> list[int]:
-        return sorted(key.n for key in self.groups if key.benchmark == benchmark and key.topology == topology)
+    def topologies_for(self, benchmark: str, case: str = "") -> list[str]:
+        return sorted({key.topology for key in self.groups if key.benchmark == benchmark and key.case == case})
+
+    def sizes_for(self, benchmark: str, topology: str, case: str = "") -> list[int]:
+        return sorted(
+            key.n
+            for key in self.groups
+            if key.benchmark == benchmark and key.topology == topology and key.case == case
+        )
 
     def rows(self) -> list[SummaryRow]:
         rows: list[SummaryRow] = []
         for benchmark in self.benchmarks():
-            for topology in self.topologies_for(benchmark):
-                for n in self.sizes_for(benchmark, topology):
-                    rows.extend(self.rows_for(benchmark, topology, n))
+            for case in self.cases_for(benchmark):
+                for topology in self.topologies_for(benchmark, case):
+                    for n in self.sizes_for(benchmark, topology, case):
+                        rows.extend(self.rows_for(benchmark, topology, n, case))
         return rows
 
-    def rows_for(self, benchmark: str, topology: str, n: int) -> list[SummaryRow]:
-        key = GroupKey(benchmark, topology, n)
+    def rows_for(self, benchmark: str, topology: str, n: int, case: str = "") -> list[SummaryRow]:
+        key = GroupKey(benchmark, topology, n, case)
         summaries = self.groups[key]
         metric = self.metric_by_benchmark[benchmark]
         base_summary = summaries.get(self.baseline)
@@ -177,6 +211,8 @@ class SummaryTable:
             speedup_vs_base=relative_speedup(base_value, value, metric.lower_is_better),
             trials=summary.trials,
             valid_all=summary.valid_all,
+            case=key.case,
+            status=summary.status,
         )
 
     def _row_sort_key(self, row: SummaryRow) -> tuple[bool, float, str]:

@@ -23,7 +23,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=DESCRIPTION, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("results_dir", nargs="?", default="results", help="results directory (default: results)")
     parser.add_argument("--format", choices=[item.value for item in OutputFormat], default=OutputFormat.MARKDOWN.value)
-    parser.add_argument("--benchmark", help="only summarize this benchmark (e.g. dot_product)")
+    parser.add_argument("--benchmark", help="only summarize this benchmark (e.g. allreduce)")
     parser.add_argument("--metric", choices=[item.value for item in MetricName], help="override the primary metric")
     parser.add_argument(
         "--fit",

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
-from model import KNOWN_BACKEND_NAMES, Measurement, ParsedReportLine
+from model import KNOWN_BACKEND_NAMES, Measurement, ParsedReportLine, Status
 
 
 TOPOLOGY_RE = re.compile(r"(\d+n\d+g)")
@@ -39,6 +39,11 @@ def parse_report_line(line: str) -> ParsedReportLine | None:
             fields[key] = value
     if "validation" not in fields:
         return None
+    if "status" in fields:
+        try:
+            Status(fields["status"].upper())
+        except ValueError:
+            return None
     return ParsedReportLine(name=tokens[0], fields=fields)
 
 
@@ -52,6 +57,18 @@ def parse_int(value: str | None, default: int = 0) -> int:
         return int(value) if value is not None else default
     except ValueError:
         return default
+
+
+def status_from_fields(fields: dict[str, str]) -> Status:
+    validation = fields.get("validation", "FAIL").upper()
+    if "status" in fields:
+        status = Status(fields["status"].upper())
+        if status == Status.OK:
+            return Status.OK if validation == "PASS" else Status.ERROR
+        if status == Status.NOT_IMPLEMENTED:
+            return Status.NOT_IMPLEMENTED if validation == "SKIP" else Status.ERROR
+        return Status.ERROR
+    return Status.OK if validation == "PASS" else Status.ERROR
 
 
 def scan_results(results_dir: Path, warnings: TextIO = sys.stderr) -> list[Measurement]:
@@ -72,6 +89,11 @@ def scan_results(results_dir: Path, warnings: TextIO = sys.stderr) -> list[Measu
             if split is None:
                 continue
             backend, benchmark = split
+            status = status_from_fields(parsed.fields)
+            case = parsed.fields.get("case", "")
+            hidden = parsed.fields.get("hidden")
+            if hidden is not None:
+                case = f"{case},hidden={hidden}" if case else f"hidden={hidden}"
             measurements.append(
                 Measurement(
                     backend=backend,
@@ -80,6 +102,8 @@ def scan_results(results_dir: Path, warnings: TextIO = sys.stderr) -> list[Measu
                     n=parse_int(parsed.fields.get("n")),
                     fields=parsed.fields,
                     valid=parsed.fields.get("validation", "FAIL").upper() == "PASS",
+                    case=case,
+                    status=status,
                 )
             )
     return measurements

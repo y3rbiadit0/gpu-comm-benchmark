@@ -28,6 +28,12 @@ class MetricName(str, Enum):
     GBYTES_PER_S = "gbytes_per_s"
 
 
+class Status(str, Enum):
+    OK = "OK"
+    NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
+    ERROR = "ERROR"
+
+
 BASELINE_BACKEND = Backend.CUDA_MPI.value
 KNOWN_BACKEND_NAMES = tuple(sorted((backend.value for backend in Backend), key=len, reverse=True))
 
@@ -61,6 +67,8 @@ class Measurement:
     n: int
     fields: dict[str, str]
     valid: bool
+    case: str = ""
+    status: Status = Status.OK
 
 
 @dataclass(frozen=True, order=True)
@@ -68,6 +76,7 @@ class GroupKey:
     benchmark: str
     topology: str
     n: int
+    case: str = ""
 
 
 @dataclass(frozen=True)
@@ -79,6 +88,7 @@ class BackendSummary:
     nbytes: int | None
     trials: int
     valid_all: bool
+    status: Status = Status.OK
 
 
 @dataclass(frozen=True)
@@ -96,7 +106,9 @@ class SummaryRow:
     speedup_vs_base: float | None
     trials: int
     valid_all: bool
+    case: str = ""
+    status: Status = Status.OK
 
 
-GroupedMeasurements = dict[tuple[str, str, int, str], list[Measurement]]
+GroupedMeasurements = dict[tuple[str, str, int, str, str], list[Measurement]]
 SummaryGroups = dict[GroupKey, dict[str, BackendSummary]]
