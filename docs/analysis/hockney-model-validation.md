@@ -77,17 +77,17 @@ single-block put collapse", "eager/rendezvous switch at UCX's threshold").
 
 [halo_1d-crossover.md](halo_1d-crossover.md) §2 says "linear-fit
 `time_per_iter_s` against m: intercept = α, 1/slope = B∞", but
-`tools/benchscribe/characterize.py` actually takes α = minimum observed
-latency and B∞ = peak observed bandwidth.
+`tools/benchscribe/characterize.py` actually takes α = median observed latency
+for messages up to 4 KiB and B∞ = peak observed bandwidth.
 
 The survey's guidance (§4): compose **more than r points across a wide m
 range, solve by least-squares regression, and report each parameter as
-ā ± σā** (estimated value ± standard error). Min-floor and peak are fine as
+ā ± σā** (estimated value ± standard error). Small-message median and peak are fine as
 sanity anchors, but the reported α / B∞ / n½ should come from a per-segment
 regression with standard errors and R².
 
-Also note that `n½ = α·B∞` currently multiplies a floor from one regime by a
-peak from another — per-segment regression fixes that inconsistency for free.
+Also note that `n½ = α·B∞` currently multiplies a small-message floor by a peak
+from another regime — per-segment regression fixes that inconsistency for free.
 
 ### 2.3 Report dispersion, not just means
 

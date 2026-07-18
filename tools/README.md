@@ -33,8 +33,8 @@ For benchmarks that sweep message size (e.g. `halo_1d`, `pingpong`), `--fit`
 collapses each backend's whole sweep into the α–β model numbers, read straight off
 the curve (no regression):
 
-- **α** — latency floor: the fastest per-iteration time in the sweep (the flat,
-  small-message part).
+- **α** — latency floor: the median per-iteration time for messages up to 4 KiB.
+  If a truncated sweep starts above 4 KiB, the smallest available point is used.
 - **B∞** — peak bandwidth: the best `gbytes_per_s` reached.
 - **n½ = α·B∞** — the message size at which you hit half of peak bandwidth.
 - **peak @** / **tail** — message size at peak bandwidth, and bandwidth at the

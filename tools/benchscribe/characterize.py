@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass
 
 from summary import SummaryTable
+
+
+ALPHA_MAX_BYTES = 4 * 1024
 
 
 @dataclass(frozen=True)
@@ -12,7 +16,7 @@ class Characterization:
     topology: str
     backend: str
     unit: str                  # unit of alpha as reported (us or s)
-    alpha: float | None        # latency floor: fastest per-iter time = smallest message
+    alpha: float | None        # median latency for messages up to ALPHA_MAX_BYTES
     binf_gbs: float | None     # asymptotic bus bandwidth: peak gbytes_per_s
     peak_bytes: int | None     # message size at peak bandwidth
     nhalf_bytes: float | None  # alpha * binf -> message size at half of peak
@@ -39,7 +43,12 @@ def characterize(table: SummaryTable) -> list[Characterization]:
         points.sort()  # by message size ascending
         unit = units[(benchmark, case)]
 
-        alpha = min(latency for _bytes, latency, _bw in points)   # the flat floor
+        small_latencies = [
+            latency for nbytes, latency, _bw in points if nbytes <= ALPHA_MAX_BYTES
+        ]
+        # Truncated sweeps may start above 4 KiB; retain a useful floor estimate
+        # from their smallest available message rather than dropping the backend.
+        alpha = statistics.median(small_latencies or [points[0][1]])
         peak = max(range(len(points)), key=lambda i: points[i][2])
         binf = points[peak][2]
         peak_bytes = points[peak][0]

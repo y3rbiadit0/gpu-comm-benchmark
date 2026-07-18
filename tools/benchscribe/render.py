@@ -99,7 +99,7 @@ def render_fit_markdown(chars: list[Characterization], out: TextIO) -> None:
     out.write("# Latency / Bandwidth Characterization\n\n")
     out.write(f"_Generated {stamp}._\n\n")
     out.write(
-        "α = latency floor (fastest iteration = smallest message). "
+        "α = median latency for messages up to 4 KiB. "
         "B∞ = peak bandwidth. n½ = α·B∞ (message at half of peak). "
         "Tail = bandwidth at the largest message.\n\n"
     )

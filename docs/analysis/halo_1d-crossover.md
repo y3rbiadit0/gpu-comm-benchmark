@@ -196,7 +196,7 @@ optimisation this analysis points at.
 | `cuda_mpi` | 1n4g / 2n4g | | | | |
 | `cuda_nccl` | 1n4g / 2n4g | | | | |
 
-> α = latency floor (fastest per-iteration time in the sweep); B∞ = peak
+> α = median per-iteration time for messages up to 4 KiB; B∞ = peak
 > `gbytes_per_s`; n½ = α·B∞. Regenerate this table from raw results with
 > `python3 tools/benchscribe results/ --benchmark halo_1d --fit`. Sweep:
 > `CP_N=16777216`, 100 iters / 20 warmup.
