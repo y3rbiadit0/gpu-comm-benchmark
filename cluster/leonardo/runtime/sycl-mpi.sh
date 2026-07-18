@@ -13,9 +13,9 @@ export OMPI_MCA_coll_hcoll_enable=${OMPI_MCA_coll_hcoll_enable:-0}
 export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-0}
 export OMPI_MCA_btl=${OMPI_MCA_btl:-^openib}
 export OMPI_MCA_mpi_cuda_support=${OMPI_MCA_mpi_cuda_support:-1}
+export OMPI_MCA_pml=${OMPI_MCA_pml:-ucx}
 
 if [[ ${COMM_PLAYGROUND_JOB_NODES:-1} -gt 1 ]]; then
-  export OMPI_MCA_pml=${OMPI_MCA_pml:-ucx}
   export UCX_TLS=${COMM_PLAYGROUND_SYCL_UCX_TLS:-sm,cuda_copy,cuda_ipc,rc,self}
   # Service level 1 enables adaptive routing on Leonardo's Dragonfly+ fabric.
   export UCX_IB_SL=${UCX_IB_SL:-1}

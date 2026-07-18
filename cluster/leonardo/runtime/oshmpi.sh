@@ -18,9 +18,9 @@ export OMPI_MCA_btl=${OMPI_MCA_btl:-^openib}
 export OMPI_MCA_opal_cuda_support=${OMPI_MCA_opal_cuda_support:-1}
 export OMPI_MCA_osc=${OMPI_MCA_osc:-ucx}
 export OMPI_MCA_osc_base_verbose=${OMPI_MCA_osc_base_verbose:-0}
+export OMPI_MCA_pml=${OMPI_MCA_pml:-ucx}
 
 if [[ ${COMM_PLAYGROUND_JOB_NODES:-1} -gt 1 ]]; then
-  export OMPI_MCA_pml=${OMPI_MCA_pml:-ucx}
   export UCX_TLS=${COMM_PLAYGROUND_OSHMPI_UCX_TLS:-sm,cuda_copy,cuda_ipc,rc,self}
   export UCX_RNDV_SCHEME=${COMM_PLAYGROUND_OSHMPI_UCX_RNDV_SCHEME:-get_zcopy}
   export UCX_RNDV_THRESH=${COMM_PLAYGROUND_OSHMPI_UCX_RNDV_THRESH:-16384}
