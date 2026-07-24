@@ -86,13 +86,13 @@ The MoE benchmark treats a recognized missing `ccl::send`/`ccl::recv` implementa
 capability result and emits `status=NOT_IMPLEMENTED reason=point_to_point validation=SKIP`.
 It never falls back to MPI, leaving the missing oneCCL operation visible for contribution.
 
-Point-to-point availability is not sufficient for every communication pattern.
-The grouped `halo_1d` ring is validated on `2n1g`, but the installed backend
-stalls before its first report on `1n2g`, `1n4g`, and `2n4g`. The benchmark now
-detects multiple participating ranks per node before oneCCL initialization and
-reports `status=NOT_IMPLEMENTED`, `reason=intra_node_ring_point_to_point`, and
-`validation=SKIP`. Follow-up work is tracked in
-[`docs/unsupported-operations.md`](docs/unsupported-operations.md).
+The local oneCCL source keeps `ccl_api_functions.cpp` backend-neutral and
+dispatches groups through the existing `group_impl` layer. Its NCCL path uses
+native `ncclGroupStart`/`ncclGroupEnd`, preserves outermost-group nesting, defers
+per-operation completion, and publishes SYCL stream events only after NCCL has
+enqueued the group. Grouped point-to-point is enabled by default for `halo_1d`,
+multi-rank CG, and MoE. The `halo_1d` ring is validated on `1n2g`, `1n4g`,
+`2n1g`, and `2n4g`.
 
 ## Rebuild And Smoke Test
 
@@ -117,10 +117,12 @@ Run an explicit-size smoke test:
 
 ```bash
 CP_MSG_SIZES=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/allreduce/sycl_oneccl/1n4g.sh
+CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/sycl_oneccl/1n2g.sh
 ```
 
 Expected result:
 
 ```text
 sycl_oneccl_allreduce n=17 ranks=4 ... validation=PASS
+sycl_oneccl_halo_1d n=17 ranks=2 ... validation=PASS
 ```

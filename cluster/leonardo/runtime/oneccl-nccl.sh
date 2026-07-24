@@ -13,7 +13,11 @@ if [[ -f "$ONECCL_NCCL_ROOT/env/vars.sh" ]]; then
   set -u
 fi
 
-export CCL_BACKEND=${CCL_BACKEND:-nccl}
+if [[ -n ${CCL_BACKEND:-} && ${CCL_BACKEND:-} != nccl ]]; then
+  echo "oneccl-nccl runtime requires CCL_BACKEND=nccl, got '${CCL_BACKEND:-}'" >&2
+  return 1 2>/dev/null || exit 1
+fi
+export CCL_BACKEND=nccl
 export CCL_ATL_TRANSPORT=${CCL_ATL_TRANSPORT:-mpi}
 
 if [[ -n "$user_ccl_mpi_library_path" ]]; then

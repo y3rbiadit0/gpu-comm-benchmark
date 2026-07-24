@@ -53,6 +53,11 @@ The binaries accept `<tokens_per_rank> [hidden] [iterations] [warmup] [routing_c
 remaining case emits `status=NOT_IMPLEMENTED reason=point_to_point validation=SKIP` instead
 of benchmark timings.
 
+The Leonardo fork dispatches public groups through `group_impl`, uses native
+NCCL groups, and defers operation events until the outermost group ends. Grouped
+point-to-point is enabled by default. The runtime capability probe still reports
+`NOT_IMPLEMENTED` if the backend does not provide `ccl::send`/`ccl::recv`.
+
 Each result reports expert imbalance and useful throughput for both variable-count phases.
 Useful bytes per rank per iteration are `2 * tokens * hidden * sizeof(float)` for dispatch
 plus combine.

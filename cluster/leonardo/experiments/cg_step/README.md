@@ -67,6 +67,6 @@ NVSHMEM's device-initiated model vs. host-driven collectives).
   `shmem_double_sum_to_all`.
 - The two reductions are issued **separately** (as a real CG iteration does), so the
   benchmark reflects two reduction latencies per step, not one fused reduction.
-- **oneCCL caveat:** `sycl_oneccl_cg_step` uses `ccl::send`/`ccl::recv` for the halo. If the
-  UNISA NCCL-enabled fork does not implement point-to-point (as with `broadcast`), this job
-  reports a backend error — a documented gap.
+- `sycl_oneccl_cg_step` uses grouped `ccl::send`/`ccl::recv` for the halo. The
+  Leonardo backend routes oneCCL groups through `group_impl` to native NCCL
+  groups, and grouped point-to-point is enabled by default.

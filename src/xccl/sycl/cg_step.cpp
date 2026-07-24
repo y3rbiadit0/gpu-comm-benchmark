@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "cli.hpp"
+#include "oneccl.hpp"
 #include "partition.hpp"
 #include "report.hpp"
 #include "stencil2d.hpp"
@@ -17,8 +18,8 @@
 #include "validation.hpp"
 
 // CG iteration communication skeleton (see src/mpi/cuda/cg_step.cu): SpMV halo
-// exchange of p + two global reductions dot(p,q), dot(q,q). The halo uses oneCCL
-// point-to-point (ccl::send/ccl::recv). The UNISA NCCL-enabled fork does not
+// exchange of p + two global reductions dot(p,q), dot(q,q). The halo uses grouped
+// oneCCL point-to-point (ccl::send/ccl::recv). The UNISA NCCL-enabled fork does not
 // implement every primitive (e.g. broadcast); if pt2pt is unimplemented this
 // binary reports a backend error -- a documented gap, like the other oneCCL benchmarks.
 
@@ -111,13 +112,17 @@ int main(int argc, char** argv) {
         }).wait();
       }
       std::vector<ccl::event> events;
-      if (left >= 0) {
-        events.push_back(ccl::send(send_west, side, ccl::datatype::float32, left, comm, stream));
-        events.push_back(ccl::recv(recv_west, side, ccl::datatype::float32, left, comm, stream));
-      }
-      if (right >= 0) {
-        events.push_back(ccl::send(send_east, side, ccl::datatype::float32, right, comm, stream));
-        events.push_back(ccl::recv(recv_east, side, ccl::datatype::float32, right, comm, stream));
+      if (left >= 0 || right >= 0) {
+        comm_playground::ccl_group_scope group;
+        if (left >= 0) {
+          events.push_back(ccl::send(send_west, side, ccl::datatype::float32, left, comm, stream));
+          events.push_back(ccl::recv(recv_west, side, ccl::datatype::float32, left, comm, stream));
+        }
+        if (right >= 0) {
+          events.push_back(ccl::send(send_east, side, ccl::datatype::float32, right, comm, stream));
+          events.push_back(ccl::recv(recv_east, side, ccl::datatype::float32, right, comm, stream));
+        }
+        group.end();
       }
       for (auto& event : events) {
         event.wait();

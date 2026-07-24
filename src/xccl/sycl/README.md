@@ -13,20 +13,19 @@ SYCL examples using oneCCL collectives.
 | `sycl_oneccl_cg_step` | CG iteration skeleton (SpMV halo + two reductions). | `ccl::send`/`ccl::recv` halo + two `ccl::allreduce` (see caveat). |
 | `sycl_oneccl_moe` | Top-1 MoE dispatch + combine with variable expert loads. | Two sets of per-peer variable-count `ccl::send`/`ccl::recv` operations: dispatch followed by inverse combine (see caveat). |
 
-> **Caveat:** `sycl_oneccl_halo_1d`, `sycl_oneccl_pingpong`,
-> `sycl_oneccl_alltoall`, `sycl_oneccl_cg_step`, and `sycl_oneccl_moe` need oneCCL primitives the NCCL backend
-> may not implement. The UNISA
-> NCCL-enabled fork does not implement every primitive (e.g. `broadcast`); if `ccl::send`/
-> `ccl::recv` or `ccl::alltoall` are unimplemented, the non-MoE binaries report a backend
-> error rather than results. MoE detects unsupported point-to-point operations collectively,
+> **Caveat:** the NCCL-enabled oneCCL fork does not implement every primitive
+> (for example, `broadcast`). If a required operation is unimplemented, the
+> non-MoE binaries report a backend error rather than results. MoE detects
+> unsupported point-to-point operations collectively,
 > emits `status=NOT_IMPLEMENTED reason=point_to_point validation=SKIP` for the affected and
 > remaining routing cases, and exits successfully so unsupported capability is not reported
 > as a failed benchmark.
 >
-> On the validated Leonardo fork, the grouped `halo_1d` ring stalls whenever a
-> node hosts more than one participating rank. The `1n2g`, `1n4g`, and `2n4g`
-> jobs therefore report `NOT_IMPLEMENTED`; `2n1g` remains supported. See the
-> [unsupported operations tracker](../../../docs/unsupported-operations.md).
+> The Leonardo oneCCL fork dispatches public groups through `group_impl` to
+> native NCCL groups and defers events until the outermost group ends. Grouped
+> point-to-point is enabled by default for `halo_1d`, multi-rank CG, and MoE.
+> MoE retains a runtime point-to-point capability probe so a backend that does
+> not implement `send`/`recv` still reports `NOT_IMPLEMENTED` explicitly.
 
 ## Run
 

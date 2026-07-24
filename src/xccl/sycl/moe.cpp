@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "moe.hpp"
+#include "oneccl.hpp"
 #include "report.hpp"
 #include "timing.hpp"
 
@@ -42,36 +43,6 @@ bool is_point_to_point_unsupported(const std::string& message) {
                               lower.find("pt2pt") != std::string::npos;
   return unsupported && point_to_point;
 }
-
-class ccl_group_scope {
- public:
-  ccl_group_scope() {
-    ccl::group_start();
-    active_ = true;
-  }
-
-  ~ccl_group_scope() {
-    if (active_) {
-      active_ = false;
-      try {
-        ccl::group_end();
-      } catch (...) {
-        // Preserve the enqueue exception after making the only available attempt to close the group.
-      }
-    }
-  }
-
-  ccl_group_scope(const ccl_group_scope&) = delete;
-  ccl_group_scope& operator=(const ccl_group_scope&) = delete;
-
-  void end() {
-    active_ = false;
-    ccl::group_end();
-  }
-
- private:
-  bool active_ = false;
-};
 
 struct device_buffers {
   explicit device_buffers(sycl::queue& queue) : queue(queue) {}
@@ -108,14 +79,15 @@ struct probe_buffers {
 };
 
 void print_not_implemented(comm_playground::moe_routing routing, std::size_t tokens, std::size_t hidden,
-                           std::size_t bytes, int ranks, int iterations, int warmup) {
+                           std::size_t bytes, int ranks, int iterations, int warmup,
+                           const char* reason = "point_to_point") {
   std::cout << "sycl_oneccl_moe n=" << tokens << " ranks=" << ranks << " bytes=" << bytes
             << " iters=" << iterations << " warmup=" << warmup
             << " time_per_iter_s=0 usec=0 min_usec=0 max_usec=0 gbytes_per_s=0 case="
             << comm_playground::moe_routing_name(routing)
             << " routing=" << comm_playground::moe_routing_name(routing) << " tokens=" << tokens
             << " hidden=" << hidden
-            << " top_k=1 status=NOT_IMPLEMENTED reason=point_to_point validation=SKIP\n";
+            << " top_k=1 status=NOT_IMPLEMENTED reason=" << reason << " validation=SKIP\n";
 }
 
 }  // namespace
@@ -179,7 +151,7 @@ int main(int argc, char** argv) {
       try {
         const int recv_peer = ranks == 1 ? rank : (rank - 1 + ranks) % ranks;
         const int send_peer = ranks == 1 ? rank : (rank + 1) % ranks;
-        ccl_group_scope group;
+        comm_playground::ccl_group_scope group;
         events.push_back(ccl::recv(buffers.recv, 1, ccl::datatype::float32, recv_peer, comm, stream));
         events.push_back(ccl::send(buffers.send, 1, ccl::datatype::float32, send_peer, comm, stream));
         group.end();
@@ -234,7 +206,7 @@ int main(int argc, char** argv) {
                                         const std::vector<int>& recv_displacements) {
       std::vector<ccl::event> events;
       events.reserve(static_cast<std::size_t>(2 * ranks));
-      ccl_group_scope group;
+      comm_playground::ccl_group_scope group;
       for (int peer = 0; peer < ranks; ++peer) {
         const auto index = static_cast<std::size_t>(peer);
         if (recv_counts[index] > 0) {

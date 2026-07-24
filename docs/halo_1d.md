@@ -219,11 +219,10 @@ NCCL-backed fork in particular); if they are missing this binary reports a
 backend error instead of results. See the
 [`src/xccl/sycl/README.md`](../src/xccl/sycl/README.md) caveat.
 
-The installed Leonardo NCCL-backed fork completes this grouped ring on `2n1g`
-but stalls when any node hosts multiple participating ranks. Those `1n2g`,
-`1n4g`, and `2n4g` combinations are reported as `NOT_IMPLEMENTED` before oneCCL
-initialization. The investigation is tracked in
-[`unsupported-operations.md`](unsupported-operations.md).
+The Leonardo NCCL-backed fork dispatches public groups through `group_impl` to
+native NCCL groups and defers event publication until the outermost group ends.
+Grouped point-to-point is enabled by default and the ring is validated on
+`1n2g`, `1n4g`, `2n1g`, and `2n4g`.
 
 ---
 
