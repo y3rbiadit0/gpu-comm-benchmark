@@ -181,6 +181,9 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+!cluster/leonardo/env/
+cluster/leonardo/env/*
+!cluster/leonardo/env/oneccl-nvshmem.sh
 
 # Spyder project settings
 .spyderproject

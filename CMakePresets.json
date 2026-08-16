@@ -101,6 +101,19 @@
       }
     },
     {
+      "name": "leonardo-sycl-oneccl-oshmpi",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "ENABLE_SYCL_ONECCL": "ON",
+        "CMAKE_CXX_COMPILER": "$env{CXX}",
+        "COMM_PLAYGROUND_SYCL_FLAGS": "$env{COMM_PLAYGROUND_SYCL_FLAGS}",
+        "oneCCL_ROOT": "$env{ONECCL_OSHMPI_ROOT}",
+        "COMM_PLAYGROUND_ONECCL_USE_BUNDLED_MPI": "OFF",
+        "CMAKE_EXE_LINKER_FLAGS": "-Wl,-rpath-link,$env{OSHMPI_HOME}/lib -Wl,-rpath,$env{OSHMPI_HOME}/lib"
+      }
+    },
+    {
       "name": "leonardo-oshmpi",
       "inherits": "base",
       "generator": "Ninja",
@@ -143,6 +156,10 @@
     {
       "name": "leonardo-sycl-oneccl",
       "configurePreset": "leonardo-sycl-oneccl"
+    },
+    {
+      "name": "leonardo-sycl-oneccl-oshmpi",
+      "configurePreset": "leonardo-sycl-oneccl-oshmpi"
     },
     {
       "name": "leonardo-oshmpi",

@@ -20,9 +20,9 @@ set -euo pipefail
 # $CP_RUN_DIR/profiles. Profiling perturbs timing: use a dedicated
 # CP_NTRIALS=1 run and never report numbers from a profiled run.
 #
-# Each rank gets its own report via the launcher's per-rank env (SLURM_PROCID
-# under srun, OMPI_COMM_WORLD_RANK under mpirun); the profilers substitute
-# %q{VAR} at runtime, so the token must stay unquoted.
+# The GPU rank wrapper normalizes launcher-specific rank variables into
+# COMM_PLAYGROUND_GLOBAL_RANK. The profilers substitute %q{VAR} at runtime, so
+# the token must stay unquoted.
 #
 # ncu knobs: CP_NCU_BIN (default: nvhpc/25.3's ncu -- the nvhpc/24.5 ncu
 # 2024.1.1 in PATH fails to attach with "Failed to connect to process";
@@ -38,8 +38,7 @@ set -euo pipefail
 cp_experiment_launch_prefix() {
   [[ -n "${CP_PROFILE:-}" ]] || return 0
 
-  local rank_token='%q{SLURM_PROCID}'
-  [[ "$CP_LAUNCHER" == "mpirun" ]] && rank_token='%q{OMPI_COMM_WORLD_RANK}'
+  local rank_token='%q{COMM_PLAYGROUND_GLOBAL_RANK}'
 
   mkdir -p "$CP_RUN_DIR/profiles"
   local out="$CP_RUN_DIR/profiles/${SLURM_JOB_NAME:-manual}-${SLURM_JOB_ID:-manual}-${trial}-rank${rank_token}"
@@ -85,6 +84,7 @@ cp_experiment_setup() {
 
   CP_NTRIALS=${CP_NTRIALS:-3}
   CP_LAUNCHER=${CP_LAUNCHER:-srun}
+  CP_TRIAL_TIMEOUT=${CP_TRIAL_TIMEOUT:-2m}
   CP_RUN_DIR=${CP_RUN_DIR:-results/$CP_RESULT_NAME/$CP_EXPERIMENT}
 
   cp_experiment_defaults
@@ -95,6 +95,7 @@ cp_experiment_setup() {
   esac
 
   [ -x "$CP_BINARY" ] || { echo "no executable: $CP_BINARY" >&2; exit 1; }
+  command -v timeout >/dev/null 2>&1 || { echo "timeout command is unavailable" >&2; exit 1; }
 }
 
 cp_experiment_print_summary() {
@@ -113,6 +114,7 @@ cp_experiment_print_summary() {
   echo "tasks per node: $CP_TASKS_PER_NODE"
   echo "launcher: $CP_LAUNCHER"
   echo "launcher path: $(command -v "$CP_LAUNCHER" 2>/dev/null || true)"
+  echo "trial timeout: $CP_TRIAL_TIMEOUT"
   echo "stack: $CP_STACK"
   echo "runtime: $CP_RUNTIME"
   echo "profile: ${CP_PROFILE:-off}"
@@ -134,19 +136,22 @@ cp_experiment_run_trials() {
     echo "stdout: ${outfile}.tmp"
     echo "stderr: ${errfile}.tmp"
 
+    local trial_status=0
+    set +e
     if [[ "$CP_LAUNCHER" == "mpirun" ]]; then
       /usr/bin/time -p --verbose \
+        timeout --signal=TERM --kill-after=30s "$CP_TRIAL_TIMEOUT" \
         mpirun -np "$((CP_NODES * CP_TASKS_PER_NODE))" \
         "$CP_PROJECT_ROOT/cluster/leonardo/gpu-rank-wrapper.sh" \
         $(cp_experiment_launch_prefix) \
         "$CP_BINARY" \
         "$CP_N" \
         $CP_EXTRA_ARGS \
-        >"${outfile}.tmp" 2>"${errfile}.tmp" \
-      && mv --verbose "${outfile}.tmp" "$outfile" \
-      && mv --verbose "${errfile}.tmp" "$errfile"
+        >"${outfile}.tmp" 2>"${errfile}.tmp"
+      trial_status=$?
     else
       /usr/bin/time -p --verbose \
+        timeout --signal=TERM --kill-after=30s "$CP_TRIAL_TIMEOUT" \
         srun --cpu-freq=high \
         -N "$CP_NODES" \
         --ntasks-per-node="$CP_TASKS_PER_NODE" \
@@ -155,10 +160,26 @@ cp_experiment_run_trials() {
         "$CP_BINARY" \
         "$CP_N" \
         $CP_EXTRA_ARGS \
-        >"${outfile}.tmp" 2>"${errfile}.tmp" \
-      && mv --verbose "${outfile}.tmp" "$outfile" \
-      && mv --verbose "${errfile}.tmp" "$errfile"
+        >"${outfile}.tmp" 2>"${errfile}.tmp"
+      trial_status=$?
     fi
+    set -e
+
+    if [[ "$trial_status" -ne 0 ]]; then
+      if [[ "$trial_status" -eq 124 || "$trial_status" -eq 137 ]]; then
+        printf 'comm-playground trial exceeded timeout %s (status %s)\n' \
+          "$CP_TRIAL_TIMEOUT" "$trial_status" | tee -a "${errfile}.tmp" >&2
+      else
+        printf 'comm-playground trial failed with status %s\n' "$trial_status" \
+          | tee -a "${errfile}.tmp" >&2
+      fi
+      echo "failed stdout retained at ${outfile}.tmp" >&2
+      echo "failed stderr retained at ${errfile}.tmp" >&2
+      return "$trial_status"
+    fi
+
+    mv --verbose "${outfile}.tmp" "$outfile"
+    mv --verbose "${errfile}.tmp" "$errfile"
 
     # Back-to-back job steps can stall on Leonardo while the previous step
     # finalizes; give it a moment before launching the next srun.
