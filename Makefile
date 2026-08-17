@@ -3,7 +3,7 @@ SHELL := /bin/bash
 .ONESHELL:
 
 LEONARDO_CUDA_PRESETS := leonardo-cuda-mpi leonardo-cuda-nccl leonardo-cuda-nvshmem leonardo-oshmpi
-LEONARDO_SYCL_PRESETS := leonardo-sycl-mpi leonardo-sycl-oneccl
+LEONARDO_SYCL_PRESETS := leonardo-sycl-mpi leonardo-sycl-oneccl leonardo-sycl-oneccl-oshmpi
 LEONARDO_PRESETS := $(LEONARDO_CUDA_PRESETS) $(LEONARDO_SYCL_PRESETS)
 
 .PHONY: help configure build clean leonardo leonardo-cuda leonardo-sycl leonardo-clean

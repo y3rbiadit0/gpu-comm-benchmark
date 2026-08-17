@@ -1,6 +1,4 @@
 #!/bin/bash -l
-#SBATCH -A IscrC_HIGRAPH_0
-#SBATCH -p boost_usr_prod
 #SBATCH --job-name=moe_cuda_nccl_1n2g
 #SBATCH --error=./logs/%x-%j-stderr.txt
 #SBATCH --output=./logs/%x-%j-stdout.txt

@@ -10,6 +10,7 @@ if [[ -z "$stack" ]]; then
   return 2 2>/dev/null || exit 2
 fi
 
+source "$script_dir/slurm.sh"
 source "$script_dir/print-env.sh"
 
 case "$stack" in

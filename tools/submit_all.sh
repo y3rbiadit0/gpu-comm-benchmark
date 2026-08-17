@@ -9,6 +9,8 @@
 #   CP_ONLY_BACKENDS="cuda_mpi cuda_nccl"    # restrict backends
 #   CP_ONLY_TOPOS="1n4g 2n1g"                # restrict topologies
 #   CP_DRYRUN=1                              # print sbatch commands instead of running them
+#   CP_SLURM_ACCOUNT=IscrC_OTHER             # override the default allocation
+#   CP_SLURM_PARTITION=...                   # override the default partition
 #   CP_MSG_SIZES="1,8,64,1024"              # pingpong only: explicit message sizes
 #
 # Pass-through overrides (CP_N, CP_ITERS, CP_WARMUP, CP_NTRIALS, CP_MSG_SIZES, ...) are exported
@@ -19,6 +21,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXP="$ROOT/cluster/leonardo/experiments"
 export CP_PROJECT_ROOT="$ROOT"
+
+# Account and partition come from here, not from -A/-p in every job script.
+# Override with CP_SLURM_ACCOUNT / CP_SLURM_PARTITION.
+source "$ROOT/cluster/leonardo/slurm.sh"
 
 if ! command -v sbatch >/dev/null 2>&1; then
   echo "error: sbatch not found -- run this on Leonardo (a login node)." >&2
