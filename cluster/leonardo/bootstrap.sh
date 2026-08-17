@@ -8,7 +8,7 @@ set -euo pipefail
 #   ./cluster/leonardo/bootstrap.sh --list
 #   CP_FORCE=1 ./cluster/leonardo/bootstrap.sh ...  # rebuild even if installed
 #
-# Each target is cluster/leonardo/build/<name>.sh and declares the stack it needs,
+# Each target is cluster/leonardo/deps/<name>.sh and declares the stack it needs,
 # what it requires, and a path that proves it is already built. Adding a backend
 # means adding one file there - and one in runtime/, and one directory per
 # experiment.
@@ -17,7 +17,7 @@ set -euo pipefail
 # DPCPP_HOME at it (see cluster/leonardo/env/sycl.sh).
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-build_dir="$script_dir/build"
+build_dir="$script_dir/deps"
 
 default_targets=(oneccl-oshmpi playground)
 
