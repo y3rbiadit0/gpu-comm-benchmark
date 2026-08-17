@@ -53,6 +53,9 @@ export ONECCL_C_COMPILER="${DPCPP_CLANG:?env/sycl.sh must define DPCPP_CLANG}"
 export ONECCL_CXX_COMPILER="${DPCPP_CLANGXX:?env/sycl.sh must define DPCPP_CLANGXX}"
 export ONECCL_SYCL_FLAGS="${SYCL_FLAGS:?env/sycl.sh must define SYCL_FLAGS}"
 export ONECCL_BUILD_ROOT=$build_root
+# Keyed to this clone rather than the shared default, so a bootstrap build and a
+# hand-driven build of your own checkout cannot land in the same CMake cache.
+export ONECCL_BUILD_DIR=${ONECCL_BUILD_DIR:-$src-build}
 export ONECCL_INSTALL_PREFIX=$CP_BUILD_PROVIDES
 "$src/contrib/oshmpi/build_oneccl.sh"
 
