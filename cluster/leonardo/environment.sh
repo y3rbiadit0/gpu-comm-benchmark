@@ -11,6 +11,10 @@ if [[ -z "$stack" ]]; then
 fi
 
 source "$script_dir/slurm.sh"
+# Install prefixes for everything the bootstrap builds. Sourced here as well as by
+# the bootstrap targets, so a preset resolving $env{OSHMPI_HOME} gets the same
+# answer whether it was reached through bootstrap.sh or `make leonardo`.
+source "$script_dir/layout.sh"
 source "$script_dir/print-env.sh"
 
 case "$stack" in
