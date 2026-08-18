@@ -7,10 +7,12 @@ from dataclasses import dataclass
 from model import (
     BASELINE_BACKEND,
     METRIC_SPECS,
+    AcrossRuns,
     BackendSummary,
     GroupedMeasurements,
     GroupKey,
     Measurement,
+    RunStats,
     MetricName,
     MetricSpec,
     SummaryGroups,
@@ -28,6 +30,59 @@ def parse_float(value: str | None) -> float | None:
 
 def mean_or_none(values: list[float]) -> float | None:
     return statistics.fmean(values) if values else None
+
+
+def quantile(sorted_values: list[float], fraction: float) -> float | None:
+    """Nearest-rank percentile. Exact enough for the handful of runs we have, and
+    it never invents a value that was not measured."""
+    if not sorted_values:
+        return None
+    index = min(int(fraction * len(sorted_values)), len(sorted_values) - 1)
+    return sorted_values[index]
+
+
+def run_stats(record: Measurement, metric: MetricSpec) -> RunStats:
+    """One record's own numbers. The percentile fields are absent from results
+    produced before the harness emitted them."""
+    get = lambda key: parse_float(record.fields.get(key))
+    iters = get("iters")
+    return RunStats(
+        job=record.job,
+        mean=get(metric.name.value),
+        median=get("median_usec"),
+        p25=get("p25_usec"),
+        p75=get("p75_usec"),
+        minimum=get("min_usec"),
+        maximum=get("max_usec"),
+        stddev=get("stddev_usec"),
+        iterations=int(iters) if iters is not None else None,
+    )
+
+
+def across_runs(records: list[Measurement], metric: MetricSpec) -> AcrossRuns:
+    """Spread over independent jobs.
+
+    Trials inside one job share an allocation, so they are averaged into a single
+    value first; the dispersion is then over jobs. Treating trials as independent
+    samples would understate it several-fold.
+    """
+    per_job: dict[str, list[float]] = defaultdict(list)
+    for record in records:
+        value = parse_float(record.fields.get(metric.name.value))
+        if value is not None:
+            per_job[record.job].append(value)
+    job_values = sorted(statistics.fmean(values) for values in per_job.values() if values)
+    if not job_values:
+        return AcrossRuns()
+    return AcrossRuns(
+        n_runs=len(job_values),
+        median=statistics.median(job_values),
+        p25=quantile(job_values, 0.25),
+        p75=quantile(job_values, 0.75),
+        # Undefined for a single job, and meaningless enough below ~5 that the
+        # caller should show n_runs alongside it.
+        stddev=statistics.stdev(job_values) if len(job_values) > 1 else None,
+    )
 
 
 def preferred_metric(records: list[Measurement]) -> MetricSpec:
@@ -152,6 +207,8 @@ class SummaryTable:
                 trials=len(supported_records) if supported_records else len(records),
                 valid_all=status != Status.ERROR,
                 status=status,
+                runs=tuple(run_stats(record, metric) for record in supported_records),
+                across_runs=across_runs(supported_records, metric),
             )
         return {key: dict(value) for key, value in groups.items()}
 

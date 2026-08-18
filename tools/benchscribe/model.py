@@ -20,6 +20,7 @@ class Backend(str, Enum):
 class OutputFormat(str, Enum):
     MARKDOWN = "md"
     CSV = "csv"
+    JSON = "json"
 
 
 class MetricName(str, Enum):
@@ -70,6 +71,10 @@ class Measurement:
     valid: bool
     case: str = ""
     status: Status = Status.OK
+    # Which job produced this, and which trial within it. Trials inside one job
+    # share an allocation, so only the job distinguishes independent samples.
+    job: str = ""
+    trial: str = ""
 
 
 @dataclass(frozen=True, order=True)
@@ -78,6 +83,41 @@ class GroupKey:
     topology: str
     n: int
     case: str = ""
+
+
+@dataclass(frozen=True)
+class RunStats:
+    """One job's measurement of one point.
+
+    The percentile fields come from the within-run iteration distribution and
+    are absent in results produced before the harness emitted them, so every
+    one of them is optional.
+    """
+
+    job: str = ""
+    mean: float | None = None
+    median: float | None = None
+    p25: float | None = None
+    p75: float | None = None
+    minimum: float | None = None
+    maximum: float | None = None
+    stddev: float | None = None
+    iterations: int | None = None
+
+
+@dataclass(frozen=True)
+class AcrossRuns:
+    """Spread of one point across independent jobs.
+
+    This is the dispersion worth plotting: trials inside a single job share an
+    allocation, so their agreement says little about reproducibility.
+    """
+
+    n_runs: int = 0
+    median: float | None = None
+    p25: float | None = None
+    p75: float | None = None
+    stddev: float | None = None
 
 
 @dataclass(frozen=True)
@@ -90,6 +130,8 @@ class BackendSummary:
     trials: int
     valid_all: bool
     status: Status = Status.OK
+    runs: tuple[RunStats, ...] = ()
+    across_runs: AcrossRuns | None = None
 
 
 @dataclass(frozen=True)

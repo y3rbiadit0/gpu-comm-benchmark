@@ -71,10 +71,24 @@ def status_from_fields(fields: dict[str, str]) -> Status:
     return Status.OK if validation == "PASS" else Status.ERROR
 
 
+def job_and_trial_from_path(path: Path) -> tuple[str, str]:
+    """Split `<job name>-<job id>-<trial>-stdout.txt`.
+
+    Falls back to empty strings for hand-run files that do not follow it; the
+    caller then treats each file as its own job.
+    """
+    stem = path.name[: -len("-stdout.txt")] if path.name.endswith("-stdout.txt") else path.stem
+    parts = stem.rsplit("-", 2)
+    if len(parts) == 3:
+        return parts[1], parts[2]
+    return stem, ""
+
+
 def scan_results(results_dir: Path, warnings: TextIO = sys.stderr) -> list[Measurement]:
     measurements: list[Measurement] = []
     for path in sorted(results_dir.glob("**/*-stdout.txt")):
         topology = topology_from_path(path)
+        job, trial = job_and_trial_from_path(path)
         try:
             lines = path.read_text(errors="replace").splitlines()
         except OSError as error:
@@ -104,6 +118,8 @@ def scan_results(results_dir: Path, warnings: TextIO = sys.stderr) -> list[Measu
                     valid=parsed.fields.get("validation", "FAIL").upper() == "PASS",
                     case=case,
                     status=status,
+                    job=job,
+                    trial=trial,
                 )
             )
     return measurements

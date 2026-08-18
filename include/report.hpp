@@ -5,6 +5,8 @@
 #include <iostream>
 #include <string>
 
+#include "timing.hpp"
+
 namespace gpu_bench {
 
 struct bench_report {
@@ -17,6 +19,15 @@ struct bench_report {
   double time_per_iter_s = 0.0;     // headline: slowest-rank average per iteration
   double min_s = 0.0;
   double max_s = 0.0;
+  /* Within-run distribution of one rank, for box plots and for saying how noisy
+   * a single measurement was. Unlike the fields above it is not reduced across
+   * ranks: MAX-reducing p25 and p75 independently could take them from different
+   * ranks and yield p25 > p75. Set it with set_local_distribution(). */
+  bool has_distribution = false;
+  double median_s = 0.0;
+  double p25_s = 0.0;
+  double p75_s = 0.0;
+  double stddev_s = 0.0;
   bool valid = true;
   std::string extra;                // optional extra key=value pairs (e.g. device="...")
 };
@@ -45,6 +56,18 @@ inline std::string report_name(const bench_report& report) {
   return std::string(backend) + original.substr(split);
 }
 
+/* Records this rank's own iteration-to-iteration spread. benchscribe treats the
+ * emitted fields as optional, so results produced before this existed still
+ * parse. */
+inline void set_local_distribution(bench_report& report, const bench_stats& stats,
+                                   double scale = 1.0) {
+  report.median_s = scale * stats.median_s;
+  report.p25_s = scale * stats.p25_s;
+  report.p75_s = scale * stats.p75_s;
+  report.stddev_s = scale * stats.stddev_s;
+  report.has_distribution = true;
+}
+
 inline void print_report(const bench_report& report) {
   const double gbytes_per_s = (report.bytes_per_iter > 0 && report.time_per_iter_s > 0.0)
                                   ? static_cast<double>(report.bytes_per_iter) / report.time_per_iter_s / 1.0e9
@@ -55,6 +78,12 @@ inline void print_report(const bench_report& report) {
             << " warmup=" << report.warmup << " time_per_iter_s=" << report.time_per_iter_s
             << " usec=" << (report.time_per_iter_s * 1.0e6) << " min_usec=" << (report.min_s * 1.0e6)
             << " max_usec=" << (report.max_s * 1.0e6) << " gbytes_per_s=" << gbytes_per_s;
+    if (report.has_distribution) {
+      std::cout << " median_usec=" << (report.median_s * 1.0e6)
+                << " p25_usec=" << (report.p25_s * 1.0e6)
+                << " p75_usec=" << (report.p75_s * 1.0e6)
+                << " stddev_usec=" << (report.stddev_s * 1.0e6);
+    }
   if (!report.extra.empty()) {
     std::cout << ' ' << report.extra;
   }

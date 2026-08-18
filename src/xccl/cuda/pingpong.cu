@@ -124,6 +124,7 @@ int main(int argc, char** argv) {
         report.time_per_iter_s = 0.5 * stats.avg_s;
         report.min_s = 0.5 * stats.min_s;
         report.max_s = 0.5 * stats.max_s;
+        gpu_bench::set_local_distribution(report, stats, 0.5);
         report.valid = ok;
         gpu_bench::print_report(report);
       }

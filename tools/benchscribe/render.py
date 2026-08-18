@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import json
+from dataclasses import asdict
 import datetime as dt
 from typing import TextIO
 
@@ -145,6 +147,51 @@ def render_fit_csv(chars: list[Characterization], out: TextIO) -> None:
                 char.points,
             ]
         )
+
+
+def render_json(table: SummaryTable, out: TextIO) -> None:
+    """Machine-readable export carrying the full distribution.
+
+    Unlike the Markdown and CSV views, which collapse each point to a single
+    number, this keeps every run so figures can show spread: `runs` for the
+    within-run iteration distribution (box plots), `across_runs` for the spread
+    over independent jobs (error bands on a line graph).
+
+    `schema_version` is the contract - bump it on any incompatible change.
+    """
+    points = []
+    for key, backends in sorted(table.groups.items()):
+        metric = table.metric_by_benchmark[key.benchmark]
+        for backend, summary in sorted(backends.items()):
+            points.append(
+                {
+                    "benchmark": key.benchmark,
+                    "topology": key.topology,
+                    "case": key.case,
+                    "backend": backend,
+                    "n": key.n,
+                    "bytes": summary.nbytes,
+                    "metric": metric.name.value,
+                    "unit": metric.unit,
+                    "value_mean": summary.metric_value,
+                    "value_min": summary.metric_min,
+                    "gbytes_per_s": summary.bandwidth,
+                    "valid": summary.valid_all,
+                    "status": summary.status.value,
+                    "runs": [asdict(run) for run in summary.runs],
+                    "across_runs": asdict(summary.across_runs) if summary.across_runs else None,
+                }
+            )
+    json.dump(
+        {
+            "schema_version": 1,
+            "generated": dt.datetime.now().isoformat(timespec="seconds"),
+            "points": points,
+        },
+        out,
+        indent=2,
+    )
+    out.write("\n")
 
 
 def render_csv(table: SummaryTable, out: TextIO) -> None:

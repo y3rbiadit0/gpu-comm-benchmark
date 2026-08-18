@@ -117,6 +117,7 @@ int main(int argc, char** argv) {
         report.time_per_iter_s = time_per_iter;
         report.min_s = min_time;
         report.max_s = max_time;
+        gpu_bench::set_local_distribution(report, stats);
         report.valid = global_ok != 0;
         report.extra = "datatype=float32 reduction=sum bus_gbytes_per_s=" + std::to_string(bus_gbytes_per_s) +
                        " device=\"" + queue.get_device().get_info<sycl::info::device::name>() + "\"";

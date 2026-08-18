@@ -162,6 +162,7 @@ int main(int argc, char** argv) {
         report.time_per_iter_s = max_avg;
         report.min_s = min_min;
         report.max_s = max_max;
+        gpu_bench::set_local_distribution(report, stats);
         report.valid = global_ok != 0;
         report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv device=\"" +
                        queue.get_device().get_info<sycl::info::device::name>() + "\"";

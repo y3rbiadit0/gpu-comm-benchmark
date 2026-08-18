@@ -295,6 +295,7 @@ int main(int argc, char** argv) {
           report.time_per_iter_s = time_per_iter;
           report.min_s = min_time;
           report.max_s = max_time;
+          gpu_bench::set_local_distribution(report, stats);
           report.valid = global_ok != 0;
           report.extra = extra.str();
           gpu_bench::print_report(report);
