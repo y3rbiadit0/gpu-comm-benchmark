@@ -48,14 +48,14 @@ int main(int argc, char** argv) {
       throw std::invalid_argument(
           "usage: cuda_nccl_moe <tokens_per_rank> [hidden] [iterations] [warmup] [routing_cases]");
     }
-    const auto tokens = comm_playground::parse_moe_size_arg(argc, argv, 1, 16384U, "token count");
-    const auto hidden = comm_playground::parse_moe_size_arg(argc, argv, 2, 256U, "hidden size");
-    const auto iterations = comm_playground::parse_moe_positive_int_arg(argc, argv, 3, 100, "iteration count");
-    const auto warmup = comm_playground::parse_moe_positive_int_arg(argc, argv, 4, 20, "warmup count");
-    const auto routing_cases = comm_playground::parse_moe_routing_cases(argc, argv, 5);
-    const auto payload_elements = comm_playground::moe_checked_multiply(tokens, hidden, "MoE payload");
-    const auto bytes = comm_playground::moe_checked_multiply(
-        comm_playground::moe_checked_multiply(2U, payload_elements, "MoE useful bytes"), sizeof(float),
+    const auto tokens = gpu_bench::parse_moe_size_arg(argc, argv, 1, 16384U, "token count");
+    const auto hidden = gpu_bench::parse_moe_size_arg(argc, argv, 2, 256U, "hidden size");
+    const auto iterations = gpu_bench::parse_moe_positive_int_arg(argc, argv, 3, 100, "iteration count");
+    const auto warmup = gpu_bench::parse_moe_positive_int_arg(argc, argv, 4, 20, "warmup count");
+    const auto routing_cases = gpu_bench::parse_moe_routing_cases(argc, argv, 5);
+    const auto payload_elements = gpu_bench::moe_checked_multiply(tokens, hidden, "MoE payload");
+    const auto bytes = gpu_bench::moe_checked_multiply(
+        gpu_bench::moe_checked_multiply(2U, payload_elements, "MoE useful bytes"), sizeof(float),
         "MoE useful bytes");
 
     int device_count = 0;
@@ -75,8 +75,8 @@ int main(int argc, char** argv) {
 
     int all_cases_ok = 1;
     for (const auto routing : routing_cases) {
-      const auto plan = comm_playground::make_moe_plan(tokens, hidden, rank, ranks, routing);
-      const auto host_send = comm_playground::pack_moe_send(plan);
+      const auto plan = gpu_bench::make_moe_plan(tokens, hidden, rank, ranks, routing);
+      const auto host_send = gpu_bench::pack_moe_send(plan);
       std::vector<float> host_dispatch(plan.recv_elements);
       std::vector<float> host_combined(plan.send_elements);
 
@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
       check_cuda(cudaMemset(device_combined, 0, plan.send_elements * sizeof(float)), "cudaMemset(combined)");
 
       MPI_Barrier(MPI_COMM_WORLD);
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         check_nccl(ncclGroupStart(), "ncclGroupStart(dispatch)");
         for (int peer = 0; peer < ranks; ++peer) {
           const auto index = static_cast<std::size_t>(peer);
@@ -146,8 +146,8 @@ int main(int argc, char** argv) {
       check_cuda(cudaMemcpy(host_combined.data(), device_combined, plan.send_elements * sizeof(float),
                             cudaMemcpyDeviceToHost),
                  "cudaMemcpy(combined)");
-      int local_ok = comm_playground::validate_moe_dispatch(host_dispatch.data(), plan) &&
-                             comm_playground::validate_moe_combined(host_combined.data(), host_send)
+      int local_ok = gpu_bench::validate_moe_dispatch(host_dispatch.data(), plan) &&
+                             gpu_bench::validate_moe_combined(host_combined.data(), host_send)
                          ? 1
                          : 0;
       int global_ok = 1;
@@ -163,13 +163,13 @@ int main(int argc, char** argv) {
                                                                : 0.0;
         const double imbalance = static_cast<double>(plan.max_expert_tokens) / static_cast<double>(tokens);
         std::ostringstream extra;
-        extra << "case=" << comm_playground::moe_routing_name(routing)
-              << " routing=" << comm_playground::moe_routing_name(routing) << " tokens=" << tokens
+        extra << "case=" << gpu_bench::moe_routing_name(routing)
+              << " routing=" << gpu_bench::moe_routing_name(routing) << " tokens=" << tokens
               << " hidden=" << hidden << " top_k=1 max_expert_tokens=" << plan.max_expert_tokens
               << " expert_imbalance=" << imbalance << " useful_gbytes_per_s=" << useful_gbytes_per_s
               << " status=" << (global_ok ? "OK" : "ERROR");
 
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "cuda_nccl_moe";
         report.n = tokens;
         report.ranks = ranks;
@@ -181,7 +181,7 @@ int main(int argc, char** argv) {
         report.max_s = max_time;
         report.valid = global_ok != 0;
         report.extra = extra.str();
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
     }
 

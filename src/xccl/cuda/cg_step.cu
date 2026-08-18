@@ -120,11 +120,11 @@ int main(int argc, char** argv) {
   cudaStream_t stream = nullptr;
 
   try {
-    const auto side = comm_playground::parse_size_arg(argc, argv, 1U << 9U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 50);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 10);
-    const auto local_cols = comm_playground::local_count(side, rank, ranks);
-    const auto col_offset = comm_playground::local_offset(side, rank, ranks);
+    const auto side = gpu_bench::parse_size_arg(argc, argv, 1U << 9U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 50);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 10);
+    const auto local_cols = gpu_bench::local_count(side, rank, ranks);
+    const auto col_offset = gpu_bench::local_offset(side, rank, ranks);
     const auto width = local_cols + 2U;
     const int left = rank == 0 ? -1 : rank - 1;
     const int right = rank + 1 == ranks ? -1 : rank + 1;
@@ -185,7 +185,7 @@ int main(int argc, char** argv) {
     check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(init)");
 
     MPI_Barrier(MPI_COMM_WORLD);
-    const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+    const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
       if (local_cols > 0) {
         pack_column_kernel<<<grid1d, block1d, 0, stream>>>(p_field, send_west, side, width, 1U);
         pack_column_kernel<<<grid1d, block1d, 0, stream>>>(p_field, send_east, side, width, local_cols);
@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
     MPI_Reduce(&stats.max_s, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
     const auto ones = [](std::size_t, std::size_t) { return 1.0F; };
-    const auto qval = [&](std::size_t i, std::size_t jg) { return comm_playground::stencil5(i, jg, side, ones); };
+    const auto qval = [&](std::size_t i, std::size_t jg) { return gpu_bench::stencil5(i, jg, side, ones); };
     double ref_pq = 0.0;
     double ref_qq = 0.0;
     for (std::size_t i = 0; i < side; ++i) {
@@ -236,14 +236,14 @@ int main(int argc, char** argv) {
     double host_qq = 0.0;
     check_cuda(cudaMemcpy(&host_pq, result_pq, sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy(pq)");
     check_cuda(cudaMemcpy(&host_qq, result_qq, sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy(qq)");
-    int local_ok = comm_playground::nearly_equal(host_pq, ref_pq) && comm_playground::nearly_equal(host_qq, ref_qq)
+    int local_ok = gpu_bench::nearly_equal(host_pq, ref_pq) && gpu_bench::nearly_equal(host_qq, ref_qq)
                        ? 1
                        : 0;
     if (local_cols > 0) {
       std::vector<float> host_q(side * width);
       check_cuda(cudaMemcpy(host_q.data(), q_field, side * width * sizeof(float), cudaMemcpyDeviceToHost),
                  "cudaMemcpy(q)");
-      if (!comm_playground::validate_columns(host_q.data(), side, local_cols, width, col_offset, qval)) {
+      if (!gpu_bench::validate_columns(host_q.data(), side, local_cols, width, col_offset, qval)) {
         local_ok = 0;
       }
     }
@@ -264,7 +264,7 @@ int main(int argc, char** argv) {
     check_cuda(cudaStreamDestroy(stream), "cudaStreamDestroy");
 
     if (rank == 0) {
-      comm_playground::bench_report report;
+      gpu_bench::bench_report report;
       report.name = "cuda_nccl_cg_step";
       report.n = side;
       report.ranks = ranks;
@@ -275,7 +275,7 @@ int main(int argc, char** argv) {
       report.min_s = min_time;
       report.max_s = max_time;
       report.valid = global_ok != 0;
-      comm_playground::print_report(report);
+      gpu_bench::print_report(report);
     }
 
     MPI_Finalize();

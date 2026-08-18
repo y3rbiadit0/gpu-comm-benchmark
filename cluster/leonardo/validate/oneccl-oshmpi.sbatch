@@ -16,12 +16,12 @@
 
 set -euo pipefail
 
-playground_root=${GPU_BENCH_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
+project_root=${GPU_BENCH_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
 oneccl_build_dir=${ONECCL_BUILD_DIR:-$SCRATCH/oneccl-oshmpi}
 
-source "$playground_root/cluster/leonardo/environment.sh" sycl
+source "$project_root/cluster/leonardo/environment.sh" sycl
 export GPU_BENCH_JOB_NODES=${SLURM_NNODES:-1}
-source "$playground_root/cluster/leonardo/runtime/oshmpi.sh"
+source "$project_root/cluster/leonardo/runtime/oshmpi.sh"
 
 export OSHMPI_HOME=${OSHMPI_HOME:-$HOME/opt/oshmpi-ee5cf110-oneccl}
 

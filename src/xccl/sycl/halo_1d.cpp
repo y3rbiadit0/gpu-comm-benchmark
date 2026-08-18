@@ -56,10 +56,10 @@ int main(int argc, char** argv) {
       throw std::runtime_error("ring halo exchange requires at least 2 ranks");
     }
 
-    const auto max_halo = comm_playground::parse_size_arg(argc, argv, 1U << 20U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto halo_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_halo);
+    const auto max_halo = gpu_bench::parse_size_arg(argc, argv, 1U << 20U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto halo_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_halo);
 
     const int left = (rank - 1 + ranks) % ranks;
     const int right = (rank + 1) % ranks;
@@ -114,10 +114,10 @@ int main(int argc, char** argv) {
       float* recv_right = interior + n_local;
 
       MPI_Barrier(MPI_COMM_WORLD);
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         // Grouping prevents an in-order stream from blocking on the first
         // unmatched receive before its matching sends have been enqueued.
-        comm_playground::ccl_group_scope group;
+        gpu_bench::ccl_group_scope group;
         auto er = ccl::recv(recv_left, halo, ccl::datatype::float32, left, comm, stream);
         auto el = ccl::recv(recv_right, halo, ccl::datatype::float32, right, comm, stream);
         auto sr = ccl::send(send_right, halo, ccl::datatype::float32, right, comm, stream);
@@ -135,8 +135,8 @@ int main(int argc, char** argv) {
       queue.copy(recv_right, host_right.data(), halo).wait();
       int local_ok = 1;
       for (std::size_t i = 0; i < halo; ++i) {
-        if (!comm_playground::nearly_equal(host_left[i], expect_left) ||
-            !comm_playground::nearly_equal(host_right[i], expect_right)) {
+        if (!gpu_bench::nearly_equal(host_left[i], expect_left) ||
+            !gpu_bench::nearly_equal(host_right[i], expect_right)) {
           local_ok = 0;
           break;
         }
@@ -152,7 +152,7 @@ int main(int argc, char** argv) {
       MPI_Reduce(&stats.max_s, &max_max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
       if (rank == 0) {
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "sycl_oneccl_halo_1d";
         report.n = halo;
         report.ranks = ranks;
@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
         report.valid = global_ok != 0;
         report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv device=\"" +
                        queue.get_device().get_info<sycl::info::device::name>() + "\"";
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
     }
 

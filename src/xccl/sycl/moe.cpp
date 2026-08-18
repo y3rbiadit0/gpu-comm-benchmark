@@ -78,14 +78,14 @@ struct probe_buffers {
   float* recv = nullptr;
 };
 
-void print_not_implemented(comm_playground::moe_routing routing, std::size_t tokens, std::size_t hidden,
+void print_not_implemented(gpu_bench::moe_routing routing, std::size_t tokens, std::size_t hidden,
                            std::size_t bytes, int ranks, int iterations, int warmup,
                            const char* reason = "point_to_point") {
   std::cout << "sycl_oneccl_moe n=" << tokens << " ranks=" << ranks << " bytes=" << bytes
             << " iters=" << iterations << " warmup=" << warmup
             << " time_per_iter_s=0 usec=0 min_usec=0 max_usec=0 gbytes_per_s=0 case="
-            << comm_playground::moe_routing_name(routing)
-            << " routing=" << comm_playground::moe_routing_name(routing) << " tokens=" << tokens
+            << gpu_bench::moe_routing_name(routing)
+            << " routing=" << gpu_bench::moe_routing_name(routing) << " tokens=" << tokens
             << " hidden=" << hidden
             << " top_k=1 status=NOT_IMPLEMENTED reason=" << reason << " validation=SKIP\n";
 }
@@ -105,14 +105,14 @@ int main(int argc, char** argv) {
       throw std::invalid_argument(
           "usage: sycl_oneccl_moe <tokens_per_rank> [hidden] [iterations] [warmup] [routing_cases]");
     }
-    const auto tokens = comm_playground::parse_moe_size_arg(argc, argv, 1, 16384U, "token count");
-    const auto hidden = comm_playground::parse_moe_size_arg(argc, argv, 2, 256U, "hidden size");
-    const auto iterations = comm_playground::parse_moe_positive_int_arg(argc, argv, 3, 100, "iteration count");
-    const auto warmup = comm_playground::parse_moe_positive_int_arg(argc, argv, 4, 20, "warmup count");
-    const auto routing_cases = comm_playground::parse_moe_routing_cases(argc, argv, 5);
-    const auto payload_elements = comm_playground::moe_checked_multiply(tokens, hidden, "MoE payload");
-    const auto bytes = comm_playground::moe_checked_multiply(
-        comm_playground::moe_checked_multiply(2U, payload_elements, "MoE useful bytes"), sizeof(float),
+    const auto tokens = gpu_bench::parse_moe_size_arg(argc, argv, 1, 16384U, "token count");
+    const auto hidden = gpu_bench::parse_moe_size_arg(argc, argv, 2, 256U, "hidden size");
+    const auto iterations = gpu_bench::parse_moe_positive_int_arg(argc, argv, 3, 100, "iteration count");
+    const auto warmup = gpu_bench::parse_moe_positive_int_arg(argc, argv, 4, 20, "warmup count");
+    const auto routing_cases = gpu_bench::parse_moe_routing_cases(argc, argv, 5);
+    const auto payload_elements = gpu_bench::moe_checked_multiply(tokens, hidden, "MoE payload");
+    const auto bytes = gpu_bench::moe_checked_multiply(
+        gpu_bench::moe_checked_multiply(2U, payload_elements, "MoE useful bytes"), sizeof(float),
         "MoE useful bytes");
 
     ccl::init();
@@ -151,7 +151,7 @@ int main(int argc, char** argv) {
       try {
         const int recv_peer = ranks == 1 ? rank : (rank - 1 + ranks) % ranks;
         const int send_peer = ranks == 1 ? rank : (rank + 1) % ranks;
-        comm_playground::ccl_group_scope group;
+        gpu_bench::ccl_group_scope group;
         events.push_back(ccl::recv(buffers.recv, 1, ccl::datatype::float32, recv_peer, comm, stream));
         events.push_back(ccl::send(buffers.send, 1, ccl::datatype::float32, send_peer, comm, stream));
         group.end();
@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
                                         const std::vector<int>& recv_displacements) {
       std::vector<ccl::event> events;
       events.reserve(static_cast<std::size_t>(2 * ranks));
-      comm_playground::ccl_group_scope group;
+      gpu_bench::ccl_group_scope group;
       for (int peer = 0; peer < ranks; ++peer) {
         const auto index = static_cast<std::size_t>(peer);
         if (recv_counts[index] > 0) {
@@ -229,8 +229,8 @@ int main(int argc, char** argv) {
 
     int all_cases_ok = 1;
     for (const auto routing : routing_cases) {
-      const auto plan = comm_playground::make_moe_plan(tokens, hidden, rank, ranks, routing);
-      const auto host_send = comm_playground::pack_moe_send(plan);
+      const auto plan = gpu_bench::make_moe_plan(tokens, hidden, rank, ranks, routing);
+      const auto host_send = gpu_bench::pack_moe_send(plan);
       std::vector<float> host_dispatch(plan.recv_elements);
       std::vector<float> host_combined(plan.send_elements);
 
@@ -248,7 +248,7 @@ int main(int argc, char** argv) {
         queue.memset(buffers.combined, 0, plan.send_elements * sizeof(float)).wait();
 
         MPI_Barrier(MPI_COMM_WORLD);
-        const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+        const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
           exchange_phase_unchecked(buffers.send, plan.send_counts, plan.send_displacements, buffers.dispatch,
                                    plan.recv_counts, plan.recv_displacements);
           exchange_phase_unchecked(buffers.dispatch, plan.recv_counts, plan.recv_displacements, buffers.combined,
@@ -266,8 +266,8 @@ int main(int argc, char** argv) {
           queue.copy(buffers.dispatch, host_dispatch.data(), plan.recv_elements).wait();
         }
         queue.copy(buffers.combined, host_combined.data(), plan.send_elements).wait();
-        int local_ok = comm_playground::validate_moe_dispatch(host_dispatch.data(), plan) &&
-                               comm_playground::validate_moe_combined(host_combined.data(), host_send)
+        int local_ok = gpu_bench::validate_moe_dispatch(host_dispatch.data(), plan) &&
+                               gpu_bench::validate_moe_combined(host_combined.data(), host_send)
                            ? 1
                            : 0;
         int global_ok = 1;
@@ -279,13 +279,13 @@ int main(int argc, char** argv) {
               time_per_iter > 0.0 ? static_cast<double>(bytes) / time_per_iter / 1.0e9 : 0.0;
           const double imbalance = static_cast<double>(plan.max_expert_tokens) / static_cast<double>(tokens);
           std::ostringstream extra;
-          extra << "case=" << comm_playground::moe_routing_name(routing)
-                << " routing=" << comm_playground::moe_routing_name(routing) << " tokens=" << tokens
+          extra << "case=" << gpu_bench::moe_routing_name(routing)
+                << " routing=" << gpu_bench::moe_routing_name(routing) << " tokens=" << tokens
                 << " hidden=" << hidden << " top_k=1 max_expert_tokens=" << plan.max_expert_tokens
                 << " expert_imbalance=" << imbalance << " useful_gbytes_per_s=" << useful_gbytes_per_s
                 << " status=" << (global_ok ? "OK" : "ERROR");
 
-          comm_playground::bench_report report;
+          gpu_bench::bench_report report;
           report.name = "sycl_oneccl_moe";
           report.n = tokens;
           report.ranks = ranks;
@@ -297,7 +297,7 @@ int main(int argc, char** argv) {
           report.max_s = max_time;
           report.valid = global_ok != 0;
           report.extra = extra.str();
-          comm_playground::print_report(report);
+          gpu_bench::print_report(report);
         }
       }
     }

@@ -100,10 +100,10 @@ int main(int argc, char** argv) {
     }
     const int peer = pe == 0 ? 1 : 0;
 
-    const auto max_elems = comm_playground::parse_size_arg(argc, argv, 1U << 22U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto message_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_elems);
+    const auto max_elems = gpu_bench::parse_size_arg(argc, argv, 1U << 22U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto message_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_elems);
 
     std::vector<float> host_send(max_elems);
     for (std::size_t i = 0; i < max_elems; ++i) {
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
       base += static_cast<std::uint64_t>(warmup);
 
       nvshmem_barrier_all();
-      comm_playground::wall_timer timer;
+      gpu_bench::wall_timer timer;
       pingpong_kernel<<<1, block_size>>>(device_send, device_recv, flag, size, iterations, pe, peer, base);
       check_cuda(cudaGetLastError(), "pingpong_kernel(timed)");
       check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(timed)");
@@ -145,12 +145,12 @@ int main(int argc, char** argv) {
                    "cudaMemcpy(recv)");
         bool ok = true;
         for (std::size_t i = 0; i < size && ok; ++i) {
-          ok = comm_playground::nearly_equal(host_recv[i], host_send[i]);
+          ok = gpu_bench::nearly_equal(host_recv[i], host_send[i]);
         }
 
         // Amortized per-round-trip time; reported as one-way latency.
         const double round_trip = elapsed / static_cast<double>(iterations);
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "cuda_nvshmem_pingpong";
         report.n = size;
         report.ranks = pes;
@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
         report.min_s = 0.5 * round_trip;
         report.max_s = 0.5 * round_trip;
         report.valid = ok;
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
     }
 

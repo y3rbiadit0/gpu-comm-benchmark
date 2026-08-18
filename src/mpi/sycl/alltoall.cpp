@@ -33,16 +33,16 @@ int main(int argc, char** argv) {
   MPI_Comm_size(MPI_COMM_WORLD, &ranks);
 
   try {
-    const auto count = comm_playground::parse_size_arg(argc, argv, 1U << 16U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto count = gpu_bench::parse_size_arg(argc, argv, 1U << 16U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
     const int peer_count = mpi_count(count);
     const auto total = static_cast<std::size_t>(ranks) * count;
 
     sycl::queue queue{sycl::default_selector_v};
 
     std::vector<float> host_send(total);
-    comm_playground::fill_alltoall_send(host_send.data(), rank, ranks, count);
+    gpu_bench::fill_alltoall_send(host_send.data(), rank, ranks, count);
 
     float* device_send = sycl::malloc_device<float>(total, queue);
     float* device_recv = sycl::malloc_device<float>(total, queue);
@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
     queue.memset(device_recv, 0, total * sizeof(float)).wait();
 
     MPI_Barrier(MPI_COMM_WORLD);
-    const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+    const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
       MPI_Alltoall(device_send, peer_count, MPI_FLOAT, device_recv, peer_count, MPI_FLOAT, MPI_COMM_WORLD);
     });
 
@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
 
     std::vector<float> host_recv(total);
     queue.copy(device_recv, host_recv.data(), total).wait();
-    int local_ok = comm_playground::validate_alltoall(host_recv.data(),rank, ranks, count) ? 1 : 0;
+    int local_ok = gpu_bench::validate_alltoall(host_recv.data(),rank, ranks, count) ? 1 : 0;
     int global_ok = 1;
     MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 
@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
     sycl::free(device_recv, queue);
 
     if (rank == 0) {
-      comm_playground::bench_report report;
+      gpu_bench::bench_report report;
       report.name = "sycl_mpi_alltoall";
       report.n = count;
       report.ranks = ranks;
@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
       report.max_s = max_time;
       report.valid = global_ok != 0;
       report.extra = "device=\"" + queue.get_device().get_info<sycl::info::device::name>() + "\"";
-      comm_playground::print_report(report);
+      gpu_bench::print_report(report);
     }
 
     MPI_Finalize();

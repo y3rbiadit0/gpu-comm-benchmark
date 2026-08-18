@@ -11,7 +11,7 @@ from scan import scan_results
 from summary import SummaryTable
 
 
-DESCRIPTION = """Summarize comm-playground benchmark results.
+DESCRIPTION = """Summarize gpu-comm-bench benchmark results.
 
 Benchscribe scans Slurm stdout files under a results directory, parses benchmark
 key=value report lines, aggregates repeated trials, and reports every backend

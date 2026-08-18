@@ -169,10 +169,10 @@ gpu_bench_experiment_run_trials() {
 
     if [[ "$trial_status" -ne 0 ]]; then
       if [[ "$trial_status" -eq 124 || "$trial_status" -eq 137 ]]; then
-        printf 'comm-playground trial exceeded timeout %s (status %s)\n' \
+        printf 'gpu-comm-bench trial exceeded timeout %s (status %s)\n' \
           "$GPU_BENCH_TRIAL_TIMEOUT" "$trial_status" | tee -a "${errfile}.tmp" >&2
       else
-        printf 'comm-playground trial failed with status %s\n' "$trial_status" \
+        printf 'gpu-comm-bench trial failed with status %s\n' "$trial_status" \
           | tee -a "${errfile}.tmp" >&2
       fi
       echo "failed stdout retained at ${outfile}.tmp" >&2

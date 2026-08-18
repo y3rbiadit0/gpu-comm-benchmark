@@ -55,13 +55,13 @@ int main(int argc, char** argv) {
       throw std::runtime_error("NVSHMEM PE layout does not match MPI rank layout");
     }
 
-    const auto count = comm_playground::parse_size_arg(argc, argv, 1U << 16U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto count = gpu_bench::parse_size_arg(argc, argv, 1U << 16U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
     const auto total = static_cast<std::size_t>(pes) * count;
 
     std::vector<float> host_send(total);
-    comm_playground::fill_alltoall_send(host_send.data(), pe, pes, count);
+    gpu_bench::fill_alltoall_send(host_send.data(), pe, pes, count);
 
     auto* device_send = static_cast<float*>(nvshmem_malloc(total * sizeof(float)));
     auto* device_recv = static_cast<float*>(nvshmem_malloc(total * sizeof(float)));
@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
 
     nvshmem_barrier_all();
     MPI_Barrier(MPI_COMM_WORLD);
-    const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+    const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
       nvshmem_float_alltoall(NVSHMEM_TEAM_WORLD, device_recv, device_send, count);
     });
 
@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
     std::vector<float> host_recv(total);
     check_cuda(cudaMemcpy(host_recv.data(), device_recv, total * sizeof(float), cudaMemcpyDeviceToHost),
                "cudaMemcpy(recv)");
-    int local_ok = comm_playground::validate_alltoall(host_recv.data(),pe, pes, count) ? 1 : 0;
+    int local_ok = gpu_bench::validate_alltoall(host_recv.data(),pe, pes, count) ? 1 : 0;
     int global_ok = 1;
     MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
     nvshmem_initialized = false;
 
     if (pe == 0) {
-      comm_playground::bench_report report;
+      gpu_bench::bench_report report;
       report.name = "cuda_nvshmem_alltoall";
       report.n = count;
       report.ranks = pes;
@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
       report.min_s = min_time;
       report.max_s = max_time;
       report.valid = global_ok != 0;
-      comm_playground::print_report(report);
+      gpu_bench::print_report(report);
     }
 
     MPI_Finalize();

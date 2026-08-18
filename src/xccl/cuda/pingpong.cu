@@ -46,10 +46,10 @@ int main(int argc, char** argv) {
     if (ranks != 2) {
       throw std::runtime_error("pingpong requires exactly 2 ranks");
     }
-    const auto max_elems = comm_playground::parse_size_arg(argc, argv, 1U << 22U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto message_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_elems);
+    const auto max_elems = gpu_bench::parse_size_arg(argc, argv, 1U << 22U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto message_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_elems);
     const int peer = rank == 0 ? 1 : 0;
 
     int device_count = 0;
@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
       const std::size_t count = size;
 
       MPI_Barrier(MPI_COMM_WORLD);
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         if (rank == 0) {
           check_nccl(ncclGroupStart(), "ncclGroupStart(send)");
           check_nccl(ncclSend(device_send, count, ncclFloat, peer, comm, stream), "ncclSend(ping)");
@@ -111,10 +111,10 @@ int main(int argc, char** argv) {
                    "cudaMemcpy(recv)");
         bool ok = true;
         for (std::size_t i = 0; i < size && ok; ++i) {
-          ok = comm_playground::nearly_equal(host_recv[i], host_send[i]);
+          ok = gpu_bench::nearly_equal(host_recv[i], host_send[i]);
         }
 
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "cuda_nccl_pingpong";
         report.n = size;
         report.ranks = ranks;
@@ -125,7 +125,7 @@ int main(int argc, char** argv) {
         report.min_s = 0.5 * stats.min_s;
         report.max_s = 0.5 * stats.max_s;
         report.valid = ok;
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
     }
 

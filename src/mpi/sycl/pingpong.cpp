@@ -24,10 +24,10 @@ int main(int argc, char** argv) {
     if (ranks != 2) {
       throw std::runtime_error("pingpong requires exactly 2 ranks");
     }
-    const auto max_elems = comm_playground::parse_size_arg(argc, argv, 1U << 22U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto message_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_elems);
+    const auto max_elems = gpu_bench::parse_size_arg(argc, argv, 1U << 22U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto message_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_elems);
     const int peer = rank == 0 ? 1 : 0;
 
     sycl::queue queue{sycl::default_selector_v};
@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
       const int count = static_cast<int>(size);
 
       MPI_Barrier(MPI_COMM_WORLD);
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         if (rank == 0) {
           MPI_Send(device_send, count, MPI_FLOAT, peer, 0, MPI_COMM_WORLD);
           MPI_Recv(device_recv, count, MPI_FLOAT, peer, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -63,10 +63,10 @@ int main(int argc, char** argv) {
         queue.copy(device_recv, host_recv.data(), size).wait();
         bool ok = true;
         for (std::size_t i = 0; i < size && ok; ++i) {
-          ok = comm_playground::nearly_equal(host_recv[i], host_send[i]);
+          ok = gpu_bench::nearly_equal(host_recv[i], host_send[i]);
         }
 
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "sycl_mpi_pingpong";
         report.n = size;
         report.ranks = ranks;
@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
         report.max_s = 0.5 * stats.max_s;
         report.valid = ok;
         report.extra = "device=\"" + queue.get_device().get_info<sycl::info::device::name>() + "\"";
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
     }
 

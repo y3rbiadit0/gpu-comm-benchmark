@@ -12,7 +12,7 @@ help:
 	@printf '%s\n' \
 	  'Targets:' \
 	  '  make bootstrap                  Build dependencies (oneCCL, OSHMPI) then the' \
-	  '                                  playground. TARGETS=... for specific ones,' \
+	  '                                  benchmarks. TARGETS=... for specific ones,' \
 	  '                                  see cluster/leonardo/bootstrap.sh --list' \
 	  '  make submit                     Submit experiments (BENCH=allreduce ...)' \
 	  '  make configure PRESET=<preset>  Configure one CMake preset' \

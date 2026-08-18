@@ -4,7 +4,7 @@
 
 #include "validation.hpp"
 
-namespace comm_playground {
+namespace gpu_bench {
 
 // Host-side helpers shared by the column-slab 2D stencil benchmarks (cg_step). A square S x S grid is split by columns; each rank stores its slab
 // in a padded row-major array of width (local_cols + 2) with ghost columns at
@@ -43,4 +43,4 @@ inline bool validate_columns(const float* padded, std::size_t side, std::size_t 
   return true;
 }
 
-}  // namespace comm_playground
+}  // namespace gpu_bench

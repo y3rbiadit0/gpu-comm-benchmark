@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace comm_playground {
+namespace gpu_bench {
 
 inline bool has_leading_minus(const char* value) {
   while (std::isspace(static_cast<unsigned char>(*value)) != 0) {
@@ -112,4 +112,4 @@ inline int parse_positive_int_arg(int argc, char** argv, int index, int default_
   return static_cast<int>(value);
 }
 
-}  // namespace comm_playground
+}  // namespace gpu_bench

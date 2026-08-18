@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 
-namespace comm_playground {
+namespace gpu_bench {
 
 // Block decomposition of `total` items across `ranks`: the first `total % ranks`
 // ranks get one extra item. Used to split vectors (or grid columns) evenly.
@@ -20,4 +20,4 @@ inline std::size_t local_offset(std::size_t total, int rank, int ranks) {
   return rank_value * base + std::min(rank_value, remainder);
 }
 
-}  // namespace comm_playground
+}  // namespace gpu_bench

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Where everything the playground builds lives. One definition, read by the
+# Where everything this project builds lives. One definition, read by the
 # bootstrap targets that produce these paths and by the runtime scripts that
 # consume them, so the two cannot drift and nothing has to be overridden by hand.
 #
@@ -14,8 +14,8 @@
 # Relocate everything by setting one of those. Individual paths can still be
 # overridden for one-off experiments, and are respected if already set.
 
-GPU_BENCH_WORK_ROOT=${GPU_BENCH_WORK_ROOT:-${SCRATCH:?set SCRATCH or GPU_BENCH_WORK_ROOT to a build filesystem}/comm-playground}
-GPU_BENCH_PREFIX_ROOT=${GPU_BENCH_PREFIX_ROOT:-$HOME/opt/comm-playground}
+GPU_BENCH_WORK_ROOT=${GPU_BENCH_WORK_ROOT:-${SCRATCH:?set SCRATCH or GPU_BENCH_WORK_ROOT to a build filesystem}/gpu-comm-bench}
+GPU_BENCH_PREFIX_ROOT=${GPU_BENCH_PREFIX_ROOT:-$HOME/opt/gpu-comm-bench}
 
 # Sources and build trees - scratch.
 export GPU_BENCH_SRC_DIR=${GPU_BENCH_SRC_DIR:-$GPU_BENCH_WORK_ROOT/src}

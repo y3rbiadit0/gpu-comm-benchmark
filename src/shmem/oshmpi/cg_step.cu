@@ -124,11 +124,11 @@ int main(int argc, char** argv) {
   double* stats_by_pe = nullptr;
 
   try {
-    const auto side = comm_playground::parse_size_arg(argc, argv, 1U << 9U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 50);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 10);
-    const auto local_cols = comm_playground::local_count(side, pe, pes);
-    const auto col_offset = comm_playground::local_offset(side, pe, pes);
+    const auto side = gpu_bench::parse_size_arg(argc, argv, 1U << 9U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 50);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 10);
+    const auto local_cols = gpu_bench::local_count(side, pe, pes);
+    const auto col_offset = gpu_bench::local_offset(side, pe, pes);
     const auto width = local_cols + 2U;
     const int left = pe == 0 ? -1 : pe - 1;
     const int right = pe + 1 == pes ? -1 : pe + 1;
@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
     check_cuda(cudaSetDevice(pe % device_count), "cudaSetDevice");
 
     const auto symmetric_bytes = std::max<std::size_t>(8U * side * sizeof(float), 1U << 20U);
-    space = comm_playground_oshmpi_space_create(symmetric_bytes);
+    space = gpu_bench_oshmpi_space_create(symmetric_bytes);
     if (space == nullptr) {
       throw std::runtime_error("failed to create OSHMPI CUDA memory space");
     }
@@ -155,10 +155,10 @@ int main(int argc, char** argv) {
     check_cuda(cudaMalloc(reinterpret_cast<void**>(&q_field), side * width * sizeof(float)), "cudaMalloc(q)");
     check_cuda(cudaMalloc(reinterpret_cast<void**>(&partial_pq), sizeof(double)), "cudaMalloc(partial_pq)");
     check_cuda(cudaMalloc(reinterpret_cast<void**>(&partial_qq), sizeof(double)), "cudaMalloc(partial_qq)");
-    auto* send_west = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, side * sizeof(float)));
-    auto* send_east = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, side * sizeof(float)));
-    auto* recv_west = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, side * sizeof(float)));
-    auto* recv_east = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, side * sizeof(float)));
+    auto* send_west = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, side * sizeof(float)));
+    auto* send_east = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, side * sizeof(float)));
+    auto* recv_west = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, side * sizeof(float)));
+    auto* recv_east = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, side * sizeof(float)));
 
     source = static_cast<double*>(shmem_malloc(2U * sizeof(double)));
     result = static_cast<double*>(shmem_malloc(2U * sizeof(double)));
@@ -197,7 +197,7 @@ int main(int argc, char** argv) {
     check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(init)");
     shmem_barrier_all();
 
-    const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+    const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
       if (local_cols > 0) {
         pack_column_kernel<<<grid1d, block1d>>>(p_field, send_west, side, width, 1U);
         pack_column_kernel<<<grid1d, block1d>>>(p_field, send_east, side, width, local_cols);
@@ -227,7 +227,7 @@ int main(int argc, char** argv) {
     });
 
     const auto ones = [](std::size_t, std::size_t) { return 1.0F; };
-    const auto qval = [&](std::size_t i, std::size_t jg) { return comm_playground::stencil5(i, jg, side, ones); };
+    const auto qval = [&](std::size_t i, std::size_t jg) { return gpu_bench::stencil5(i, jg, side, ones); };
     double ref_pq = 0.0;
     double ref_qq = 0.0;
     for (std::size_t i = 0; i < side; ++i) {
@@ -238,12 +238,12 @@ int main(int argc, char** argv) {
       }
     }
     int local_ok =
-        comm_playground::nearly_equal(result[0], ref_pq) && comm_playground::nearly_equal(result[1], ref_qq) ? 1 : 0;
+        gpu_bench::nearly_equal(result[0], ref_pq) && gpu_bench::nearly_equal(result[1], ref_qq) ? 1 : 0;
     if (local_cols > 0) {
       std::vector<float> host_q(side * width);
       check_cuda(cudaMemcpy(host_q.data(), q_field, side * width * sizeof(float), cudaMemcpyDeviceToHost),
                  "cudaMemcpy(q)");
-      if (!comm_playground::validate_columns(host_q.data(), side, local_cols, width, col_offset, qval)) {
+      if (!gpu_bench::validate_columns(host_q.data(), side, local_cols, width, col_offset, qval)) {
         local_ok = 0;
       }
     }
@@ -280,11 +280,11 @@ int main(int argc, char** argv) {
     shmem_free(pwrk_pq);
     shmem_free(result);
     shmem_free(source);
-    comm_playground_oshmpi_space_destroy(space);
+    gpu_bench_oshmpi_space_destroy(space);
     space_created = false;
 
     if (pe == 0) {
-      comm_playground::bench_report report;
+      gpu_bench::bench_report report;
       report.name = "oshmpi_cg_step";
       report.n = side;
       report.ranks = pes;
@@ -295,7 +295,7 @@ int main(int argc, char** argv) {
       report.min_s = min_time;
       report.max_s = max_time;
       report.valid = global_ok != 0;
-      comm_playground::print_report(report);
+      gpu_bench::print_report(report);
     }
 
     shmem_finalize();
@@ -303,7 +303,7 @@ int main(int argc, char** argv) {
   } catch (const std::exception& error) {
     std::cerr << "PE " << pe << ": " << error.what() << '\n';
     if (space_created) {
-      comm_playground_oshmpi_space_destroy(space);
+      gpu_bench_oshmpi_space_destroy(space);
     }
     shmem_global_exit(1);
   }

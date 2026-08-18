@@ -33,7 +33,7 @@ void check_nvshmem(int status, const char* call) {
 
 bool validate_result(const float* values, std::size_t count, float expected) {
   for (std::size_t i = 0; i < count; ++i) {
-    if (!comm_playground::nearly_equal(values[i], expected)) {
+    if (!gpu_bench::nearly_equal(values[i], expected)) {
       return false;
     }
   }
@@ -71,12 +71,12 @@ int main(int argc, char** argv) {
       throw std::runtime_error("NVSHMEM PE layout does not match MPI rank layout");
     }
 
-    const auto max_elements = comm_playground::parse_size_arg(argc, argv, 4194304U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto message_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_elements);
+    const auto max_elements = gpu_bench::parse_size_arg(argc, argv, 4194304U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto message_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_elements);
     const auto max_bytes =
-        comm_playground::checked_size_multiply(max_elements, sizeof(float), "allreduce allocation");
+        gpu_bench::checked_size_multiply(max_elements, sizeof(float), "allreduce allocation");
 
     std::vector<float> host_source(max_elements, static_cast<float>(pe + 1));
     std::vector<float> host_result(max_elements);
@@ -94,10 +94,10 @@ int main(int argc, char** argv) {
     const auto expected = static_cast<float>(static_cast<double>(pes) * (pes + 1) / 2.0);
     int all_sizes_ok = 1;
     for (const auto count : message_sizes) {
-      const auto bytes = comm_playground::checked_size_multiply(count, sizeof(float), "allreduce message");
+      const auto bytes = gpu_bench::checked_size_multiply(count, sizeof(float), "allreduce message");
       nvshmem_barrier_all();
       MPI_Barrier(MPI_COMM_WORLD);
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         check_nvshmem(nvshmem_float_sum_reduce(NVSHMEM_TEAM_WORLD, device_result, device_source, count),
                       "nvshmem_float_sum_reduce");
       });
@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
         const double bus_gbytes_per_s =
             algorithm_gbytes_per_s * 2.0 * static_cast<double>(pes - 1) / static_cast<double>(pes);
 
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "cuda_nvshmem_allreduce";
         report.n = count;
         report.ranks = pes;
@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
         report.valid = global_ok != 0;
         report.extra = "datatype=float32 reduction=sum bus_gbytes_per_s=" +
                        std::to_string(bus_gbytes_per_s) + " memory=device_symmetric";
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
     }
 

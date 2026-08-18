@@ -46,10 +46,10 @@ int main(int argc, char** argv) {
     }
     const int peer = pe == 0 ? 1 : 0;
 
-    const auto max_elems = comm_playground::parse_size_arg(argc, argv, 1U << 22U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto message_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_elems);
+    const auto max_elems = gpu_bench::parse_size_arg(argc, argv, 1U << 22U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto message_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_elems);
 
     int device_count = 0;
     check_cuda(cudaGetDeviceCount(&device_count), "cudaGetDeviceCount");
@@ -59,14 +59,14 @@ int main(int argc, char** argv) {
     check_cuda(cudaSetDevice(pe % device_count), "cudaSetDevice");
 
     const auto symmetric_bytes = std::max<std::size_t>(4U * max_elems * sizeof(float), 1U << 20U);
-    space = comm_playground_oshmpi_space_create(symmetric_bytes);
+    space = gpu_bench_oshmpi_space_create(symmetric_bytes);
     if (space == nullptr) {
       throw std::runtime_error("failed to create OSHMPI CUDA memory space");
     }
     space_created = true;
 
-    device_send = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, max_elems * sizeof(float)));
-    device_recv = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, max_elems * sizeof(float)));
+    device_send = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, max_elems * sizeof(float)));
+    device_recv = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, max_elems * sizeof(float)));
     if (device_send == nullptr || device_recv == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI symmetric memory");
     }
@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
       const std::size_t bytes = size * sizeof(float);
 
       shmem_barrier_all();
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         if (pe == 0) {
           shmem_putmem(device_recv, device_send, bytes, peer);  // ping -> peer
           shmem_quiet();
@@ -108,10 +108,10 @@ int main(int argc, char** argv) {
         check_cuda(cudaMemcpy(host_recv.data(), device_recv, bytes, cudaMemcpyDeviceToHost), "cudaMemcpy(recv)");
         bool ok = true;
         for (std::size_t i = 0; i < size && ok; ++i) {
-          ok = comm_playground::nearly_equal(host_recv[i], host_send[i]);
+          ok = gpu_bench::nearly_equal(host_recv[i], host_send[i]);
         }
 
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "oshmpi_pingpong";
         report.n = size;
         report.ranks = pes;
@@ -122,7 +122,7 @@ int main(int argc, char** argv) {
         report.min_s = 0.5 * stats.min_s;
         report.max_s = 0.5 * stats.max_s;
         report.valid = ok;
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
     }
 
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
     device_recv = nullptr;
     shmem_free(device_send);
     device_send = nullptr;
-    comm_playground_oshmpi_space_destroy(space);
+    gpu_bench_oshmpi_space_destroy(space);
     space_created = false;
 
     shmem_finalize();
@@ -145,7 +145,7 @@ int main(int argc, char** argv) {
       shmem_free(device_send);
     }
     if (space_created) {
-      comm_playground_oshmpi_space_destroy(space);
+      gpu_bench_oshmpi_space_destroy(space);
     }
     shmem_global_exit(1);
   }

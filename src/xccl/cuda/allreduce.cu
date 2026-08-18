@@ -43,12 +43,12 @@ int main(int argc, char** argv) {
   cudaStream_t stream = nullptr;
 
   try {
-    const auto max_elements = comm_playground::parse_size_arg(argc, argv, 1U << 22U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto message_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_elements);
+    const auto max_elements = gpu_bench::parse_size_arg(argc, argv, 1U << 22U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto message_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_elements);
     const auto max_bytes =
-        comm_playground::checked_size_multiply(max_elements, sizeof(float), "allreduce allocation");
+        gpu_bench::checked_size_multiply(max_elements, sizeof(float), "allreduce allocation");
 
     int device_count = 0;
     check_cuda(cudaGetDeviceCount(&device_count), "cudaGetDeviceCount");
@@ -77,9 +77,9 @@ int main(int argc, char** argv) {
 
     int all_sizes_ok = 1;
     for (std::size_t size : message_sizes) {
-      const auto bytes = comm_playground::checked_size_multiply(size, sizeof(float), "allreduce message");
+      const auto bytes = gpu_bench::checked_size_multiply(size, sizeof(float), "allreduce message");
       MPI_Barrier(MPI_COMM_WORLD);
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         check_nccl(ncclAllReduce(device_send, device_recv, size, ncclFloat, ncclSum, comm, stream),
                    "ncclAllReduce");
         check_cuda(cudaStreamSynchronize(stream), "cudaStreamSynchronize(allreduce)");
@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
       const auto expected = static_cast<float>(static_cast<double>(ranks) * (ranks + 1.0) / 2.0);
       int local_ok = 1;
       for (std::size_t i = 0; i < size; ++i) {
-        if (!comm_playground::nearly_equal(host_recv[i], expected)) {
+        if (!gpu_bench::nearly_equal(host_recv[i], expected)) {
           local_ok = 0;
         }
       }
@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
         const double bus_gbytes_per_s =
             algorithm_gbytes_per_s * 2.0 * static_cast<double>(ranks - 1) / static_cast<double>(ranks);
 
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "cuda_nccl_allreduce";
         report.n = size;
         report.ranks = ranks;
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
         report.max_s = max_time;
         report.valid = global_ok != 0;
         report.extra = "datatype=float32 reduction=sum bus_gbytes_per_s=" + std::to_string(bus_gbytes_per_s);
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
     }
 

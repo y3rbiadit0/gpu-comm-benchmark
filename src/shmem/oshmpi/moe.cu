@@ -44,16 +44,16 @@ int main(int argc, char** argv) {
       throw std::invalid_argument(
           "usage: oshmpi_moe <tokens_per_rank> [hidden] [iterations] [warmup] [routing_cases]");
     }
-    const auto tokens = comm_playground::parse_moe_size_arg(argc, argv, 1, 16384U, "token count");
-    const auto hidden = comm_playground::parse_moe_size_arg(argc, argv, 2, 256U, "hidden size");
-    const auto iterations = comm_playground::parse_moe_positive_int_arg(argc, argv, 3, 100, "iteration count");
-    const auto warmup = comm_playground::parse_moe_positive_int_arg(argc, argv, 4, 20, "warmup count");
-    const auto routing_cases = comm_playground::parse_moe_routing_cases(argc, argv, 5);
-    const auto payload_elements = comm_playground::moe_checked_multiply(tokens, hidden, "MoE payload");
+    const auto tokens = gpu_bench::parse_moe_size_arg(argc, argv, 1, 16384U, "token count");
+    const auto hidden = gpu_bench::parse_moe_size_arg(argc, argv, 2, 256U, "hidden size");
+    const auto iterations = gpu_bench::parse_moe_positive_int_arg(argc, argv, 3, 100, "iteration count");
+    const auto warmup = gpu_bench::parse_moe_positive_int_arg(argc, argv, 4, 20, "warmup count");
+    const auto routing_cases = gpu_bench::parse_moe_routing_cases(argc, argv, 5);
+    const auto payload_elements = gpu_bench::moe_checked_multiply(tokens, hidden, "MoE payload");
     const auto payload_bytes =
-        comm_playground::moe_checked_multiply(payload_elements, sizeof(float), "MoE payload");
-    const auto bytes = comm_playground::moe_checked_multiply(
-        comm_playground::moe_checked_multiply(2U, payload_elements, "MoE useful bytes"), sizeof(float),
+        gpu_bench::moe_checked_multiply(payload_elements, sizeof(float), "MoE payload");
+    const auto bytes = gpu_bench::moe_checked_multiply(
+        gpu_bench::moe_checked_multiply(2U, payload_elements, "MoE useful bytes"), sizeof(float),
         "MoE useful bytes");
 
     int device_count = 0;
@@ -71,37 +71,37 @@ int main(int argc, char** argv) {
 
     int all_cases_ok = 1;
     for (const auto routing : routing_cases) {
-      std::vector<comm_playground::moe_plan> plans;
+      std::vector<gpu_bench::moe_plan> plans;
       plans.reserve(static_cast<std::size_t>(pes));
       for (int plan_pe = 0; plan_pe < pes; ++plan_pe) {
-        plans.push_back(comm_playground::make_moe_plan(tokens, hidden, plan_pe, pes, routing));
+        plans.push_back(gpu_bench::make_moe_plan(tokens, hidden, plan_pe, pes, routing));
       }
       const auto& plan = plans[static_cast<std::size_t>(pe)];
-      const auto host_send = comm_playground::pack_moe_send(plan);
+      const auto host_send = gpu_bench::pack_moe_send(plan);
       std::vector<float> host_dispatch(plan.recv_elements);
       std::vector<float> host_combined(plan.send_elements);
 
       const auto dispatch_elements = std::max<std::size_t>(
-          comm_playground::moe_checked_multiply(plan.max_expert_tokens, hidden, "MoE dispatch buffer"), 1U);
+          gpu_bench::moe_checked_multiply(plan.max_expert_tokens, hidden, "MoE dispatch buffer"), 1U);
       const auto dispatch_bytes =
-          comm_playground::moe_checked_multiply(dispatch_elements, sizeof(float), "MoE dispatch buffer");
-      const auto allocation_bytes = comm_playground::moe_checked_add(
-          comm_playground::moe_checked_multiply(2U, payload_bytes, "MoE symmetric allocation"),
+          gpu_bench::moe_checked_multiply(dispatch_elements, sizeof(float), "MoE dispatch buffer");
+      const auto allocation_bytes = gpu_bench::moe_checked_add(
+          gpu_bench::moe_checked_multiply(2U, payload_bytes, "MoE symmetric allocation"),
           dispatch_bytes, "MoE symmetric allocation");
       const auto symmetric_bytes = std::max<std::size_t>(
-          comm_playground::moe_checked_multiply(2U, allocation_bytes, "MoE symmetric space"), 1U << 20U);
-      space = comm_playground_oshmpi_space_create(symmetric_bytes);
+          gpu_bench::moe_checked_multiply(2U, allocation_bytes, "MoE symmetric space"), 1U << 20U);
+      space = gpu_bench_oshmpi_space_create(symmetric_bytes);
       if (space == nullptr) {
         throw std::runtime_error("failed to create OSHMPI CUDA memory space");
       }
       space_created = true;
 
       auto* device_send =
-          static_cast<float*>(comm_playground_oshmpi_space_malloc(space, payload_bytes));
+          static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, payload_bytes));
       auto* device_dispatch =
-          static_cast<float*>(comm_playground_oshmpi_space_malloc(space, dispatch_bytes));
+          static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, dispatch_bytes));
       auto* device_combined =
-          static_cast<float*>(comm_playground_oshmpi_space_malloc(space, payload_bytes));
+          static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, payload_bytes));
       if (device_send == nullptr || device_dispatch == nullptr || device_combined == nullptr) {
         throw std::runtime_error("failed to allocate OSHMPI symmetric memory");
       }
@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
       check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(init)");
       shmem_barrier_all();
 
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         for (int destination = 0; destination < pes; ++destination) {
           const auto destination_index = static_cast<std::size_t>(destination);
           const auto count = static_cast<std::size_t>(plan.send_counts[destination_index]);
@@ -162,8 +162,8 @@ int main(int argc, char** argv) {
       }
       check_cuda(cudaMemcpy(host_combined.data(), device_combined, payload_bytes, cudaMemcpyDeviceToHost),
                  "cudaMemcpy(combined)");
-      const int local_ok = comm_playground::validate_moe_dispatch(host_dispatch.data(), plan) &&
-                                   comm_playground::validate_moe_combined(host_combined.data(), host_send)
+      const int local_ok = gpu_bench::validate_moe_dispatch(host_dispatch.data(), plan) &&
+                                   gpu_bench::validate_moe_combined(host_combined.data(), host_send)
                                ? 1
                                : 0;
       const double local_values[4] = {
@@ -196,7 +196,7 @@ int main(int argc, char** argv) {
       global_ok = stats_by_pe[0] >= 0.5 ? 1 : 0;
       all_cases_ok = std::min(all_cases_ok, global_ok);
 
-      comm_playground_oshmpi_space_destroy(space);
+      gpu_bench_oshmpi_space_destroy(space);
       space = nullptr;
       space_created = false;
 
@@ -205,13 +205,13 @@ int main(int argc, char** argv) {
                                                                : 0.0;
         const double imbalance = static_cast<double>(plan.max_expert_tokens) / static_cast<double>(tokens);
         std::ostringstream extra;
-        extra << "case=" << comm_playground::moe_routing_name(routing)
-              << " routing=" << comm_playground::moe_routing_name(routing) << " tokens=" << tokens
+        extra << "case=" << gpu_bench::moe_routing_name(routing)
+              << " routing=" << gpu_bench::moe_routing_name(routing) << " tokens=" << tokens
               << " hidden=" << hidden << " top_k=1 max_expert_tokens=" << plan.max_expert_tokens
               << " expert_imbalance=" << imbalance << " useful_gbytes_per_s=" << useful_gbytes_per_s
               << " status=" << (global_ok ? "OK" : "ERROR") << " memory=device_symmetric";
 
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "oshmpi_moe";
         report.n = tokens;
         report.ranks = pes;
@@ -223,7 +223,7 @@ int main(int argc, char** argv) {
         report.max_s = max_time;
         report.valid = global_ok != 0;
         report.extra = extra.str();
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
     }
 
@@ -233,7 +233,7 @@ int main(int argc, char** argv) {
   } catch (const std::exception& error) {
     std::cerr << "PE " << pe << ": " << error.what() << '\n';
     if (space_created) {
-      comm_playground_oshmpi_space_destroy(space);
+      gpu_bench_oshmpi_space_destroy(space);
     }
     shmem_global_exit(1);
   }

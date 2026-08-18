@@ -5,7 +5,7 @@
 #include <iostream>
 #include <string>
 
-namespace comm_playground {
+namespace gpu_bench {
 
 struct bench_report {
   const char* name = "";
@@ -61,4 +61,4 @@ inline void print_report(const bench_report& report) {
   std::cout << " validation=" << (report.valid ? "PASS" : "FAIL") << '\n';
 }
 
-}  // namespace comm_playground
+}  // namespace gpu_bench

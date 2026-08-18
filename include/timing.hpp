@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <vector>
 
-namespace comm_playground {
+namespace gpu_bench {
 
 class wall_timer {
  public:
@@ -68,4 +68,4 @@ bench_stats run_benchmark(int warmup_iterations, int timed_iterations, Body&& bo
   return stats;
 }
 
-}  // namespace comm_playground
+}  // namespace gpu_bench

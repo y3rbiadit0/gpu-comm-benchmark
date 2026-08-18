@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds the dependencies a preset needs, in order, then the playground.
+# Builds the dependencies a preset needs, in order, then the benchmarks.
 #
 #   ./cluster/leonardo/bootstrap.sh                 # default target set
 #   ./cluster/leonardo/bootstrap.sh oneccl-oshmpi   # one target and its requires
@@ -19,7 +19,7 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 build_dir="$script_dir/deps"
 
-default_targets=(oneccl-oshmpi playground)
+default_targets=(oneccl-oshmpi benchmarks)
 
 list_targets() {
     local f

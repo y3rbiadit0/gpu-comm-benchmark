@@ -1,6 +1,6 @@
 # oneCCL UNISA Notes
 
-These notes document the Leonardo setup used for the UNISA NCCL-enabled oneCCL fork in this playground.
+These notes document the Leonardo setup used for the UNISA NCCL-enabled oneCCL fork used here.
 
 ## Install Layout
 

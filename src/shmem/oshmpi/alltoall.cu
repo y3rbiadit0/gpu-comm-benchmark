@@ -40,9 +40,9 @@ int main(int argc, char** argv) {
   double* stats_by_pe = nullptr;
 
   try {
-    const auto count = comm_playground::parse_size_arg(argc, argv, 1U << 16U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto count = gpu_bench::parse_size_arg(argc, argv, 1U << 16U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
     const auto total = static_cast<std::size_t>(pes) * count;
     const auto block_bytes = count * sizeof(float);
 
@@ -54,28 +54,28 @@ int main(int argc, char** argv) {
     check_cuda(cudaSetDevice(pe % device_count), "cudaSetDevice");
 
     const auto symmetric_bytes = std::max<std::size_t>(4U * total * sizeof(float), 1U << 20U);
-    space = comm_playground_oshmpi_space_create(symmetric_bytes);
+    space = gpu_bench_oshmpi_space_create(symmetric_bytes);
     if (space == nullptr) {
       throw std::runtime_error("failed to create OSHMPI CUDA memory space");
     }
     space_created = true;
 
-    auto* device_send = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, total * sizeof(float)));
-    auto* device_recv = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, total * sizeof(float)));
+    auto* device_send = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, total * sizeof(float)));
+    auto* device_recv = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, total * sizeof(float)));
     stats_by_pe = static_cast<double*>(shmem_malloc(4U * static_cast<std::size_t>(pes) * sizeof(double)));
     if (device_send == nullptr || device_recv == nullptr || stats_by_pe == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI symmetric memory");
     }
 
     std::vector<float> host_send(total);
-    comm_playground::fill_alltoall_send(host_send.data(), pe, pes, count);
+    gpu_bench::fill_alltoall_send(host_send.data(), pe, pes, count);
     check_cuda(cudaMemcpy(device_send, host_send.data(), total * sizeof(float), cudaMemcpyHostToDevice),
                "cudaMemcpy(send)");
     check_cuda(cudaMemset(device_recv, 0, total * sizeof(float)), "cudaMemset(recv)");
     check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(init)");
     shmem_barrier_all();
 
-    const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+    const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
       // One-sided all-to-all: put my block-for-dst into dst's recv slot for me.
       for (int dst = 0; dst < pes; ++dst) {
         float* dest = device_recv + static_cast<std::size_t>(pe) * count;
@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
     std::vector<float> host_recv(total);
     check_cuda(cudaMemcpy(host_recv.data(), device_recv, total * sizeof(float), cudaMemcpyDeviceToHost),
                "cudaMemcpy(recv)");
-    int local_ok = comm_playground::validate_alltoall(host_recv.data(),pe, pes, count) ? 1 : 0;
+    int local_ok = gpu_bench::validate_alltoall(host_recv.data(),pe, pes, count) ? 1 : 0;
 
     const double local_stats[4] = {stats.avg_s, stats.min_s, stats.max_s, static_cast<double>(local_ok)};
     shmem_putmem(stats_by_pe + 4 * pe, local_stats, 4U * sizeof(double), 0);
@@ -117,11 +117,11 @@ int main(int argc, char** argv) {
     }
 
     shmem_free(stats_by_pe);
-    comm_playground_oshmpi_space_destroy(space);
+    gpu_bench_oshmpi_space_destroy(space);
     space_created = false;
 
     if (pe == 0) {
-      comm_playground::bench_report report;
+      gpu_bench::bench_report report;
       report.name = "oshmpi_alltoall";
       report.n = count;
       report.ranks = pes;
@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
       report.min_s = min_time;
       report.max_s = max_time;
       report.valid = global_ok != 0;
-      comm_playground::print_report(report);
+      gpu_bench::print_report(report);
     }
 
     shmem_finalize();
@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
   } catch (const std::exception& error) {
     std::cerr << "PE " << pe << ": " << error.what() << '\n';
     if (space_created) {
-      comm_playground_oshmpi_space_destroy(space);
+      gpu_bench_oshmpi_space_destroy(space);
     }
     shmem_global_exit(1);
   }

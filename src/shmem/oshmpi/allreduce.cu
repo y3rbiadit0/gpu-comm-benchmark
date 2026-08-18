@@ -20,7 +20,7 @@ namespace {
 
 bool validate_result(const float* values, std::size_t count, float expected) {
   for (std::size_t i = 0; i < count; ++i) {
-    if (!comm_playground::nearly_equal(values[i], expected)) {
+    if (!gpu_bench::nearly_equal(values[i], expected)) {
       return false;
     }
   }
@@ -36,22 +36,22 @@ int main(int argc, char** argv) {
   const int pes = shmem_n_pes();
 
   try {
-    const auto max_elements = comm_playground::parse_size_arg(argc, argv, 4194304U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto message_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_elements);
+    const auto max_elements = gpu_bench::parse_size_arg(argc, argv, 4194304U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto message_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_elements);
     const auto max_bytes =
-        comm_playground::checked_size_multiply(max_elements, sizeof(float), "allreduce allocation");
+        gpu_bench::checked_size_multiply(max_elements, sizeof(float), "allreduce allocation");
     const auto pwrk_elements = std::max<std::size_t>(max_elements / 2U + 1U,
                                                       SHMEM_REDUCE_MIN_WRKDATA_SIZE);
     const auto pwrk_bytes =
-        comm_playground::checked_size_multiply(pwrk_elements, sizeof(float), "allreduce work buffer");
-    const auto psync_bytes = comm_playground::checked_size_multiply(
+        gpu_bench::checked_size_multiply(pwrk_elements, sizeof(float), "allreduce work buffer");
+    const auto psync_bytes = gpu_bench::checked_size_multiply(
         static_cast<std::size_t>(SHMEM_REDUCE_SYNC_SIZE), sizeof(long), "allreduce sync buffer");
-    const auto stats_elements = comm_playground::checked_size_multiply(
+    const auto stats_elements = gpu_bench::checked_size_multiply(
         4U, static_cast<std::size_t>(pes), "allreduce statistics buffer");
     const auto stats_bytes =
-        comm_playground::checked_size_multiply(stats_elements, sizeof(double), "allreduce statistics buffer");
+        gpu_bench::checked_size_multiply(stats_elements, sizeof(double), "allreduce statistics buffer");
 
     auto* sym_source = static_cast<float*>(shmem_malloc(max_bytes));
     auto* sym_result = static_cast<float*>(shmem_malloc(max_bytes));
@@ -73,9 +73,9 @@ int main(int argc, char** argv) {
     const auto expected = static_cast<float>(static_cast<double>(pes) * (pes + 1) / 2.0);
     int all_sizes_ok = 1;
     for (const auto count : message_sizes) {
-      const auto bytes = comm_playground::checked_size_multiply(count, sizeof(float), "allreduce message");
+      const auto bytes = gpu_bench::checked_size_multiply(count, sizeof(float), "allreduce message");
       shmem_barrier_all();
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         shmem_float_sum_to_all(sym_result, sym_source, count, 0, 0, pes, pwrk, psync);
       });
 
@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
         const double bus_gbytes_per_s =
             algorithm_gbytes_per_s * 2.0 * static_cast<double>(pes - 1) / static_cast<double>(pes);
 
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "oshmpi_allreduce";
         report.n = count;
         report.ranks = pes;
@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
         report.valid = global_ok != 0;
         report.extra = "datatype=float32 reduction=sum bus_gbytes_per_s=" +
                        std::to_string(bus_gbytes_per_s) + " memory=host_symmetric";
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
     }
 

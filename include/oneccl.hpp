@@ -2,7 +2,7 @@
 
 #include <oneapi/ccl.hpp>
 
-namespace comm_playground {
+namespace gpu_bench {
 
 class ccl_group_scope {
  public:
@@ -32,4 +32,4 @@ class ccl_group_scope {
   bool active_ = false;
 };
 
-}  // namespace comm_playground
+}  // namespace gpu_bench

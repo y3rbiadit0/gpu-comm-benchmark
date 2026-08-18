@@ -18,7 +18,7 @@ endif()
 add_executable(cuda_nvshmem_halo_1d halo_1d.cu)
 target_include_directories(cuda_nvshmem_halo_1d PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_halo_1d PRIVATE
-  comm_playground_common
+  gpu_bench_common
   MPI::MPI_CXX
   ${NVSHMEM_HOST_LIBRARY}
   ${NVSHMEM_DEVICE_LIBRARY}
@@ -27,7 +27,7 @@ target_link_libraries(cuda_nvshmem_halo_1d PRIVATE
 add_executable(cuda_nvshmem_halo_1d_optimized halo_1d-optimized.cu)
 target_include_directories(cuda_nvshmem_halo_1d_optimized PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_halo_1d_optimized PRIVATE
-  comm_playground_common
+  gpu_bench_common
   MPI::MPI_CXX
   ${NVSHMEM_HOST_LIBRARY}
   ${NVSHMEM_DEVICE_LIBRARY}
@@ -36,7 +36,7 @@ target_link_libraries(cuda_nvshmem_halo_1d_optimized PRIVATE
 add_executable(cuda_nvshmem_pingpong pingpong.cu)
 target_include_directories(cuda_nvshmem_pingpong PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_pingpong PRIVATE
-  comm_playground_common
+  gpu_bench_common
   MPI::MPI_CXX
   ${NVSHMEM_HOST_LIBRARY}
   ${NVSHMEM_DEVICE_LIBRARY}
@@ -45,7 +45,7 @@ target_link_libraries(cuda_nvshmem_pingpong PRIVATE
 add_executable(cuda_nvshmem_alltoall alltoall.cu)
 target_include_directories(cuda_nvshmem_alltoall PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_alltoall PRIVATE
-  comm_playground_common
+  gpu_bench_common
   MPI::MPI_CXX
   ${NVSHMEM_HOST_LIBRARY}
   ${NVSHMEM_DEVICE_LIBRARY}
@@ -54,7 +54,7 @@ target_link_libraries(cuda_nvshmem_alltoall PRIVATE
 add_executable(cuda_nvshmem_allreduce allreduce.cu)
 target_include_directories(cuda_nvshmem_allreduce PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_allreduce PRIVATE
-  comm_playground_common
+  gpu_bench_common
   MPI::MPI_CXX
   ${NVSHMEM_HOST_LIBRARY}
   ${NVSHMEM_DEVICE_LIBRARY}
@@ -63,7 +63,7 @@ target_link_libraries(cuda_nvshmem_allreduce PRIVATE
 add_executable(cuda_nvshmem_cg_step cg_step.cu)
 target_include_directories(cuda_nvshmem_cg_step PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_cg_step PRIVATE
-  comm_playground_common
+  gpu_bench_common
   MPI::MPI_CXX
   ${NVSHMEM_HOST_LIBRARY}
   ${NVSHMEM_DEVICE_LIBRARY}
@@ -72,7 +72,7 @@ target_link_libraries(cuda_nvshmem_cg_step PRIVATE
 add_executable(cuda_nvshmem_moe moe.cu)
 target_include_directories(cuda_nvshmem_moe PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_moe PRIVATE
-  comm_playground_common
+  gpu_bench_common
   MPI::MPI_CXX
   ${NVSHMEM_HOST_LIBRARY}
   ${NVSHMEM_DEVICE_LIBRARY}

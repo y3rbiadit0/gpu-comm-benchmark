@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace comm_playground {
+namespace gpu_bench {
 
 enum class moe_routing { uniform, locality80, hotspot80 };
 
@@ -314,4 +314,4 @@ inline bool validate_moe_combined(const float* combined, const std::vector<float
   return true;
 }
 
-}  // namespace comm_playground
+}  // namespace gpu_bench

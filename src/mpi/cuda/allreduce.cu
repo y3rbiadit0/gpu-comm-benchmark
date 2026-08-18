@@ -48,13 +48,13 @@ int main(int argc, char** argv) {
   MPI_Comm_size(MPI_COMM_WORLD, &ranks);
 
   try {
-    const auto max_elems = comm_playground::parse_size_arg(argc, argv, 1U << 22U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto message_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_elems);
+    const auto max_elems = gpu_bench::parse_size_arg(argc, argv, 1U << 22U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto message_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_elems);
     mpi_count(max_elems);
     const auto max_bytes =
-        comm_playground::checked_size_multiply(max_elems, sizeof(float), "allreduce allocation");
+        gpu_bench::checked_size_multiply(max_elems, sizeof(float), "allreduce allocation");
 
     int device_count = 0;
     check_cuda(cudaGetDeviceCount(&device_count), "cudaGetDeviceCount");
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
     std::vector<float> host_recv;
     for (const std::size_t size : message_sizes) {
       const int count = mpi_count(size);
-      const auto bytes = comm_playground::checked_size_multiply(size, sizeof(float), "allreduce message");
+      const auto bytes = gpu_bench::checked_size_multiply(size, sizeof(float), "allreduce message");
       constexpr int block_size = 256;
       const auto grid_size = static_cast<int>((size + block_size - 1U) / block_size);
       fill_kernel<<<grid_size, block_size>>>(device_send, size, static_cast<float>(rank + 1));
@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
       check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(fill)");
 
       MPI_Barrier(MPI_COMM_WORLD);
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         MPI_Allreduce(device_send, device_recv, count, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
       });
 
@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
       const float expected = static_cast<float>(static_cast<double>(ranks) * (ranks + 1.0) / 2.0);
       int local_ok = 1;
       for (std::size_t i = 0; i < size; ++i) {
-        if (!comm_playground::nearly_equal(host_recv[i], expected)) {
+        if (!gpu_bench::nearly_equal(host_recv[i], expected)) {
           local_ok = 0;
           break;
         }
@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
                                                  static_cast<double>(ranks)
                                            : 0.0;
 
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "cuda_mpi_allreduce";
         report.n = size;
         report.ranks = ranks;
@@ -126,7 +126,7 @@ int main(int argc, char** argv) {
         report.max_s = max_max;
         report.valid = global_ok != 0;
         report.extra = "datatype=float32 reduction=sum bus_gbytes_per_s=" + std::to_string(bus_gbytes_per_s);
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
     }
 

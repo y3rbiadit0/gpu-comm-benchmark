@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Submit comm-playground experiment jobs on Leonardo.
+# Submit gpu-comm-bench experiment jobs on Leonardo.
 #
 # Usage:
 #   tools/submit_all.sh                      # submit every benchmark, every backend, every topology

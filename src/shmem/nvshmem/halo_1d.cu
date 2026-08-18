@@ -115,10 +115,10 @@ int main(int argc, char** argv) {
       throw std::runtime_error("ring halo exchange requires at least 2 PEs");
     }
 
-    const auto max_halo = comm_playground::parse_size_arg(argc, argv, 1U << 20U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto halo_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_halo);
+    const auto max_halo = gpu_bench::parse_size_arg(argc, argv, 1U << 20U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto halo_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_halo);
 
     const int left = (pe - 1 + pes) % pes;
     const int right = (pe + 1) % pes;
@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
 
       constexpr int block_size = 256;
       MPI_Barrier(MPI_COMM_WORLD);
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         ++value;
         halo_exchange_kernel<<<1, block_size>>>(recv_left, recv_right, send_left, send_right, signals,
                                                 halo, value, left, right);
@@ -177,8 +177,8 @@ int main(int argc, char** argv) {
                  "cudaMemcpy(recv_right)");
       int local_ok = 1;
       for (std::size_t i = 0; i < halo; ++i) {
-        if (!comm_playground::nearly_equal(host_left[i], expect_left) ||
-            !comm_playground::nearly_equal(host_right[i], expect_right)) {
+        if (!gpu_bench::nearly_equal(host_left[i], expect_left) ||
+            !gpu_bench::nearly_equal(host_right[i], expect_right)) {
           local_ok = 0;
           break;
         }
@@ -194,7 +194,7 @@ int main(int argc, char** argv) {
       MPI_Reduce(&stats.max_s, &max_max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
       if (pe == 0) {
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "cuda_nvshmem_halo_1d";
         report.n = halo;
         report.ranks = pes;
@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
         report.max_s = max_max;
         report.valid = global_ok != 0;
         report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv sync=signal";
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
       nvshmem_barrier_all();
     }

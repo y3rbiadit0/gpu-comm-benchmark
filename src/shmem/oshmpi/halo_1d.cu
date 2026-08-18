@@ -70,10 +70,10 @@ int main(int argc, char** argv) {
       throw std::runtime_error("ring halo exchange requires at least 2 PEs");
     }
 
-    const auto max_halo = comm_playground::parse_size_arg(argc, argv, 1U << 20U);
-    const auto iterations = comm_playground::parse_positive_int_arg(argc, argv, 2, 100);
-    const auto warmup = comm_playground::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto halo_sizes = comm_playground::parse_size_list_arg(argc, argv, 4, max_halo);
+    const auto max_halo = gpu_bench::parse_size_arg(argc, argv, 1U << 20U);
+    const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
+    const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
+    const auto halo_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_halo);
 
     const int left = (pe - 1 + pes) % pes;
     const int right = (pe + 1) % pes;
@@ -94,13 +94,13 @@ int main(int argc, char** argv) {
     const float expect_right = static_cast<float>(2 * (right + 1));
 
     const auto symmetric_bytes = std::max<std::size_t>(total * sizeof(float), 1U << 20U);
-    space = comm_playground_oshmpi_space_create(symmetric_bytes);
+    space = gpu_bench_oshmpi_space_create(symmetric_bytes);
     if (space == nullptr) {
       throw std::runtime_error("failed to create OSHMPI CUDA memory space");
     }
     space_created = true;
 
-    auto* buf = static_cast<float*>(comm_playground_oshmpi_space_malloc(space, total * sizeof(float)));
+    auto* buf = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, total * sizeof(float)));
     if (buf == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI CUDA symmetric memory");
     }
@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
       const std::size_t halo_bytes = halo * sizeof(float);
 
       shmem_barrier_all();
-      const auto stats = comm_playground::run_benchmark(warmup, iterations, [&]() {
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         // Put my right boundary into the right neighbour's left halo, and my
         // left boundary into the left neighbour's right halo.
         shmem_putmem(recv_left, send_right, halo_bytes, right);
@@ -151,8 +151,8 @@ int main(int argc, char** argv) {
                  "cudaMemcpy(recv_right)");
       int local_ok = 1;
       for (std::size_t i = 0; i < halo; ++i) {
-        if (!comm_playground::nearly_equal(host_left[i], expect_left) ||
-            !comm_playground::nearly_equal(host_right[i], expect_right)) {
+        if (!gpu_bench::nearly_equal(host_left[i], expect_left) ||
+            !gpu_bench::nearly_equal(host_right[i], expect_right)) {
           local_ok = 0;
           break;
         }
@@ -177,7 +177,7 @@ int main(int argc, char** argv) {
           global_ok = global_ok && oks[source];
         }
 
-        comm_playground::bench_report report;
+        gpu_bench::bench_report report;
         report.name = "oshmpi_halo_1d";
         report.n = halo;
         report.ranks = pes;
@@ -189,7 +189,7 @@ int main(int argc, char** argv) {
         report.max_s = max_max;
         report.valid = global_ok != 0;
         report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv sync=barrier";
-        comm_playground::print_report(report);
+        gpu_bench::print_report(report);
       }
       shmem_barrier_all();
     }
@@ -198,7 +198,7 @@ int main(int argc, char** argv) {
     shmem_free(stat_max);
     shmem_free(stat_min);
     shmem_free(stat_avg);
-    comm_playground_oshmpi_space_destroy(space);
+    gpu_bench_oshmpi_space_destroy(space);
     space_created = false;
 
     shmem_finalize();
@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
   } catch (const std::exception& error) {
     std::cerr << "PE " << pe << ": " << error.what() << '\n';
     if (space_created) {
-      comm_playground_oshmpi_space_destroy(space);
+      gpu_bench_oshmpi_space_destroy(space);
     }
     shmem_global_exit(1);
   }
