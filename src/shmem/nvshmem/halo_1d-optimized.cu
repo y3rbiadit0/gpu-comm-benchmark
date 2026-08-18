@@ -310,7 +310,6 @@ int main(int argc, char** argv) {
         report.time_per_iter_s = max_avg;  // slowest-PE amortized per-iteration time
         report.min_s = min_avg;            // no per-iteration distribution (loop is in-kernel)
         report.max_s = max_avg;
-        gpu_bench::set_local_distribution(report, stats);
         report.valid = global_ok != 0;
         report.extra = "halo_elems=" + std::to_string(halo) +
                        " topology=ring bw=sendrecv sync=quiet-signal variant=persistent-multiblock" +

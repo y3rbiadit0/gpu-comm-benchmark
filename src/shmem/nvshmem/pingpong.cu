@@ -160,7 +160,6 @@ int main(int argc, char** argv) {
         report.time_per_iter_s = 0.5 * round_trip;
         report.min_s = 0.5 * round_trip;
         report.max_s = 0.5 * round_trip;
-        gpu_bench::set_local_distribution(report, stats, 0.5);
         report.valid = ok;
         gpu_bench::print_report(report);
       }
