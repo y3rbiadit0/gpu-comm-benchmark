@@ -129,10 +129,10 @@ Each `cg_step` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers;
 Useful overrides:
 
 ```bash
-CP_N=16777216 CP_NTRIALS=5 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
-CP_RESULT_NAME=halo-sycl-test sbatch cluster/leonardo/experiments/halo_1d/sycl_mpi/1n4g.sh
-CP_ITERS=500 CP_WARMUP=100 sbatch cluster/leonardo/experiments/allreduce/cuda_nccl/2n1g.sh
-CP_HIDDEN=512 CP_ROUTINGS=uniform,hotspot80 sbatch cluster/leonardo/experiments/moe/cuda_nccl/2n4g.sh
+GPU_BENCH_N=16777216 GPU_BENCH_NTRIALS=5 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
+GPU_BENCH_RESULT_NAME=halo-sycl-test sbatch cluster/leonardo/experiments/halo_1d/sycl_mpi/1n4g.sh
+GPU_BENCH_ITERS=500 GPU_BENCH_WARMUP=100 sbatch cluster/leonardo/experiments/allreduce/cuda_nccl/2n1g.sh
+GPU_BENCH_HIDDEN=512 GPU_BENCH_ROUTINGS=uniform,hotspot80 sbatch cluster/leonardo/experiments/moe/cuda_nccl/2n4g.sh
 ```
 
 Per-problem notes and validated results live in `cluster/leonardo/experiments/<problem>/README.md`.

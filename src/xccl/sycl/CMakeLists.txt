@@ -1,6 +1,6 @@
 include(${PROJECT_SOURCE_DIR}/cmake/sycl.cmake)
 
-option(COMM_PLAYGROUND_ONECCL_USE_BUNDLED_MPI "Link SYCL oneCCL examples with oneCCL's bundled Intel MPI" OFF)
+option(GPU_BENCH_ONECCL_USE_BUNDLED_MPI "Link SYCL oneCCL examples with oneCCL's bundled Intel MPI" OFF)
 set(ONECCL_BUNDLED_MPI_ROOT "" CACHE PATH "oneCCL bundled MPI installation root")
 
 find_path(ONECCL_INCLUDE_DIR oneapi/ccl.hpp
@@ -27,7 +27,7 @@ target_include_directories(sycl_oneccl_allreduce PRIVATE ${ONECCL_INCLUDE_DIR})
 target_include_directories(sycl_oneccl_cg_step PRIVATE ${ONECCL_INCLUDE_DIR})
 target_include_directories(sycl_oneccl_moe PRIVATE ${ONECCL_INCLUDE_DIR})
 
-if(COMM_PLAYGROUND_ONECCL_USE_BUNDLED_MPI)
+if(GPU_BENCH_ONECCL_USE_BUNDLED_MPI)
   set(_oneccl_bundled_mpi_roots)
   if(ONECCL_BUNDLED_MPI_ROOT)
     list(APPEND _oneccl_bundled_mpi_roots "${ONECCL_BUNDLED_MPI_ROOT}")

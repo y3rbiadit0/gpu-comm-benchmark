@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CP_EXPERIMENT=moe
-CP_N_LABEL="tokens per rank"
+GPU_BENCH_EXPERIMENT=moe
+GPU_BENCH_N_LABEL="tokens per rank"
 
-source "$CP_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
+source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
 
-cp_experiment_defaults() {
-  CP_N=${CP_N:-16384}
-  CP_HIDDEN=${CP_HIDDEN:-256}
-  CP_ITERS=${CP_ITERS:-100}
-  CP_WARMUP=${CP_WARMUP:-20}
+gpu_bench_experiment_defaults() {
+  GPU_BENCH_N=${GPU_BENCH_N:-16384}
+  GPU_BENCH_HIDDEN=${GPU_BENCH_HIDDEN:-256}
+  GPU_BENCH_ITERS=${GPU_BENCH_ITERS:-100}
+  GPU_BENCH_WARMUP=${GPU_BENCH_WARMUP:-20}
   # MoE binaries accept: <tokens_per_rank> [hidden] [iterations] [warmup] [routing_cases]
-  CP_EXTRA_ARGS="$CP_HIDDEN $CP_ITERS $CP_WARMUP"
-  if [[ -n "${CP_ROUTINGS:-}" ]]; then
-    CP_EXTRA_ARGS="$CP_EXTRA_ARGS $CP_ROUTINGS"
+  GPU_BENCH_EXTRA_ARGS="$GPU_BENCH_HIDDEN $GPU_BENCH_ITERS $GPU_BENCH_WARMUP"
+  if [[ -n "${GPU_BENCH_ROUTINGS:-}" ]]; then
+    GPU_BENCH_EXTRA_ARGS="$GPU_BENCH_EXTRA_ARGS $GPU_BENCH_ROUTINGS"
   fi
 }
 
-cp_experiment_extra_summary() {
-  echo "hidden size: $CP_HIDDEN"
-  echo "routing cases: ${CP_ROUTINGS:-uniform,locality80,hotspot80}"
+gpu_bench_experiment_extra_summary() {
+  echo "hidden size: $GPU_BENCH_HIDDEN"
+  echo "routing cases: ${GPU_BENCH_ROUTINGS:-uniform,locality80,hotspot80}"
 }
 
-cp_moe_main() { cp_experiment_main; }
+gpu_bench_moe_main() { gpu_bench_experiment_main; }

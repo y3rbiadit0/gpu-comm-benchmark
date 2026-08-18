@@ -10,13 +10,13 @@
 
 set -euo pipefail
 
-CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
-CP_STACK=sycl
-CP_RUNTIME=sycl-mpi
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-sycl-mpi/src/mpi/sycl/sycl_mpi_pingpong}
-CP_RESULT_NAME=${CP_RESULT_NAME:-pingpong-sycl-mpi-1n2g}
-CP_NODES=1
-CP_TASKS_PER_NODE=2
+GPU_BENCH_PROJECT_ROOT=${GPU_BENCH_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
+GPU_BENCH_STACK=sycl
+GPU_BENCH_RUNTIME=sycl-mpi
+GPU_BENCH_BINARY=${GPU_BENCH_BINARY:-$GPU_BENCH_PROJECT_ROOT/build/leonardo-sycl-mpi/src/mpi/sycl/sycl_mpi_pingpong}
+GPU_BENCH_RESULT_NAME=${GPU_BENCH_RESULT_NAME:-pingpong-sycl-mpi-1n2g}
+GPU_BENCH_NODES=1
+GPU_BENCH_TASKS_PER_NODE=2
 
-source "$CP_PROJECT_ROOT/cluster/leonardo/experiments/pingpong/common.sh"
-cp_pingpong_main
+source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/pingpong/common.sh"
+gpu_bench_pingpong_main

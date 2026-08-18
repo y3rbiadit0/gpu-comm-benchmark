@@ -6,24 +6,24 @@
 #   tools/submit_all.sh allreduce pingpong    # only these benchmarks
 #
 # Filters (env, space-separated globs):
-#   CP_ONLY_BACKENDS="cuda_mpi cuda_nccl"    # restrict backends
-#   CP_ONLY_TOPOS="1n4g 2n1g"                # restrict topologies
-#   CP_DRYRUN=1                              # print sbatch commands instead of running them
-#   CP_SLURM_ACCOUNT=IscrC_OTHER             # override the default allocation
-#   CP_SLURM_PARTITION=...                   # override the default partition
-#   CP_MSG_SIZES="1,8,64,1024"              # pingpong only: explicit message sizes
+#   GPU_BENCH_ONLY_BACKENDS="cuda_mpi cuda_nccl"    # restrict backends
+#   GPU_BENCH_ONLY_TOPOS="1n4g 2n1g"                # restrict topologies
+#   GPU_BENCH_DRYRUN=1                              # print sbatch commands instead of running them
+#   GPU_BENCH_SLURM_ACCOUNT=IscrC_OTHER             # override the default allocation
+#   GPU_BENCH_SLURM_PARTITION=...                   # override the default partition
+#   GPU_BENCH_MSG_SIZES="1,8,64,1024"              # pingpong only: explicit message sizes
 #
-# Pass-through overrides (CP_N, CP_ITERS, CP_WARMUP, CP_NTRIALS, CP_MSG_SIZES, ...) are exported
+# Pass-through overrides (GPU_BENCH_N, GPU_BENCH_ITERS, GPU_BENCH_WARMUP, GPU_BENCH_NTRIALS, GPU_BENCH_MSG_SIZES, ...) are exported
 # here and inherited by every job, e.g.:
-#   CP_NTRIALS=5 tools/submit_all.sh allreduce
+#   GPU_BENCH_NTRIALS=5 tools/submit_all.sh allreduce
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXP="$ROOT/cluster/leonardo/experiments"
-export CP_PROJECT_ROOT="$ROOT"
+export GPU_BENCH_PROJECT_ROOT="$ROOT"
 
 # Account and partition come from here, not from -A/-p in every job script.
-# Override with CP_SLURM_ACCOUNT / CP_SLURM_PARTITION.
+# Override with GPU_BENCH_SLURM_ACCOUNT / GPU_BENCH_SLURM_PARTITION.
 source "$ROOT/cluster/leonardo/slurm.sh"
 
 if ! command -v sbatch >/dev/null 2>&1; then
@@ -56,9 +56,9 @@ for bench in "${benchmarks[@]}"; do
     [[ -e "$script" ]] || continue
     topo="$(basename "$script" .sh)"
     backend="$(basename "$(dirname "$script")")"
-    matches "$backend" "${CP_ONLY_BACKENDS:-}" || { skipped=$((skipped+1)); continue; }
-    matches "$topo" "${CP_ONLY_TOPOS:-}" || { skipped=$((skipped+1)); continue; }
-    if [[ "${CP_DRYRUN:-0}" == "1" ]]; then
+    matches "$backend" "${GPU_BENCH_ONLY_BACKENDS:-}" || { skipped=$((skipped+1)); continue; }
+    matches "$topo" "${GPU_BENCH_ONLY_TOPOS:-}" || { skipped=$((skipped+1)); continue; }
+    if [[ "${GPU_BENCH_DRYRUN:-0}" == "1" ]]; then
       echo "would submit: $bench/$backend/$topo"
     else
       echo "submitting: $bench/$backend/$topo"

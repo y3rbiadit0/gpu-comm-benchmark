@@ -120,7 +120,7 @@ The headline crossover story to validate:
    overtakes NVSHMEM on `gbytes_per_s` even though NVSHMEM still wins latency.
    **Finding that crossover H is the most interesting single result in this
    study** — it is the concrete "use one-sided for small frequent halos, switch
-   to NCCL/MPI for bulk" guidance. If the sweep doesn't reach it, extend `CP_N`.
+   to NCCL/MPI for bulk" guidance. If the sweep doesn't reach it, extend `GPU_BENCH_N`.
 
 ## 5. Profiling with Nsight Systems
 
@@ -131,11 +131,11 @@ Run a dedicated, single-trial, profiled job (profiling perturbs timing — never
 report numbers from it):
 
 ```bash
-CP_PROFILE=nsys CP_NTRIALS=1 \
+GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 \
   sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem/2n4g.sh
-CP_PROFILE=nsys CP_NTRIALS=1 \
+GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 \
   sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/2n4g.sh
-CP_PROFILE=nsys CP_NTRIALS=1 \
+GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 \
   sbatch cluster/leonardo/experiments/halo_1d/cuda_nccl/2n4g.sh
 ```
 
@@ -147,7 +147,7 @@ Open in the Nsight Systems GUI, or summarise headless:
 nsys stats --report cuda_gpu_kern_sum,nvtx_sum,mpi_event_sum <file>.nsys-rep
 ```
 
-Knobs: `CP_NSYS_TRACE` (default `cuda,nvtx,mpi`; add `ucx` to see the IB path on
+Knobs: `GPU_BENCH_NSYS_TRACE` (default `cuda,nvtx,mpi`; add `ucx` to see the IB path on
 2-node runs). To cut overhead you can profile a single rank by gating on
 `SLURM_PROCID` in the rank wrapper — all-ranks is the default.
 
@@ -199,7 +199,7 @@ optimisation this analysis points at.
 > α = median per-iteration time for messages up to 4 KiB; B∞ = peak
 > `gbytes_per_s`; n½ = α·B∞. Regenerate this table from raw results with
 > `python3 tools/benchscribe results/ --benchmark halo_1d --fit`. Sweep:
-> `CP_N=16777216`, 100 iters / 20 warmup.
+> `GPU_BENCH_N=16777216`, 100 iters / 20 warmup.
 
 ### 6.2 Crossover
 
@@ -220,13 +220,13 @@ optimisation this analysis points at.
 
 ```bash
 # clean timing sweep (numbers to report)
-CP_NTRIALS=5 sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem/2n4g.sh
+GPU_BENCH_NTRIALS=5 sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem/2n4g.sh
 # ... per backend/topology, then:
 python3 tools/benchscribe results/ --benchmark halo_1d        # normalise vs cuda_mpi
 python3 tools/benchscribe results/ --benchmark halo_1d --fit  # α, B∞, n½ per backend
 
 # timeline (separate, not reported)
-CP_PROFILE=nsys CP_NTRIALS=1 sbatch .../cuda_nvshmem/2n4g.sh
+GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 sbatch .../cuda_nvshmem/2n4g.sh
 ```
 
 Fair-comparison caveats from the experiment README still apply: the MPI variants

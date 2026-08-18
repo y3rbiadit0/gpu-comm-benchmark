@@ -1,7 +1,7 @@
 # Leonardo MoE Experiments
 
 These jobs benchmark a top-1 mixture-of-experts exchange over float32 token payloads. Each
-rank starts with `CP_N` tokens of width `CP_HIDDEN`; one expert is assigned to each rank.
+rank starts with `GPU_BENCH_N` tokens of width `GPU_BENCH_HIDDEN`; one expert is assigned to each rank.
 Every timed iteration dispatches variable-sized token blocks to their expert ranks and then
 combines them back to their source ranks. This is a skew-sensitive application pattern, not
 the dense equal-count exchange measured by `alltoall`.
@@ -38,12 +38,12 @@ sbatch cluster/leonardo/experiments/moe/sycl_oneccl/1n4g.sh
 ## Overrides
 
 ```bash
-CP_N=16384                         # tokens per rank
-CP_HIDDEN=256                      # float32 values per token
-CP_ITERS=100                       # timed dispatch+combine iterations per case
-CP_WARMUP=20                       # untimed iterations per case
-CP_ROUTINGS=uniform,hotspot80      # optional subset; omitted runs all internal cases
-CP_NTRIALS=3                       # job-level repeats
+GPU_BENCH_N=16384                         # tokens per rank
+GPU_BENCH_HIDDEN=256                      # float32 values per token
+GPU_BENCH_ITERS=100                       # timed dispatch+combine iterations per case
+GPU_BENCH_WARMUP=20                       # untimed iterations per case
+GPU_BENCH_ROUTINGS=uniform,hotspot80      # optional subset; omitted runs all internal cases
+GPU_BENCH_NTRIALS=3                       # job-level repeats
 ```
 
 The binaries accept `<tokens_per_rank> [hidden] [iterations] [warmup] [routing_cases]`.

@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CP_EXPERIMENT=pingpong
-CP_N_LABEL="max message elements"
+GPU_BENCH_EXPERIMENT=pingpong
+GPU_BENCH_N_LABEL="max message elements"
 
-source "$CP_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
+source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
 
 # pingpong is a 2-endpoint benchmark. By default it sweeps powers of two from
-# 1 element up to CP_N; CP_MSG_SIZES can override that with a comma-separated list.
-cp_experiment_defaults() {
-  CP_N=${CP_N:-4194304}
-  CP_ITERS=${CP_ITERS:-100}
-  CP_WARMUP=${CP_WARMUP:-20}
+# 1 element up to GPU_BENCH_N; GPU_BENCH_MSG_SIZES can override that with a comma-separated list.
+gpu_bench_experiment_defaults() {
+  GPU_BENCH_N=${GPU_BENCH_N:-4194304}
+  GPU_BENCH_ITERS=${GPU_BENCH_ITERS:-100}
+  GPU_BENCH_WARMUP=${GPU_BENCH_WARMUP:-20}
   # pingpong binaries accept: <max_elements> [iterations] [warmup] [message_sizes]
-  CP_EXTRA_ARGS=${CP_EXTRA_ARGS:-"$CP_ITERS $CP_WARMUP"}
-  if [[ -n "${CP_MSG_SIZES:-}" ]]; then
-    CP_EXTRA_ARGS="$CP_EXTRA_ARGS $CP_MSG_SIZES"
+  GPU_BENCH_EXTRA_ARGS=${GPU_BENCH_EXTRA_ARGS:-"$GPU_BENCH_ITERS $GPU_BENCH_WARMUP"}
+  if [[ -n "${GPU_BENCH_MSG_SIZES:-}" ]]; then
+    GPU_BENCH_EXTRA_ARGS="$GPU_BENCH_EXTRA_ARGS $GPU_BENCH_MSG_SIZES"
   fi
 }
 
-cp_experiment_extra_summary() {
-  echo "message sizes: ${CP_MSG_SIZES:-powers-of-two}"
+gpu_bench_experiment_extra_summary() {
+  echo "message sizes: ${GPU_BENCH_MSG_SIZES:-powers-of-two}"
 }
 
-cp_pingpong_main() { cp_experiment_main; }
+gpu_bench_pingpong_main() { gpu_bench_experiment_main; }

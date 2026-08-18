@@ -38,10 +38,10 @@ sbatch cluster/leonardo/experiments/cg_step/sycl_oneccl/1n4g.sh
 ## Overrides
 
 ```bash
-CP_N=8192           # grid side length (grid is CP_N x CP_N)
-CP_ITERS=100        # timed CG-step iterations
-CP_WARMUP=20        # untimed warmup iterations
-CP_NTRIALS=5        # job-level repeats
+GPU_BENCH_N=8192           # grid side length (grid is GPU_BENCH_N x GPU_BENCH_N)
+GPU_BENCH_ITERS=100        # timed CG-step iterations
+GPU_BENCH_WARMUP=20        # untimed warmup iterations
+GPU_BENCH_NTRIALS=5        # job-level repeats
 ```
 
 The binaries accept `<side> [iterations] [warmup]`.

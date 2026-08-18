@@ -34,10 +34,10 @@ topologies. Each launch starts at least two ranks/PEs.
 Choose a backend directory and one of the four topology scripts. For example:
 
 ```bash
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n2g.sh
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/2n1g.sh
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/2n4g.sh
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n2g.sh
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/2n1g.sh
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/2n4g.sh
 ```
 
 Backend directories are `cuda_mpi`, `cuda_nccl`, `cuda_nvshmem`,
@@ -53,16 +53,16 @@ results/<result-name>/halo_1d/<job-name>-<job-id>-<trial>-stderr.txt
 
 ## Profiling & Analysis
 
-Set `CP_PROFILE=nsys` to wrap each rank in Nsight Systems and drop one
+Set `GPU_BENCH_PROFILE=nsys` to wrap each rank in Nsight Systems and drop one
 `.nsys-rep` per rank under `results/<result-name>/halo_1d/profiles/`. Profiling
 perturbs timing, so use a dedicated single-trial run and do not report its
 numbers:
 
 ```bash
-CP_PROFILE=nsys CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem/2n4g.sh
+GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem/2n4g.sh
 ```
 
-`CP_NSYS_TRACE` overrides the trace set (default `cuda,nvtx,mpi`; add `ucx` for
+`GPU_BENCH_NSYS_TRACE` overrides the trace set (default `cuda,nvtx,mpi`; add `ucx` for
 the inter-node IB path). The latency/bandwidth (α–β) model, the
 NVSHMEM-vs-NCCL-vs-MPI crossover analysis, and a guide to reading the timelines
 are in [`docs/analysis/halo_1d-crossover.md`](../../../../docs/analysis/halo_1d-crossover.md).
@@ -71,7 +71,7 @@ are in [`docs/analysis/halo_1d-crossover.md`](../../../../docs/analysis/halo_1d-
 
 > **Note:** The tables below predate the comm-only ring rewrite of the halo_1d benchmarks (all backends). They reflect the old one-step stencil (single halo width, gathered validation) and are kept only for historical reference. Re-run on Leonardo to regenerate numbers for the new comm-only benchmark.
 
-Validated on Leonardo A100 boost nodes with `CP_N=1048576`. Times are the mean over successful trial stdout files.
+Validated on Leonardo A100 boost nodes with `GPU_BENCH_N=1048576`. Times are the mean over successful trial stdout files.
 
 ### 1 Node / 4 GPUs
 

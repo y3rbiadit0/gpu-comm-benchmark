@@ -25,12 +25,12 @@ struct bench_report {
  * <backend>_<benchmark>. A binary that can be driven by more than one backend -
  * oneCCL, which dispatches to NCCL or OSHMPI at runtime - therefore cannot use a
  * fixed name, or the two would be indistinguishable in the results. Runtime
- * scripts set CP_REPORT_BACKEND to say which one is actually in use.
+ * scripts set GPU_BENCH_REPORT_BACKEND to say which one is actually in use.
  *
  * Any override must still be a name benchscribe knows, otherwise the record is
  * skipped. */
 inline std::string report_name(const bench_report& report) {
-  const char* backend = std::getenv("CP_REPORT_BACKEND");
+  const char* backend = std::getenv("GPU_BENCH_REPORT_BACKEND");
   if (!backend || !*backend) {
     return report.name;
   }

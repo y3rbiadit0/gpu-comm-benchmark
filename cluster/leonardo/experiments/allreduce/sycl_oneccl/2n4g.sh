@@ -10,14 +10,14 @@
 
 set -euo pipefail
 
-CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
-CP_STACK=sycl
-CP_RUNTIME=oneccl-nccl
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_allreduce}
-CP_RESULT_NAME=${CP_RESULT_NAME:-allreduce-sycl-oneccl-2n4g}
-CP_NODES=2
-CP_TASKS_PER_NODE=4
-CP_LAUNCHER=mpirun
+GPU_BENCH_PROJECT_ROOT=${GPU_BENCH_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
+GPU_BENCH_STACK=sycl
+GPU_BENCH_RUNTIME=oneccl-nccl
+GPU_BENCH_BINARY=${GPU_BENCH_BINARY:-$GPU_BENCH_PROJECT_ROOT/build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_allreduce}
+GPU_BENCH_RESULT_NAME=${GPU_BENCH_RESULT_NAME:-allreduce-sycl-oneccl-2n4g}
+GPU_BENCH_NODES=2
+GPU_BENCH_TASKS_PER_NODE=4
+GPU_BENCH_LAUNCHER=mpirun
 
-source "$CP_PROJECT_ROOT/cluster/leonardo/experiments/allreduce/common.sh"
-cp_allreduce_main
+source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/allreduce/common.sh"
+gpu_bench_allreduce_main

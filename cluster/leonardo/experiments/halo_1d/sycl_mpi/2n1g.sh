@@ -10,13 +10,13 @@
 
 set -euo pipefail
 
-CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
-CP_STACK=sycl
-CP_RUNTIME=sycl-mpi
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-sycl-mpi/src/mpi/sycl/sycl_mpi_halo_1d}
-CP_RESULT_NAME=${CP_RESULT_NAME:-halo-1d-sycl-mpi-2n1g}
-CP_NODES=2
-CP_TASKS_PER_NODE=1
+GPU_BENCH_PROJECT_ROOT=${GPU_BENCH_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
+GPU_BENCH_STACK=sycl
+GPU_BENCH_RUNTIME=sycl-mpi
+GPU_BENCH_BINARY=${GPU_BENCH_BINARY:-$GPU_BENCH_PROJECT_ROOT/build/leonardo-sycl-mpi/src/mpi/sycl/sycl_mpi_halo_1d}
+GPU_BENCH_RESULT_NAME=${GPU_BENCH_RESULT_NAME:-halo-1d-sycl-mpi-2n1g}
+GPU_BENCH_NODES=2
+GPU_BENCH_TASKS_PER_NODE=1
 
-source "$CP_PROJECT_ROOT/cluster/leonardo/experiments/halo_1d/common.sh"
-cp_halo_1d_main
+source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/halo_1d/common.sh"
+gpu_bench_halo_1d_main

@@ -6,7 +6,7 @@ set -euo pipefail
 #   ./cluster/leonardo/bootstrap.sh                 # default target set
 #   ./cluster/leonardo/bootstrap.sh oneccl-oshmpi   # one target and its requires
 #   ./cluster/leonardo/bootstrap.sh --list
-#   CP_FORCE=1 ./cluster/leonardo/bootstrap.sh ...  # rebuild even if installed
+#   GPU_BENCH_FORCE=1 ./cluster/leonardo/bootstrap.sh ...  # rebuild even if installed
 #
 # Each target is cluster/leonardo/deps/<name>.sh and declares the stack it needs,
 # what it requires, and a path that proves it is already built. Adding a backend
@@ -37,7 +37,7 @@ fi
 requested=("$@")
 [[ ${#requested[@]} -eq 0 ]] && requested=("${default_targets[@]}")
 
-# Depth-first over CP_BUILD_REQUIRES, so each target appears once, after its
+# Depth-first over GPU_BENCH_BUILD_REQUIRES, so each target appears once, after its
 # dependencies. Plain strings rather than associative arrays: the target count is
 # small and this runs anywhere, including bash 3.2.
 seen=" "
@@ -55,23 +55,23 @@ resolve() {
     seen="$seen$target "
 
     # Sourced for metadata only; the guard in each target stops it running here.
-    local CP_BUILD_REQUIRES="" CP_BUILD_STACK="" CP_BUILD_PROVIDES=""
+    local GPU_BENCH_BUILD_REQUIRES="" GPU_BENCH_BUILD_STACK=""
     # shellcheck disable=SC1090
     source "$file"
 
     # Every target currently needs the sycl stack, and environment.sh mutates the
     # shell, so mixing stacks in one invocation would build against the wrong
     # toolchain. Refuse rather than do that silently.
-    if [[ -n "$stack" && -n "$CP_BUILD_STACK" && "$CP_BUILD_STACK" != "$stack" ]]; then
+    if [[ -n "$stack" && -n "$GPU_BENCH_BUILD_STACK" && "$GPU_BENCH_BUILD_STACK" != "$stack" ]]; then
         printf 'error: %s needs the %s stack, but %s is already selected\n' \
-            "$target" "$CP_BUILD_STACK" "$stack" >&2
+            "$target" "$GPU_BENCH_BUILD_STACK" "$stack" >&2
         printf 'build them in separate invocations\n' >&2
         exit 2
     fi
-    [[ -n "$CP_BUILD_STACK" ]] && stack=$CP_BUILD_STACK
+    [[ -n "$GPU_BENCH_BUILD_STACK" ]] && stack=$GPU_BENCH_BUILD_STACK
 
     local dep
-    for dep in $CP_BUILD_REQUIRES; do resolve "$dep"; done
+    for dep in $GPU_BENCH_BUILD_REQUIRES; do resolve "$dep"; done
     ordered+=("$target")
 }
 
@@ -83,7 +83,7 @@ printf 'building: %s\n' "${ordered[*]}"
 source "$script_dir/environment.sh" "${stack:-sycl}"
 
 for target in "${ordered[@]}"; do
-    CP_BUILD_RUN=1 bash "$build_dir/$target.sh"
+    GPU_BENCH_BUILD_RUN=1 bash "$build_dir/$target.sh"
 done
 
 printf '\nbootstrap complete\n'

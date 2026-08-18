@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CP_EXPERIMENT=alltoall
-CP_N_LABEL="count per peer"
+GPU_BENCH_EXPERIMENT=alltoall
+GPU_BENCH_N_LABEL="count per peer"
 
-source "$CP_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
+source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
 
-# alltoall sends CP_N elements to every peer (send/recv buffers are ranks*CP_N).
-cp_experiment_defaults() {
-  CP_N=${CP_N:-65536}
-  CP_ITERS=${CP_ITERS:-100}
-  CP_WARMUP=${CP_WARMUP:-20}
+# alltoall sends GPU_BENCH_N elements to every peer (send/recv buffers are ranks*GPU_BENCH_N).
+gpu_bench_experiment_defaults() {
+  GPU_BENCH_N=${GPU_BENCH_N:-65536}
+  GPU_BENCH_ITERS=${GPU_BENCH_ITERS:-100}
+  GPU_BENCH_WARMUP=${GPU_BENCH_WARMUP:-20}
   # alltoall binaries accept: <count_per_peer> [iterations] [warmup]
-  CP_EXTRA_ARGS=${CP_EXTRA_ARGS:-"$CP_ITERS $CP_WARMUP"}
+  GPU_BENCH_EXTRA_ARGS=${GPU_BENCH_EXTRA_ARGS:-"$GPU_BENCH_ITERS $GPU_BENCH_WARMUP"}
 }
 
-cp_alltoall_main() { cp_experiment_main; }
+gpu_bench_alltoall_main() { gpu_bench_experiment_main; }

@@ -10,13 +10,13 @@
 
 set -euo pipefail
 
-CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
-CP_STACK=cuda
-CP_RUNTIME=nvshmem
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_allreduce}
-CP_RESULT_NAME=${CP_RESULT_NAME:-allreduce-cuda-nvshmem-1n1g}
-CP_NODES=1
-CP_TASKS_PER_NODE=1
+GPU_BENCH_PROJECT_ROOT=${GPU_BENCH_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
+GPU_BENCH_STACK=cuda
+GPU_BENCH_RUNTIME=nvshmem
+GPU_BENCH_BINARY=${GPU_BENCH_BINARY:-$GPU_BENCH_PROJECT_ROOT/build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_allreduce}
+GPU_BENCH_RESULT_NAME=${GPU_BENCH_RESULT_NAME:-allreduce-cuda-nvshmem-1n1g}
+GPU_BENCH_NODES=1
+GPU_BENCH_TASKS_PER_NODE=1
 
-source "$CP_PROJECT_ROOT/cluster/leonardo/experiments/allreduce/common.sh"
-cp_allreduce_main
+source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/allreduce/common.sh"
+gpu_bench_allreduce_main

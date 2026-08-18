@@ -9,11 +9,11 @@ set -euo pipefail
 # loads. Setting I_MPI_*/FI_* here would configure a library that is not in the
 # process.
 
-export ONECCL_OSHMPI_ROOT=${ONECCL_OSHMPI_ROOT:-$HOME/opt/oneccl-oshmpi}
+# Same definition the bootstrap installs into, so the two cannot drift.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/layout.sh"
 export ONECCL_ROOT="$ONECCL_OSHMPI_ROOT"
 export CCL_ROOT="$ONECCL_OSHMPI_ROOT"
 
-export OSHMPI_HOME=${OSHMPI_HOME:-$HOME/opt/oshmpi-ee5cf110-oneccl}
 export OSHMPI_ROOT="$OSHMPI_HOME"
 
 if [[ ! -f "$OSHMPI_HOME/include/shmem.h" ]]; then
@@ -37,7 +37,7 @@ export CCL_LOG_LEVEL=${CCL_LOG_LEVEL:-warn}
 # The binaries are shared with the NCCL-backed oneCCL runs and compile in
 # report.name = "sycl_oneccl_<benchmark>". benchscribe derives the backend from
 # that name, so without an override both backends would land in the same row.
-export CP_REPORT_BACKEND=${CP_REPORT_BACKEND:-sycl_oneccl_oshmpi}
+export GPU_BENCH_REPORT_BACKEND=${GPU_BENCH_REPORT_BACKEND:-sycl_oneccl_oshmpi}
 
 # Symmetric heap must hold the staging arena plus the point-to-point landing
 # area, which is world_size * CCL_OSHMPI_PT2PT_SLOT_SIZE.

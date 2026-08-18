@@ -10,13 +10,13 @@
 
 set -euo pipefail
 
-CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
-CP_STACK=cuda
-CP_RUNTIME=oshmpi
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_alltoall}
-CP_RESULT_NAME=${CP_RESULT_NAME:-alltoall-oshmpi-2n1g}
-CP_NODES=2
-CP_TASKS_PER_NODE=1
+GPU_BENCH_PROJECT_ROOT=${GPU_BENCH_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
+GPU_BENCH_STACK=cuda
+GPU_BENCH_RUNTIME=oshmpi
+GPU_BENCH_BINARY=${GPU_BENCH_BINARY:-$GPU_BENCH_PROJECT_ROOT/build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_alltoall}
+GPU_BENCH_RESULT_NAME=${GPU_BENCH_RESULT_NAME:-alltoall-oshmpi-2n1g}
+GPU_BENCH_NODES=2
+GPU_BENCH_TASKS_PER_NODE=1
 
-source "$CP_PROJECT_ROOT/cluster/leonardo/experiments/alltoall/common.sh"
-cp_alltoall_main
+source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/alltoall/common.sh"
+gpu_bench_alltoall_main

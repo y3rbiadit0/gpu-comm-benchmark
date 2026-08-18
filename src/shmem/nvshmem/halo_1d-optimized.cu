@@ -201,12 +201,12 @@ int main(int argc, char** argv) {
     // Transport-aware block cap. Without IBGDA, every block's remote put_signal is
     // a separate proxied IB operation, so many blocks flood the host proxy and the
     // multi-block optimization backfires inter-node. Cap the grid when the job
-    // spans nodes (8 by default); CP_NVSHMEM_MAX_BLOCKS overrides for sweeping the
+    // spans nodes (8 by default); GPU_BENCH_NVSHMEM_MAX_BLOCKS overrides for sweeping the
     // optimum. Intra-node (IPC) the cap is unset, so bandwidth still scales.
     std::size_t block_cap = 0;
-    if (const char* cap_env = std::getenv("CP_NVSHMEM_MAX_BLOCKS")) {
+    if (const char* cap_env = std::getenv("GPU_BENCH_NVSHMEM_MAX_BLOCKS")) {
       block_cap = std::strtoull(cap_env, nullptr, 10);
-    } else if (const char* nodes_env = std::getenv("COMM_PLAYGROUND_JOB_NODES")) {
+    } else if (const char* nodes_env = std::getenv("GPU_BENCH_JOB_NODES")) {
       if (std::strtol(nodes_env, nullptr, 10) > 1) {
         block_cap = 8;
       }

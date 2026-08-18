@@ -10,13 +10,13 @@
 
 set -euo pipefail
 
-CP_PROJECT_ROOT=${CP_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
-CP_STACK=cuda
-CP_RUNTIME=nvshmem
-CP_BINARY=${CP_BINARY:-$CP_PROJECT_ROOT/build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_cg_step}
-CP_RESULT_NAME=${CP_RESULT_NAME:-cg-step-cuda-nvshmem-2n1g}
-CP_NODES=2
-CP_TASKS_PER_NODE=1
+GPU_BENCH_PROJECT_ROOT=${GPU_BENCH_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
+GPU_BENCH_STACK=cuda
+GPU_BENCH_RUNTIME=nvshmem
+GPU_BENCH_BINARY=${GPU_BENCH_BINARY:-$GPU_BENCH_PROJECT_ROOT/build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_cg_step}
+GPU_BENCH_RESULT_NAME=${GPU_BENCH_RESULT_NAME:-cg-step-cuda-nvshmem-2n1g}
+GPU_BENCH_NODES=2
+GPU_BENCH_TASKS_PER_NODE=1
 
-source "$CP_PROJECT_ROOT/cluster/leonardo/experiments/cg_step/common.sh"
-cp_cg_step_main
+source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/cg_step/common.sh"
+gpu_bench_cg_step_main

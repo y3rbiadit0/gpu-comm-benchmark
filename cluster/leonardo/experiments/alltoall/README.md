@@ -2,7 +2,7 @@
 
 These jobs benchmark an all-to-all personalized exchange — the heaviest collective and the
 classic **bisection-bandwidth** stress test (FFT / transpose / sparse / sort motif). Each
-rank holds a `ranks × CP_N` send buffer and sends a distinct `CP_N`-element block to every
+rank holds a `ranks × GPU_BENCH_N` send buffer and sends a distinct `GPU_BENCH_N`-element block to every
 rank, receiving one block from each. The per-block value encodes `(source, destination)`,
 so the full permutation is validated **locally** (no gather). Build setup is in
 [`cluster/leonardo/README.md`](../../README.md).
@@ -31,16 +31,16 @@ sbatch cluster/leonardo/experiments/alltoall/sycl_oneccl/1n4g.sh
 ## Overrides
 
 ```bash
-CP_N=262144         # elements exchanged with EACH peer (buffers are ranks*CP_N)
-CP_ITERS=200        # timed iterations
-CP_WARMUP=50        # untimed warmup iterations
-CP_NTRIALS=5        # job-level repeats
+GPU_BENCH_N=262144         # elements exchanged with EACH peer (buffers are ranks*GPU_BENCH_N)
+GPU_BENCH_ITERS=200        # timed iterations
+GPU_BENCH_WARMUP=50        # untimed warmup iterations
+GPU_BENCH_NTRIALS=5        # job-level repeats
 ```
 
 Example:
 
 ```bash
-CP_N=262144 CP_ITERS=200 sbatch cluster/leonardo/experiments/alltoall/cuda_nccl/2n4g.sh
+GPU_BENCH_N=262144 GPU_BENCH_ITERS=200 sbatch cluster/leonardo/experiments/alltoall/cuda_nccl/2n4g.sh
 ```
 
 The binaries accept `<count_per_peer> [iterations] [warmup]`.

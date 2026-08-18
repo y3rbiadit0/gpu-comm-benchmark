@@ -4,7 +4,7 @@ These jobs benchmark point-to-point **one-way latency and bandwidth** between tw
 (OSU-style ping-pong). Rank 0 sends a message to rank 1, which echoes it back; the round
 trip is timed on the initiator and halved to report one-way figures. Each binary sweeps
 message sizes internally, printing one standardized line per size. By default the sweep
-uses powers of two from 1 element up to `CP_N`; set `CP_MSG_SIZES` to a comma-separated
+uses powers of two from 1 element up to `GPU_BENCH_N`; set `GPU_BENCH_MSG_SIZES` to a comma-separated
 list to run specific element counts. Build setup is in [`cluster/leonardo/README.md`](../../README.md).
 
 ## Topologies
@@ -32,18 +32,18 @@ sbatch cluster/leonardo/experiments/pingpong/sycl_oneccl/2n1g.sh
 ## Overrides
 
 ```bash
-CP_N=16777216       # maximum message length in elements (float); sweep goes 1..CP_N by x2
-CP_MSG_SIZES=1,8,64,1024,1048576  # optional explicit message lengths in elements
-CP_ITERS=200        # timed round trips per size
-CP_WARMUP=50        # untimed warmup round trips per size
-CP_NTRIALS=5        # job-level repeats
+GPU_BENCH_N=16777216       # maximum message length in elements (float); sweep goes 1..GPU_BENCH_N by x2
+GPU_BENCH_MSG_SIZES=1,8,64,1024,1048576  # optional explicit message lengths in elements
+GPU_BENCH_ITERS=200        # timed round trips per size
+GPU_BENCH_WARMUP=50        # untimed warmup round trips per size
+GPU_BENCH_NTRIALS=5        # job-level repeats
 ```
 
 Example:
 
 ```bash
-CP_N=16777216 CP_ITERS=500 sbatch cluster/leonardo/experiments/pingpong/cuda_nvshmem/1n2g.sh
-CP_MSG_SIZES=1,8,64,1024,1048576 sbatch cluster/leonardo/experiments/pingpong/cuda_mpi/2n1g.sh
+GPU_BENCH_N=16777216 GPU_BENCH_ITERS=500 sbatch cluster/leonardo/experiments/pingpong/cuda_nvshmem/1n2g.sh
+GPU_BENCH_MSG_SIZES=1,8,64,1024,1048576 sbatch cluster/leonardo/experiments/pingpong/cuda_mpi/2n1g.sh
 ```
 
 ## Output

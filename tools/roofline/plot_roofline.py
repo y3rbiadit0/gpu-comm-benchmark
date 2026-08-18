@@ -5,7 +5,7 @@
 # ///
 """Roofline chart from Nsight Compute raw-page CSV exports.
 
-Input files come from profiled experiment runs (CP_PROFILE=ncu, --set roofline):
+Input files come from profiled experiment runs (GPU_BENCH_PROFILE=ncu, --set roofline):
 
     ncu --import report.ncu-rep --csv --page raw > kernel_raw.csv
 

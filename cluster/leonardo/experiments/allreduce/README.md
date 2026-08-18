@@ -2,7 +2,7 @@
 
 These jobs benchmark a float32 sum allreduce over device-resident buffers (host-symmetric
 buffers for OSHMPI). Each rank contributes `n` elements and receives the elementwise sum.
-By default each binary sweeps powers of two from 1 element through `CP_N`; `CP_MSG_SIZES`
+By default each binary sweeps powers of two from 1 element through `GPU_BENCH_N`; `GPU_BENCH_MSG_SIZES`
 selects explicit comma-separated sizes. Build setup is in
 [`cluster/leonardo/README.md`](../../README.md).
 
@@ -30,11 +30,11 @@ sbatch cluster/leonardo/experiments/allreduce/sycl_oneccl/1n4g.sh
 ## Overrides
 
 ```bash
-CP_N=4194304                  # maximum element count; default sweep is powers of two
-CP_MSG_SIZES=1,1024,1048576  # optional explicit element counts
-CP_ITERS=100                 # timed iterations per size
-CP_WARMUP=20                 # untimed iterations per size
-CP_NTRIALS=3                 # job-level repeats
+GPU_BENCH_N=4194304                  # maximum element count; default sweep is powers of two
+GPU_BENCH_MSG_SIZES=1,1024,1048576  # optional explicit element counts
+GPU_BENCH_ITERS=100                 # timed iterations per size
+GPU_BENCH_WARMUP=20                 # untimed iterations per size
+GPU_BENCH_NTRIALS=3                 # job-level repeats
 ```
 
 The binaries accept `<max_elements> [iterations] [warmup] [message_sizes]`. oneCCL jobs

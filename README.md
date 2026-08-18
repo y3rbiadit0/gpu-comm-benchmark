@@ -1,6 +1,11 @@
-# Communication Playground
+# GPU Communication Benchmark
 
-Small distributed GPU communication examples organized by communication model.
+Comparative benchmarks for GPU communication on HPC clusters: the same workloads
+run over several communication models, so the results can be compared directly.
+
+Organized by communication model - message passing (`src/mpi`), one-sided PGAS
+(`src/shmem`), and collective libraries (`src/xccl`) - each with CUDA and SYCL
+implementations where both apply.
 
 ## Layout
 
@@ -113,9 +118,9 @@ See [`tools/README.md`](tools/README.md) for details.
 Use the Slurm scripts for validation runs; they request the GPU partition and resources correctly.
 
 ```bash
-CP_N=17 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n2g.sh
-CP_MSG_SIZES=1,1024 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/allreduce/cuda_mpi/1n4g.sh
-CP_ROUTINGS=uniform,hotspot80 CP_NTRIALS=1 sbatch cluster/leonardo/experiments/moe/cuda_mpi/1n4g.sh
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n2g.sh
+GPU_BENCH_MSG_SIZES=1,1024 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/allreduce/cuda_mpi/1n4g.sh
+GPU_BENCH_ROUTINGS=uniform,hotspot80 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/moe/cuda_mpi/1n4g.sh
 ```
 
 Leonardo setup, presets, and experiment notes live under [`cluster/leonardo`](cluster/leonardo/README.md).
