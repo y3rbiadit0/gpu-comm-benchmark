@@ -21,10 +21,18 @@ GPU_BENCH_PREFIX_ROOT=${GPU_BENCH_PREFIX_ROOT:-$HOME/opt/gpu-comm-bench}
 export GPU_BENCH_SRC_DIR=${GPU_BENCH_SRC_DIR:-$GPU_BENCH_WORK_ROOT/src}
 export GPU_BENCH_BUILD_DIR=${GPU_BENCH_BUILD_DIR:-$GPU_BENCH_WORK_ROOT/build}
 
-# Install prefixes - persistent. These names are what runtime/*.sh resolve.
+# Install prefixes - persistent. One target under deps/ produces each of these, and
+# runtime/*.sh resolves them by these names. Nothing else may define them: two
+# definitions with different defaults resolve by source order, which is how a build
+# silently links one install's headers against another's libraries.
+#
+# Vendor-supplied libraries are not listed here. NVSHMEM, for one, comes from the
+# nvhpc module and belongs to env/cuda.sh.
 export OSHMPI_HOME=${OSHMPI_HOME:-$GPU_BENCH_PREFIX_ROOT/oshmpi}
 export ONECCL_OSHMPI_ROOT=${ONECCL_OSHMPI_ROOT:-$GPU_BENCH_PREFIX_ROOT/oneccl-oshmpi}
-export ONECCL_NCCL_ROOT=${ONECCL_NCCL_ROOT:-$GPU_BENCH_PREFIX_ROOT/oneccl-nccl}
-export NVSHMEM_HOME=${NVSHMEM_HOME:-$GPU_BENCH_PREFIX_ROOT/nvshmem}
+# No deps/ target builds this one yet - it was installed by hand - so the default is
+# where it actually is rather than where the layout would put it. Moves to
+# $GPU_BENCH_PREFIX_ROOT/oneccl-nccl when deps/oneccl-nccl.sh exists.
+export ONECCL_NCCL_ROOT=${ONECCL_NCCL_ROOT:-$HOME/opt/oneccl-nccl-leonardo}
 
 export GPU_BENCH_WORK_ROOT GPU_BENCH_PREFIX_ROOT

@@ -23,8 +23,6 @@ source "$project_root/cluster/leonardo/environment.sh" sycl
 export GPU_BENCH_JOB_NODES=${SLURM_NNODES:-1}
 source "$project_root/cluster/leonardo/runtime/oshmpi.sh"
 
-export OSHMPI_HOME=${OSHMPI_HOME:-$HOME/opt/oshmpi-ee5cf110-oneccl}
-
 # oneCCL builds with CMAKE_SKIP_RPATH, so nothing records where libccl.so.1 or
 # liboshmpi.so live. Put both on the loader path explicitly.
 export LD_LIBRARY_PATH="$oneccl_build_dir/src:$OSHMPI_HOME/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"

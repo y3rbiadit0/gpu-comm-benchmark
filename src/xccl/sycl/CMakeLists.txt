@@ -1,7 +1,28 @@
 include(${PROJECT_SOURCE_DIR}/cmake/sycl.cmake)
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-option(GPU_BENCH_ONECCL_USE_BUNDLED_MPI "Link SYCL oneCCL examples with oneCCL's bundled Intel MPI" OFF)
+# Which MPI the executables call directly. They must use the same one oneCCL loads:
+# an Open MPI executable driving a oneCCL that dlopens Intel MPI fails in transport
+# setup, and the reverse fails at link.
+option(GPU_BENCH_ONECCL_USE_BUNDLED_MPI "Link against oneCCL's bundled Intel MPI" OFF)
+# The OSHMPI-backed oneCCL leaves libccl.so with a DT_NEEDED on liboshmpi, which the
+# link has to resolve even though nothing here calls shmem_* directly.
+option(GPU_BENCH_ONECCL_USE_OSHMPI "The oneCCL install uses the OSHMPI backend" OFF)
 set(ONECCL_BUNDLED_MPI_ROOT "" CACHE PATH "oneCCL bundled MPI installation root")
+
+set(GPU_BENCH_ONECCL_BENCHMARKS halo_1d pingpong alltoall allreduce cg_step moe)
+
+# find_path/find_library cache their results, so pointing oneCCL_ROOT at a different
+# install would otherwise keep the previous one's libraries and link them against the
+# new one's headers. Drop the cached answers whenever the root changes.
+set(_oneccl_fingerprint "${oneCCL_ROOT}|$ENV{ONECCL_ROOT}|$ENV{CCL_ROOT}")
+if(NOT "${_oneccl_fingerprint}" STREQUAL "${ONECCL_CACHED_FINGERPRINT}")
+  unset(ONECCL_INCLUDE_DIR CACHE)
+  unset(ONECCL_LIBRARY CACHE)
+  unset(ONECCL_BUNDLED_MPI_INCLUDE_DIR CACHE)
+  unset(ONECCL_BUNDLED_MPI_LIBRARY CACHE)
+  set(ONECCL_CACHED_FINGERPRINT "${_oneccl_fingerprint}" CACHE INTERNAL "")
+endif()
 
 find_path(ONECCL_INCLUDE_DIR oneapi/ccl.hpp
   HINTS ${oneCCL_ROOT} $ENV{ONECCL_ROOT} $ENV{CCL_ROOT}
@@ -14,116 +35,83 @@ if(NOT ONECCL_INCLUDE_DIR OR NOT ONECCL_LIBRARY)
   message(FATAL_ERROR "oneCCL not found. Set oneCCL_ROOT, ONECCL_ROOT, or CCL_ROOT")
 endif()
 
-add_executable(sycl_oneccl_halo_1d halo_1d.cpp)
-add_executable(sycl_oneccl_pingpong pingpong.cpp)
-add_executable(sycl_oneccl_alltoall alltoall.cpp)
-add_executable(sycl_oneccl_allreduce allreduce.cpp)
-add_executable(sycl_oneccl_cg_step cg_step.cpp)
-add_executable(sycl_oneccl_moe moe.cpp)
-target_include_directories(sycl_oneccl_halo_1d PRIVATE ${ONECCL_INCLUDE_DIR})
-target_include_directories(sycl_oneccl_pingpong PRIVATE ${ONECCL_INCLUDE_DIR})
-target_include_directories(sycl_oneccl_alltoall PRIVATE ${ONECCL_INCLUDE_DIR})
-target_include_directories(sycl_oneccl_allreduce PRIVATE ${ONECCL_INCLUDE_DIR})
-target_include_directories(sycl_oneccl_cg_step PRIVATE ${ONECCL_INCLUDE_DIR})
-target_include_directories(sycl_oneccl_moe PRIVATE ${ONECCL_INCLUDE_DIR})
+get_filename_component(ONECCL_LIBRARY_DIR "${ONECCL_LIBRARY}" DIRECTORY)
+get_filename_component(_oneccl_install_root "${ONECCL_LIBRARY_DIR}" DIRECTORY)
+
+# Everything the executables need on the loader path. oneCCL is built with
+# CMAKE_SKIP_RPATH, so nothing records these for us.
+set(ONECCL_RUNTIME_RPATH "${ONECCL_LIBRARY_DIR};$ENV{DPCPP_INSTALL}/lib;$ENV{GCC12_LIB}")
+set(_oneccl_link_libraries gpu_bench_common ${ONECCL_LIBRARY})
 
 if(GPU_BENCH_ONECCL_USE_BUNDLED_MPI)
-  set(_oneccl_bundled_mpi_roots)
+  # The bundled MPI must come from the same install as the libccl.so being linked.
+  # Discovering it independently is what let a stale ONECCL_LIBRARY be linked against
+  # another install's headers.
+  set(_oneccl_bundled_mpi_roots "${_oneccl_install_root}/opt/mpi")
   if(ONECCL_BUNDLED_MPI_ROOT)
-    list(APPEND _oneccl_bundled_mpi_roots "${ONECCL_BUNDLED_MPI_ROOT}")
+    list(INSERT _oneccl_bundled_mpi_roots 0 "${ONECCL_BUNDLED_MPI_ROOT}")
   endif()
-  if(DEFINED ENV{ONECCL_BUNDLED_MPI_ROOT} AND NOT "$ENV{ONECCL_BUNDLED_MPI_ROOT}" STREQUAL "")
-    list(APPEND _oneccl_bundled_mpi_roots "$ENV{ONECCL_BUNDLED_MPI_ROOT}")
-  endif()
-  if(DEFINED ENV{ONECCL_NCCL_ROOT} AND NOT "$ENV{ONECCL_NCCL_ROOT}" STREQUAL "")
-    list(APPEND _oneccl_bundled_mpi_roots "$ENV{ONECCL_NCCL_ROOT}/opt/mpi")
-  endif()
-  if(DEFINED ENV{ONECCL_ROOT} AND NOT "$ENV{ONECCL_ROOT}" STREQUAL "")
-    list(APPEND _oneccl_bundled_mpi_roots "$ENV{ONECCL_ROOT}/opt/mpi")
-  endif()
-  if(DEFINED ENV{CCL_ROOT} AND NOT "$ENV{CCL_ROOT}" STREQUAL "")
-    list(APPEND _oneccl_bundled_mpi_roots "$ENV{CCL_ROOT}/opt/mpi")
-  endif()
-
-  set(_oneccl_bundled_mpi_library_hints)
-  foreach(_oneccl_bundled_mpi_root IN LISTS _oneccl_bundled_mpi_roots)
-    list(APPEND _oneccl_bundled_mpi_library_hints
-      "${_oneccl_bundled_mpi_root}/lib/release"
-      "${_oneccl_bundled_mpi_root}/lib")
-  endforeach()
 
   find_path(ONECCL_BUNDLED_MPI_INCLUDE_DIR mpi.h
-    HINTS ${_oneccl_bundled_mpi_roots}
-    PATH_SUFFIXES include
-    NO_DEFAULT_PATH)
+    HINTS ${_oneccl_bundled_mpi_roots} PATH_SUFFIXES include NO_DEFAULT_PATH)
   find_library(ONECCL_BUNDLED_MPI_LIBRARY mpi
-    HINTS ${_oneccl_bundled_mpi_library_hints}
-    NO_DEFAULT_PATH)
+    HINTS ${_oneccl_bundled_mpi_roots} PATH_SUFFIXES lib/release lib NO_DEFAULT_PATH)
 
+  # Intel MPI ships libmpi.so.12 without the unversioned symlink find_library needs.
   if(NOT ONECCL_BUNDLED_MPI_LIBRARY)
-    set(_oneccl_bundled_mpi_candidates)
-    foreach(_oneccl_bundled_mpi_library_hint IN LISTS _oneccl_bundled_mpi_library_hints)
-      file(GLOB _oneccl_bundled_mpi_root_candidates
-        "${_oneccl_bundled_mpi_library_hint}/libmpi.so*")
-      list(APPEND _oneccl_bundled_mpi_candidates ${_oneccl_bundled_mpi_root_candidates})
+    foreach(_root IN LISTS _oneccl_bundled_mpi_roots)
+      file(GLOB _candidates "${_root}/lib/release/libmpi.so.*" "${_root}/lib/libmpi.so.*")
+      if(_candidates)
+        list(SORT _candidates)
+        list(GET _candidates 0 ONECCL_BUNDLED_MPI_LIBRARY)
+        break()
+      endif()
     endforeach()
-    if(_oneccl_bundled_mpi_candidates)
-      list(SORT _oneccl_bundled_mpi_candidates)
-      list(GET _oneccl_bundled_mpi_candidates 0 ONECCL_BUNDLED_MPI_LIBRARY)
-    endif()
   endif()
 
   if(NOT ONECCL_BUNDLED_MPI_INCLUDE_DIR OR NOT ONECCL_BUNDLED_MPI_LIBRARY)
-    message(FATAL_ERROR "oneCCL bundled MPI not found. Set ONECCL_BUNDLED_MPI_ROOT or ONECCL_BUNDLED_MPI_INCLUDE_DIR/ONECCL_BUNDLED_MPI_LIBRARY")
+    message(FATAL_ERROR
+      "oneCCL bundled MPI not found under: ${_oneccl_bundled_mpi_roots}\n"
+      "That oneCCL install has no opt/mpi. Point oneCCL_ROOT at one that does, set "
+      "ONECCL_BUNDLED_MPI_ROOT, or configure with GPU_BENCH_ONECCL_USE_BUNDLED_MPI=OFF.")
+  endif()
+
+  # A -I on a missing directory is silently ignored, so the build would otherwise fall
+  # through to whichever mpi.h the loaded modules put on CPATH and link those objects
+  # against Intel MPI.
+  if(NOT EXISTS "${ONECCL_BUNDLED_MPI_INCLUDE_DIR}/mpi.h")
+    message(FATAL_ERROR "ONECCL_BUNDLED_MPI_INCLUDE_DIR=${ONECCL_BUNDLED_MPI_INCLUDE_DIR} has no mpi.h")
   endif()
 
   find_package(Threads REQUIRED)
   get_filename_component(ONECCL_BUNDLED_MPI_LIBRARY_DIR "${ONECCL_BUNDLED_MPI_LIBRARY}" DIRECTORY)
-  get_filename_component(ONECCL_LIBRARY_DIR "${ONECCL_LIBRARY}" DIRECTORY)
-  set(ONECCL_RUNTIME_RPATH "${ONECCL_LIBRARY_DIR};${ONECCL_BUNDLED_MPI_LIBRARY_DIR};$ENV{DPCPP_INSTALL}/lib;$ENV{GCC12_LIB}")
-  target_include_directories(sycl_oneccl_halo_1d PRIVATE ${ONECCL_BUNDLED_MPI_INCLUDE_DIR})
-  target_include_directories(sycl_oneccl_pingpong PRIVATE ${ONECCL_BUNDLED_MPI_INCLUDE_DIR})
-  target_include_directories(sycl_oneccl_alltoall PRIVATE ${ONECCL_BUNDLED_MPI_INCLUDE_DIR})
-  target_include_directories(sycl_oneccl_allreduce PRIVATE ${ONECCL_BUNDLED_MPI_INCLUDE_DIR})
-  target_include_directories(sycl_oneccl_cg_step PRIVATE ${ONECCL_BUNDLED_MPI_INCLUDE_DIR})
-  target_include_directories(sycl_oneccl_moe PRIVATE ${ONECCL_BUNDLED_MPI_INCLUDE_DIR})
-  target_link_libraries(sycl_oneccl_halo_1d PRIVATE gpu_bench_common ${ONECCL_LIBRARY} ${ONECCL_BUNDLED_MPI_LIBRARY} ${CMAKE_DL_LIBS} Threads::Threads)
-  target_link_libraries(sycl_oneccl_pingpong PRIVATE gpu_bench_common ${ONECCL_LIBRARY} ${ONECCL_BUNDLED_MPI_LIBRARY} ${CMAKE_DL_LIBS} Threads::Threads)
-  target_link_libraries(sycl_oneccl_alltoall PRIVATE gpu_bench_common ${ONECCL_LIBRARY} ${ONECCL_BUNDLED_MPI_LIBRARY} ${CMAKE_DL_LIBS} Threads::Threads)
-  target_link_libraries(sycl_oneccl_allreduce PRIVATE gpu_bench_common ${ONECCL_LIBRARY} ${ONECCL_BUNDLED_MPI_LIBRARY} ${CMAKE_DL_LIBS} Threads::Threads)
-  target_link_libraries(sycl_oneccl_cg_step PRIVATE gpu_bench_common ${ONECCL_LIBRARY} ${ONECCL_BUNDLED_MPI_LIBRARY} ${CMAKE_DL_LIBS} Threads::Threads)
-  target_link_libraries(sycl_oneccl_moe PRIVATE gpu_bench_common ${ONECCL_LIBRARY} ${ONECCL_BUNDLED_MPI_LIBRARY} ${CMAKE_DL_LIBS} Threads::Threads)
-  set_target_properties(sycl_oneccl_halo_1d PROPERTIES
-    BUILD_RPATH "${ONECCL_RUNTIME_RPATH}"
-    INSTALL_RPATH "${ONECCL_RUNTIME_RPATH}")
-  set_target_properties(sycl_oneccl_pingpong PROPERTIES
-    BUILD_RPATH "${ONECCL_RUNTIME_RPATH}"
-    INSTALL_RPATH "${ONECCL_RUNTIME_RPATH}")
-  set_target_properties(sycl_oneccl_alltoall PROPERTIES
-    BUILD_RPATH "${ONECCL_RUNTIME_RPATH}"
-    INSTALL_RPATH "${ONECCL_RUNTIME_RPATH}")
-  set_target_properties(sycl_oneccl_allreduce PROPERTIES
-    BUILD_RPATH "${ONECCL_RUNTIME_RPATH}"
-    INSTALL_RPATH "${ONECCL_RUNTIME_RPATH}")
-  set_target_properties(sycl_oneccl_cg_step PROPERTIES
-    BUILD_RPATH "${ONECCL_RUNTIME_RPATH}"
-    INSTALL_RPATH "${ONECCL_RUNTIME_RPATH}")
-  set_target_properties(sycl_oneccl_moe PROPERTIES
-    BUILD_RPATH "${ONECCL_RUNTIME_RPATH}"
-    INSTALL_RPATH "${ONECCL_RUNTIME_RPATH}")
+  list(APPEND ONECCL_RUNTIME_RPATH "${ONECCL_BUNDLED_MPI_LIBRARY_DIR}")
+  list(APPEND _oneccl_link_libraries
+    ${ONECCL_BUNDLED_MPI_LIBRARY} ${CMAKE_DL_LIBS} Threads::Threads)
 else()
   include(${PROJECT_SOURCE_DIR}/cmake/mpi.cmake)
-  target_link_libraries(sycl_oneccl_halo_1d PRIVATE gpu_bench_common MPI::MPI_CXX ${ONECCL_LIBRARY})
-  target_link_libraries(sycl_oneccl_pingpong PRIVATE gpu_bench_common MPI::MPI_CXX ${ONECCL_LIBRARY})
-  target_link_libraries(sycl_oneccl_alltoall PRIVATE gpu_bench_common MPI::MPI_CXX ${ONECCL_LIBRARY})
-  target_link_libraries(sycl_oneccl_allreduce PRIVATE gpu_bench_common MPI::MPI_CXX ${ONECCL_LIBRARY})
-  target_link_libraries(sycl_oneccl_cg_step PRIVATE gpu_bench_common MPI::MPI_CXX ${ONECCL_LIBRARY})
-  target_link_libraries(sycl_oneccl_moe PRIVATE gpu_bench_common MPI::MPI_CXX ${ONECCL_LIBRARY})
+  list(APPEND _oneccl_link_libraries MPI::MPI_CXX)
 endif()
 
-gpu_bench_enable_sycl(sycl_oneccl_halo_1d)
-gpu_bench_enable_sycl(sycl_oneccl_pingpong)
-gpu_bench_enable_sycl(sycl_oneccl_alltoall)
-gpu_bench_enable_sycl(sycl_oneccl_allreduce)
-gpu_bench_enable_sycl(sycl_oneccl_cg_step)
-gpu_bench_enable_sycl(sycl_oneccl_moe)
+if(GPU_BENCH_ONECCL_USE_OSHMPI)
+  # Located rather than assumed: OSHMPI installs to lib or lib64 depending on how it
+  # was configured, and naming the wrong one surfaces only as fifty undefined shmem_*
+  # symbols at link time.
+  find_package(OSHMPI REQUIRED)
+  list(APPEND ONECCL_RUNTIME_RPATH "${OSHMPI_LIBRARY_DIRS}")
+  list(APPEND _oneccl_link_libraries ${OSHMPI_LIBRARIES})
+endif()
+
+foreach(benchmark IN LISTS GPU_BENCH_ONECCL_BENCHMARKS)
+  set(target sycl_oneccl_${benchmark})
+  add_executable(${target} ${benchmark}.cpp)
+  target_include_directories(${target} PRIVATE ${ONECCL_INCLUDE_DIR})
+  if(GPU_BENCH_ONECCL_USE_BUNDLED_MPI)
+    target_include_directories(${target} PRIVATE ${ONECCL_BUNDLED_MPI_INCLUDE_DIR})
+  endif()
+  target_link_libraries(${target} PRIVATE ${_oneccl_link_libraries})
+  set_target_properties(${target} PROPERTIES
+    BUILD_RPATH "${ONECCL_RUNTIME_RPATH}"
+    INSTALL_RPATH "${ONECCL_RUNTIME_RPATH}")
+  gpu_bench_enable_sycl(${target})
+endforeach()

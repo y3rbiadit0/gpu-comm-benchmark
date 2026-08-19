@@ -34,9 +34,6 @@ export SYCL_DEVICE_FILTER=${SYCL_DEVICE_FILTER:-cuda}
 
 export GPU_BENCH_SYCL_FLAGS=${GPU_BENCH_SYCL_FLAGS:--fsycl --gcc-toolchain=${GCC12_ROOT} -fsycl-targets=${SYCL_TARGET} -Xsycl-target-backend=${SYCL_TARGET} --cuda-gpu-arch=${NVIDIA_GPU_ARCH}}
 export SYCL_FLAGS="$GPU_BENCH_SYCL_FLAGS"
-export ONECCL_NCCL_ROOT=${ONECCL_NCCL_ROOT:-$HOME/opt/oneccl-nccl-leonardo}
-export ONECCL_ROOT=${ONECCL_ROOT:-$ONECCL_NCCL_ROOT}
-export CCL_ROOT=${CCL_ROOT:-$ONECCL_NCCL_ROOT}
 
 export PATH="$DPCPP_INSTALL/bin:$PATH"
 export LD_LIBRARY_PATH="$DPCPP_INSTALL/lib:$GCC12_LIB:$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"

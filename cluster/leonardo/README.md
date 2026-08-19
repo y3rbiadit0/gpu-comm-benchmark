@@ -2,6 +2,54 @@
 
 Leonardo uses different validated software stacks for native CUDA and SYCL-on-NVIDIA runs. Select the stack explicitly before configuring or submitting jobs.
 
+## Setup
+
+From a clean clone, build the external libraries before any benchmark:
+
+```bash
+./cluster/leonardo/bootstrap.sh
+```
+
+It resolves target order itself and builds patched OSHMPI, then oneCCL with the OSHMPI
+backend, then the `leonardo-sycl-oneccl-oshmpi` benchmarks. Targets live in
+[`deps/`](deps/); each declares the stack it needs, what it requires, and a path that
+proves it is already built, so re-running skips finished work.
+
+```bash
+./cluster/leonardo/bootstrap.sh --list           # available targets
+./cluster/leonardo/bootstrap.sh oneccl-oshmpi    # one target and its dependencies
+GPU_BENCH_FORCE=1 ./cluster/leonardo/bootstrap.sh oneccl-oshmpi   # rebuild anyway
+```
+
+The only prerequisite it cannot install is a **DPC++ compiler**. Point `DPCPP_HOME` at
+one (default `$HOME/opt/dpcpp_6.3`).
+
+### Where things go
+
+[`layout.sh`](layout.sh) is the single definition of every path the bootstrap produces
+and every path the runtime scripts consume, so the two cannot drift:
+
+| Variable | Default | Holds |
+| --- | --- | --- |
+| `GPU_BENCH_WORK_ROOT` | `$SCRATCH/gpu-comm-bench` | clones and build trees - large, disposable |
+| `GPU_BENCH_PREFIX_ROOT` | `$HOME/opt/gpu-comm-bench` | install prefixes - small, persistent, resolved by jobs at run time |
+
+Relocate everything by setting one of those. Individual prefixes (`OSHMPI_HOME`,
+`ONECCL_OSHMPI_ROOT`, `ONECCL_NCCL_ROOT`) are respected if already exported, for one-off
+experiments. Nothing else defines them - two definitions with different defaults would
+resolve by source order, which is how a build ends up linking one install's headers
+against another's libraries.
+
+`environment.sh` sources `layout.sh`, so `make leonardo` and the bootstrap agree on
+every path.
+
+### Not yet bootstrapped
+
+`leonardo-sycl-oneccl` needs oneCCL built with the **NCCL** backend at
+`$ONECCL_NCCL_ROOT`. There is no `deps/` target for it yet; it is hand-built, and
+`layout.sh` defaults to where that install already lives. See
+[`../../oneccl-unisa.md`](../../oneccl-unisa.md).
+
 ## CUDA Stack
 
 ```bash

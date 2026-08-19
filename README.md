@@ -32,7 +32,7 @@ The active suite contains six communication patterns:
 ## Implementations
 
 | Model | Backend | Details |
-| --- | --- |
+| --- | --- | --- |
 | MPI | CUDA | [`src/mpi/cuda`](src/mpi/cuda/README.md) |
 | MPI | SYCL | [`src/mpi/sycl`](src/mpi/sycl/README.md) |
 | XCCL | CUDA/NCCL | [`src/xccl/cuda`](src/xccl/cuda/README.md) |
@@ -45,20 +45,64 @@ tracked in [`docs/unsupported-operations.md`](docs/unsupported-operations.md).
 
 ## Build
 
-Build one preset directly:
+Most presets need external libraries that the cluster does not provide. Build those
+first with the bootstrap, then build the benchmarks.
+
+### 1. Provide a DPC++ compiler
+
+The one prerequisite the bootstrap cannot install for you. Point `DPCPP_HOME` at an
+install (default `$HOME/opt/dpcpp_6.3`); it is needed by every SYCL preset and by the
+oneCCL the bootstrap builds. Everything else comes from cluster modules or from the
+bootstrap itself.
+
+### 2. Bootstrap the dependencies
+
+```bash
+./cluster/leonardo/bootstrap.sh          # or: make bootstrap
+```
+
+This clones and builds, in order, patched OSHMPI and oneCCL with the OSHMPI backend,
+then the `leonardo-sycl-oneccl-oshmpi` benchmarks. Sources and build trees go to
+`$SCRATCH`; install prefixes to `$HOME/opt/gpu-comm-bench`, both defined once in
+[`cluster/leonardo/layout.sh`](cluster/leonardo/layout.sh). Re-running skips what is
+already installed; `GPU_BENCH_FORCE=1` rebuilds anyway.
+
+```bash
+./cluster/leonardo/bootstrap.sh --list           # available targets
+./cluster/leonardo/bootstrap.sh oneccl-oshmpi    # one target and its dependencies
+```
+
+### 3. Build the benchmarks
+
+```bash
+make leonardo          # all Leonardo presets
+make leonardo-cuda     # CUDA-stack presets only
+make leonardo-sycl     # SYCL-stack presets only
+```
+
+Or one preset at a time, which is the fastest loop while editing a benchmark:
 
 ```bash
 make configure PRESET=cuda-mpi
 make build PRESET=cuda-mpi
 ```
 
-Build all Leonardo presets on Leonardo:
+The Makefile is a thin wrapper over `CMakePresets.json`.
 
-```bash
-make leonardo
-```
+### What each preset needs
 
-Use `make leonardo-cuda` or `make leonardo-sycl` to build only one stack. The Makefile is only a thin wrapper over `CMakePresets.json`.
+| Preset | Stack | Depends on | Provided by |
+| --- | --- | --- | --- |
+| `leonardo-cuda-mpi` | cuda | HPC-X MPI | module |
+| `leonardo-cuda-nccl` | cuda | NCCL | `nvhpc` module |
+| `leonardo-cuda-nvshmem` | cuda | NVSHMEM | `nvhpc` module |
+| `leonardo-oshmpi` | cuda | OSHMPI | `bootstrap.sh oneccl-oshmpi` |
+| `leonardo-sycl-mpi` | sycl | Open MPI, DPC++ | module, your DPC++ |
+| `leonardo-sycl-oneccl` | sycl | oneCCL with the NCCL backend | **no bootstrap target yet** - hand-built at `$ONECCL_NCCL_ROOT` |
+| `leonardo-sycl-oneccl-oshmpi` | sycl | OSHMPI, oneCCL with the OSHMPI backend | `bootstrap.sh` |
+
+A preset whose dependency is missing now fails at configure time naming the path it
+searched, rather than at link time with undefined symbols.
 
 ## Run Examples
 

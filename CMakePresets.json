@@ -96,8 +96,7 @@
         "CMAKE_CXX_COMPILER": "$env{CXX}",
         "GPU_BENCH_SYCL_FLAGS": "$env{GPU_BENCH_SYCL_FLAGS}",
         "oneCCL_ROOT": "$env{ONECCL_NCCL_ROOT}",
-        "GPU_BENCH_ONECCL_USE_BUNDLED_MPI": "ON",
-        "ONECCL_BUNDLED_MPI_INCLUDE_DIR": "$env{ONECCL_NCCL_ROOT}/opt/mpi/include"
+        "GPU_BENCH_ONECCL_USE_BUNDLED_MPI": "ON"
       }
     },
     {
@@ -110,7 +109,7 @@
         "GPU_BENCH_SYCL_FLAGS": "$env{GPU_BENCH_SYCL_FLAGS}",
         "oneCCL_ROOT": "$env{ONECCL_OSHMPI_ROOT}",
         "GPU_BENCH_ONECCL_USE_BUNDLED_MPI": "OFF",
-        "CMAKE_EXE_LINKER_FLAGS": "-Wl,-rpath-link,$env{OSHMPI_HOME}/lib -Wl,-rpath,$env{OSHMPI_HOME}/lib"
+        "GPU_BENCH_ONECCL_USE_OSHMPI": "ON"
       }
     },
     {

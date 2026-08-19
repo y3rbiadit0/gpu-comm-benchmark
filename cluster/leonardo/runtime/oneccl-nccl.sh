@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export ONECCL_NCCL_ROOT=${ONECCL_NCCL_ROOT:-$HOME/opt/oneccl-nccl-leonardo}
-export ONECCL_BUNDLED_MPI_ROOT=${ONECCL_BUNDLED_MPI_ROOT:-$HOME/oneCCL-nccl/deps/mpi}
+# Same definition the bootstrap installs into, so the two cannot drift.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/layout.sh"
+export ONECCL_ROOT="$ONECCL_NCCL_ROOT"
+export CCL_ROOT="$ONECCL_NCCL_ROOT"
+
+# Intel MPI ships inside the oneCCL install. Derived, not configured separately, so it
+# can never name a different install than the libccl.so being loaded.
+export ONECCL_BUNDLED_MPI_ROOT=${ONECCL_BUNDLED_MPI_ROOT:-$ONECCL_NCCL_ROOT/opt/mpi}
 user_ccl_mpi_library_path=${CCL_MPI_LIBRARY_PATH:-}
 libfabric_dir=${ONECCL_LIBFABRIC_DIR:-$ONECCL_NCCL_ROOT/opt/mpi/libfabric/lib}
 libfabric_provider_dir=${ONECCL_LIBFABRIC_PROVIDER_DIR:-$libfabric_dir/prov-tcp-only}
@@ -25,11 +31,8 @@ if [[ -n "$user_ccl_mpi_library_path" ]]; then
 else
   unset CCL_MPI_LIBRARY_PATH
   ccl_mpi_candidates=(
-    "$ONECCL_NCCL_ROOT/opt/mpi/lib/release/libmpi.so"
-    "$ONECCL_NCCL_ROOT"/opt/mpi/lib/release/libmpi.so.*
-    "$ONECCL_NCCL_ROOT/opt/mpi/lib/libmpi.so"
-    "$ONECCL_NCCL_ROOT"/opt/mpi/lib/libmpi.so.*
-    "$ONECCL_BUNDLED_MPI_ROOT/lib/libmpi.so.12"
+    "$ONECCL_BUNDLED_MPI_ROOT/lib/release/libmpi.so"
+    "$ONECCL_BUNDLED_MPI_ROOT"/lib/release/libmpi.so.*
     "$ONECCL_BUNDLED_MPI_ROOT/lib/libmpi.so"
     "$ONECCL_BUNDLED_MPI_ROOT"/lib/libmpi.so.*
   )
@@ -40,7 +43,7 @@ else
     fi
   done
   if [[ -z ${CCL_MPI_LIBRARY_PATH:-} ]]; then
-    echo "could not find bundled oneCCL MPI libmpi.so under $ONECCL_NCCL_ROOT or $ONECCL_BUNDLED_MPI_ROOT" >&2
+    echo "could not find bundled oneCCL MPI libmpi.so under $ONECCL_BUNDLED_MPI_ROOT" >&2
     return 1 2>/dev/null || exit 1
   fi
 fi
@@ -71,10 +74,7 @@ else
 fi
 
 ccl_mpi_lib_dir=$(dirname -- "$CCL_MPI_LIBRARY_PATH")
-if [[ -d "$ONECCL_NCCL_ROOT/opt/mpi/bin" ]]; then
-  export PATH="$ONECCL_NCCL_ROOT/opt/mpi/bin:$PATH"
-fi
 if [[ -d "$ONECCL_BUNDLED_MPI_ROOT/bin" ]]; then
   export PATH="$ONECCL_BUNDLED_MPI_ROOT/bin:$PATH"
 fi
-export LD_LIBRARY_PATH="$libfabric_dir:$ccl_mpi_lib_dir:$ONECCL_NCCL_ROOT/opt/mpi/lib/release:$ONECCL_NCCL_ROOT/opt/mpi/lib:${GCC12_LIB:-}:${DPCPP_INSTALL:-}/lib:${CUDA_HOME:-${CUDA_PATH:-}}/lib64:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$libfabric_dir:$ccl_mpi_lib_dir:$ONECCL_BUNDLED_MPI_ROOT/lib/release:$ONECCL_BUNDLED_MPI_ROOT/lib:$ONECCL_NCCL_ROOT/lib:${GCC12_LIB:-}:${DPCPP_INSTALL:-}/lib:${CUDA_HOME:-${CUDA_PATH:-}}/lib64:${LD_LIBRARY_PATH:-}"
