@@ -7,7 +7,11 @@ export OMP_NUM_THREADS=${OMP_NUM_THREADS:-8}
 export SLURM_CPU_BIND=${SLURM_CPU_BIND:-none}
 
 export OMPI_MCA_coll_hcoll_enable=${OMPI_MCA_coll_hcoll_enable:-0}
-export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-0}
+# Aligned with the other MPI-using runtimes. NVSHMEM uses MPI only to bootstrap
+# and for the harness's own validation/statistics reductions, both outside every
+# timed region, so this does not affect the measurement - it is set so the only
+# difference between runtime files is the transport actually under test.
+export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-1}
 export OMPI_MCA_btl=${OMPI_MCA_btl:-^openib}
 export OMPI_MCA_mpi_cuda_support=${OMPI_MCA_mpi_cuda_support:-1}
 

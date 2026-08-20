@@ -19,6 +19,10 @@ export OMPI_MCA_coll_hcoll_enable=${OMPI_MCA_coll_hcoll_enable:-0}
 # validates (job 53263792) and runs 34x faster than host staging at 16 MiB.
 export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-1}
 export OMPI_MCA_btl=${OMPI_MCA_btl:-^openib}
+# OSHMPI hands device pointers straight to MPI, so CUDA-aware support matters
+# more here than anywhere else. This was the only MPI-using runtime leaving it
+# to the build default.
+export OMPI_MCA_mpi_cuda_support=${OMPI_MCA_mpi_cuda_support:-1}
 export OMPI_MCA_opal_cuda_support=${OMPI_MCA_opal_cuda_support:-1}
 export OMPI_MCA_osc=${OMPI_MCA_osc:-ucx}
 export OMPI_MCA_osc_base_verbose=${OMPI_MCA_osc_base_verbose:-0}

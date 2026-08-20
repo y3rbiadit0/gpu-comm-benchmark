@@ -47,6 +47,24 @@ namespace cg = cooperative_groups;
 
 namespace {
 
+// Blocks to move `elements`, given the cooperative-launch ceiling.
+//
+// One block per element wastes the grid on small messages: a 4 KiB payload
+// split across 216 blocks gives each block ~19 bytes to move and pays a full
+// grid.sync() to coordinate it. Measured cost of getting this wrong on
+// pingpong 1n2g: 4 KiB latency 3.4 us -> 17.9 us. Give every block a useful
+// chunk instead, so small messages collapse to a single block (the low-latency
+// path) and only large ones spread out to chase bandwidth.
+constexpr std::size_t min_elements_per_block = 4096;  // 16 KiB of float
+
+std::size_t blocks_for(std::size_t elements, std::size_t max_grid) {
+  if (elements == 0U || max_grid == 0U) {
+    return 1U;
+  }
+  const std::size_t wanted = (elements + min_elements_per_block - 1U) / min_elements_per_block;
+  return wanted < 1U ? 1U : (wanted > max_grid ? max_grid : wanted);
+}
+
 constexpr int sig_left = 0;   // raised by my left neighbour when my left halo is ready
 constexpr int sig_right = 1;  // raised by my right neighbour when my right halo is ready
 
@@ -236,11 +254,7 @@ int main(int argc, char** argv) {
       float* recv_left = interior - halo;
       float* recv_right = interior + n_local;
 
-      // Use up to one block per element, capped by the cooperative ceiling.
-      std::size_t nblocks = halo < max_grid ? halo : max_grid;
-      if (nblocks == 0U) {
-        nblocks = 1U;
-      }
+      const std::size_t nblocks = blocks_for(halo, max_grid);
       std::size_t chunk = (halo + nblocks - 1U) / nblocks;
       if (chunk == 0U) {
         chunk = 1U;

@@ -87,15 +87,23 @@ int main(int argc, char** argv) {
 
       shmem_barrier_all();
       const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
+        // CUDA-space RMA may enqueue device work that outlives shmem_quiet, so
+        // each leg is closed with a device sync before the barrier that hands
+        // the turn over -- the same completion halo_1d.cu uses. Without it the
+        // copy overlaps the barriers and the following iteration's ping, which
+        // is not a ping-pong at all: the round trip stops being a round trip
+        // and halving it reports a one-way bandwidth above the link's ceiling.
         if (pe == 0) {
           shmem_putmem(device_recv, device_send, bytes, peer);  // ping -> peer
           shmem_quiet();
+          check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(ping)");
           shmem_barrier_all();  // peer now holds the ping
           shmem_barrier_all();  // wait for the peer's pong to complete
         } else {
           shmem_barrier_all();  // ping has arrived
           shmem_putmem(device_recv, device_recv, bytes, peer);  // pong -> peer
           shmem_quiet();
+          check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(pong)");
           shmem_barrier_all();  // initiator now holds the pong
         }
       });

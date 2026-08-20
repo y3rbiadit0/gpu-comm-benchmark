@@ -131,7 +131,11 @@ int main(int argc, char** argv) {
             shmem_putmem(target, source, block_bytes, destination);
           }
         }
+        // CUDA-space RMA may enqueue device work that outlives shmem_quiet;
+        // close it before the barrier so the timed region covers a completed
+        // exchange, as halo_1d.cu does.
         shmem_quiet();
+        check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(dispatch)");
         shmem_barrier_all();
 
         for (int source_pe = 0; source_pe < pes; ++source_pe) {
@@ -151,7 +155,11 @@ int main(int argc, char** argv) {
             shmem_putmem(target, source, block_bytes, source_pe);
           }
         }
+        // CUDA-space RMA may enqueue device work that outlives shmem_quiet;
+        // close it before the barrier so the timed region covers a completed
+        // exchange, as halo_1d.cu does.
         shmem_quiet();
+        check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(combine)");
         shmem_barrier_all();
       });
       const auto global = gpu_bench::collective_stats(stats, sample_gather, pe, pes);

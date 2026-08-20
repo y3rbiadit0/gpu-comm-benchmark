@@ -88,7 +88,11 @@ int main(int argc, char** argv) {
           shmem_putmem(dest, src, block_bytes, dst);
         }
       }
+      // CUDA-space RMA may enqueue device work that outlives shmem_quiet; close
+      // it before the barrier so the timed region covers a completed exchange,
+      // as halo_1d.cu does. The self-copy above is on the same device queue.
       shmem_quiet();
+      check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(alltoall)");
       shmem_barrier_all();
     });
     const auto global = gpu_bench::collective_stats(stats, sample_gather, pe, pes);
