@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "stats/collective.hpp"
+#include "stats/summary.hpp"
 #include "timing.hpp"
 
 namespace {

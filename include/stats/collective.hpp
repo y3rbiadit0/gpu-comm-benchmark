@@ -4,7 +4,7 @@
 #include <utility>
 #include <vector>
 
-#include "timing.hpp"
+#include "stats/summary.hpp"
 
 namespace gpu_bench {
 
