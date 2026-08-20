@@ -15,7 +15,7 @@
 #include "stats/collective_mpi.hpp"
 #include "partition.hpp"
 #include "report.hpp"
-#include "stencil2d.hpp"
+#include "benchmarks/cg_step.hpp"
 #include "timing.hpp"
 #include "validation.hpp"
 
