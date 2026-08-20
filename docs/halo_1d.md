@@ -117,8 +117,11 @@ these numbers against a vendor's unidirectional figure.)
 The shared batch harness (`include/timing.hpp`) reports two cases for every
 `H`: `isolated` uses one exchange per batch, while `steady` uses `iterations`
 exchanges per batch. A timed sample is the completed batch duration divided by
-its exchange count. Each case records `GPU_BENCH_BATCH_SAMPLES` samples
-(default `10`), reduced across ranks sample by sample with MAX, so
+its exchange count. The `steady` case records `GPU_BENCH_BATCH_SAMPLES` samples
+(default `10`); the `isolated` case records `GPU_BENCH_ISOLATED_SAMPLES`
+(default `100`), since one exchange per sample averages nothing internally and
+the latency intercept is fitted from that series. Samples are
+reduced across ranks sample by sample with MAX, so
 `time_per_iter_s` remains the **average slowest-rank amortized exchange**.
 `min`/`max` and the quartiles describe that same reduced sample series. Only
 rank/PE 0 prints.
@@ -146,7 +149,7 @@ Two lines are printed per swept `H` (the standard `print_report` format, which
 ```
 cuda_nvshmem_halo_1d n=1024 ranks=4 bytes=16384 iters=1 warmup=20 \
   time_per_iter_s=4.2e-06 usec=4.2 gbytes_per_s=3.90 case=isolated \
-  timing=batch batch_iters=1 batch_samples=10 validation=PASS
+  timing=batch batch_iters=1 batch_samples=100 validation=PASS
 cuda_nvshmem_halo_1d n=1024 ranks=4 bytes=16384 iters=100 warmup=20 \
   time_per_iter_s=3.1e-06 usec=3.1 gbytes_per_s=5.28 case=steady \
   timing=batch batch_iters=100 batch_samples=10 validation=PASS
@@ -207,8 +210,13 @@ completes the OpenSHMEM operations, then `cudaDeviceSynchronize` closes
 CUDA-space work that OSHMPI may have enqueued. `shmem_barrier_all` confirms that
 every PE has reached the completion boundary. Point-to-point flag waits are not
 used because passive RMA can require target-side progress on inter-node paths.
-The timed loop therefore includes device synchronization and one global barrier
-per exchange. Per-PE timings are reduced to PE 0 through the symmetric heap
+Completion is per **batch**, not per exchange: within a batch every put is
+issued back-to-back and the quiet/sync/barrier trio runs once at the end. Each
+exchange writes the same bytes into the same slots, so the ring dependency only
+has to hold where the halos are read back and validated. The `isolated` case
+(one exchange per batch) is where that completion cost shows up undivided; the
+`steady` case can pipeline, as every other backend's does.
+Per-PE timings are reduced to PE 0 through the symmetric heap
 (there is no direct MPI use here). Launch with `oshrun`.
 
 ### sycl_oneccl — oneCCL point-to-point

@@ -60,6 +60,8 @@ int main(int argc, char** argv) {
     const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
     const auto halo_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_halo);
     const int batch_samples = gpu_bench::parse_positive_int_env("GPU_BENCH_BATCH_SAMPLES", 10);
+    const int isolated_samples =
+        gpu_bench::parse_positive_int_env("GPU_BENCH_ISOLATED_SAMPLES", 100);
     const auto batch_iteration_counts = gpu_bench::batch_iteration_counts(iterations);
 
     const int left = (rank - 1 + ranks) % ranks;
@@ -105,9 +107,11 @@ int main(int argc, char** argv) {
       MPI_Send_init(send_left, count, MPI_FLOAT, left, 1, MPI_COMM_WORLD, &reqs[3]);
 
       for (const int batch_iters : batch_iteration_counts) {
+        const int samples =
+            gpu_bench::batch_samples_for(batch_iters, batch_samples, isolated_samples);
         int local_ok = 1;
         const auto stats = gpu_bench::run_batched_benchmark(
-            warmup, batch_iters, batch_samples,
+            warmup, batch_iters, samples,
             [&]() {
               queue.fill(recv_left, 0.0F, halo).wait();
               queue.fill(recv_right, 0.0F, halo).wait();
@@ -154,7 +158,7 @@ int main(int argc, char** argv) {
           report.valid = global_ok != 0;
           report.extra = "case=" + case_name + " timing=batch batch_iters=" +
                          std::to_string(batch_iters) + " batch_samples=" +
-                         std::to_string(batch_samples) +
+                         std::to_string(samples) +
                          " submission=host-persistent completion=waitall halo_elems=" +
                          std::to_string(halo) + " topology=ring bw=sendrecv device=\"" +
                          queue.get_device().get_info<sycl::info::device::name>() + "\"";

@@ -44,6 +44,26 @@ bench_stats run_benchmark(int warmup_iterations, int timed_iterations, Body&& bo
   return summarize(std::move(samples));
 }
 
+/* Samples to record for one batch case.
+ *
+ * The two cases need different sample counts to carry comparable confidence.
+ * A `steady` sample already averages `batch_iters` operations inside itself, so
+ * ten of them is a tight estimate. An `isolated` sample is one exchange: the
+ * barrier-exit skew that `before_batch` leaves behind, and any one-off jitter,
+ * land in it undiluted. Ten such samples is far too thin a series to fit the
+ * latency intercept from - and the intercept is the number the crossover
+ * analysis rests on.
+ *
+ * Rather than equalize total work (which would mean thousands of validated
+ * single-exchange batches, each paying a device-to-host halo copy), give the
+ * isolated case a larger fixed count and leave the steady case as it was. */
+inline int batch_samples_for(int batch_iterations, int steady_samples, int isolated_samples) {
+  if (steady_samples <= 0 || isolated_samples <= 0) {
+    throw std::invalid_argument("batch sample counts must be positive");
+  }
+  return batch_iterations == 1 ? isolated_samples : steady_samples;
+}
+
 inline std::vector<int> batch_iteration_counts(int steady_iterations) {
   if (steady_iterations <= 0) {
     throw std::invalid_argument("steady iteration count must be positive");

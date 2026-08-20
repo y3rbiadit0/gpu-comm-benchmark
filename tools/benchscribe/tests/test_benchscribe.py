@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import sys
 import tempfile
 import unittest
@@ -15,7 +16,13 @@ sys.path.insert(0, str(BENCHSCRIBE_DIR))
 from characterize import characterize
 from cli import main
 from model import GroupKey, MetricName, Status
-from render import render_csv, render_fit_csv, render_fit_markdown, render_markdown
+from render import (
+    render_csv,
+    render_fit_csv,
+    render_fit_json,
+    render_fit_markdown,
+    render_markdown,
+)
 from scan import parse_report_line, scan_results
 from summary import SummaryTable
 
@@ -224,6 +231,35 @@ class BenchscribeTest(unittest.TestCase):
         self.assertIn("## moe", stdout.getvalue())
         self.assertNotIn("## allreduce", stdout.getvalue())
         self.assertEqual(stderr.getvalue(), "")
+
+
+    def test_fit_json_is_versioned_and_carries_every_characterization(self):
+        measurements = self.scan_lines(
+            "cuda_mpi_halo_1d n=16 case=steady usec=5 bytes=256 gbytes_per_s=0.05 validation=PASS status=OK",
+            "cuda_mpi_halo_1d n=65536 case=steady usec=50 bytes=1048576 gbytes_per_s=21 validation=PASS status=OK",
+            "cuda_nccl_halo_1d n=16 case=steady usec=9 bytes=256 gbytes_per_s=0.03 validation=PASS status=OK",
+            "cuda_nccl_halo_1d n=65536 case=steady usec=45 bytes=1048576 gbytes_per_s=23 validation=PASS status=OK",
+        )
+        characterizations = characterize(SummaryTable.from_measurements(measurements))
+
+        stream = io.StringIO()
+        render_fit_json(characterizations, stream)
+        payload = json.loads(stream.getvalue())
+
+        self.assertEqual(payload["schema_version"], 1)
+        self.assertEqual(payload["alpha_max_bytes"], 4 * 1024)
+        self.assertEqual(len(payload["fits"]), len(characterizations))
+
+        by_backend = {fit["backend"]: fit for fit in payload["fits"]}
+        self.assertEqual(set(by_backend), {"cuda_mpi", "cuda_nccl"})
+        # The plotter reads these keys by name; a rename is a schema break.
+        self.assertLessEqual(
+            {"benchmark", "case", "topology", "backend", "unit", "alpha",
+             "binf_gbs", "peak_bytes", "nhalf_bytes", "tail_gbs", "points"},
+            set(by_backend["cuda_mpi"]),
+        )
+        self.assertEqual(by_backend["cuda_mpi"]["alpha"], 5.0)
+        self.assertEqual(by_backend["cuda_nccl"]["binf_gbs"], 23.0)
 
 
 if __name__ == "__main__":

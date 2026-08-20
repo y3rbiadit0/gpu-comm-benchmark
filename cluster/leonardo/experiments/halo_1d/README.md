@@ -42,8 +42,10 @@ GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/c
 
 Backend directories are `cuda_mpi`, `cuda_nccl`, `cuda_nvshmem`, `oshmpi`,
 `sycl_mpi`, and `sycl_oneccl`. oneCCL scripts use `mpirun`; all other launchers
-use the shared default launcher. Set `GPU_BENCH_BATCH_SAMPLES` to change the
-number of completed batches measured per case (default `10`).
+use the shared default launcher. `GPU_BENCH_BATCH_SAMPLES` sets the number of
+completed batches measured for the `steady` case (default `10`) and
+`GPU_BENCH_ISOLATED_SAMPLES` for the `isolated` case (default `100`, since each
+of its samples is a single exchange).
 
 Outputs are written to:
 

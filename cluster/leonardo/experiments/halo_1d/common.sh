@@ -11,6 +11,9 @@ gpu_bench_experiment_defaults() {
   GPU_BENCH_ITERS=${GPU_BENCH_ITERS:-100}
   GPU_BENCH_WARMUP=${GPU_BENCH_WARMUP:-20}
   export GPU_BENCH_BATCH_SAMPLES=${GPU_BENCH_BATCH_SAMPLES:-10}
+  # The isolated case averages nothing inside a sample, so it needs a longer
+  # series than the steady case to pin down the latency intercept.
+  export GPU_BENCH_ISOLATED_SAMPLES=${GPU_BENCH_ISOLATED_SAMPLES:-100}
   # halo_1d binaries accept: <max_halo_elems> [iterations] [warmup] [halo_sizes]
   GPU_BENCH_EXTRA_ARGS=${GPU_BENCH_EXTRA_ARGS:-"$GPU_BENCH_ITERS $GPU_BENCH_WARMUP"}
   if [[ -n "${GPU_BENCH_MSG_SIZES:-}" ]]; then
@@ -20,7 +23,8 @@ gpu_bench_experiment_defaults() {
 
 gpu_bench_experiment_extra_summary() {
   echo "message sizes: ${GPU_BENCH_MSG_SIZES:-powers-of-two}"
-  echo "batch samples: $GPU_BENCH_BATCH_SAMPLES"
+  echo "batch samples (steady): $GPU_BENCH_BATCH_SAMPLES"
+  echo "batch samples (isolated): $GPU_BENCH_ISOLATED_SAMPLES"
 }
 
 gpu_bench_halo_1d_main() { gpu_bench_experiment_main; }

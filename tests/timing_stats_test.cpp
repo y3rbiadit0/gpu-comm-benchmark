@@ -89,11 +89,29 @@ void test_batched_timing_amortizes_completed_operations() {
           "batched benchmark recorded a non-positive amortized time");
 }
 
+void test_isolated_case_gets_its_own_sample_count() {
+  require(gpu_bench::batch_samples_for(1, 10, 100) == 100,
+          "an isolated batch did not take the isolated sample count");
+  require(gpu_bench::batch_samples_for(100, 10, 100) == 10,
+          "a steady batch did not take the steady sample count");
+  require(gpu_bench::batch_samples_for(2, 10, 100) == 10,
+          "a two-operation batch is not a steady batch");
+
+  bool rejected = false;
+  try {
+    gpu_bench::batch_samples_for(1, 0, 100);
+  } catch (const std::invalid_argument&) {
+    rejected = true;
+  }
+  require(rejected, "batch_samples_for accepted a non-positive sample count");
+}
+
 }  // namespace
 
 int main() {
   test_average_of_iteration_maxima();
   test_wall_timing_samples_completed_bodies();
   test_batched_timing_amortizes_completed_operations();
+  test_isolated_case_gets_its_own_sample_count();
   return 0;
 }

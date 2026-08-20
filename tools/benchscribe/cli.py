@@ -6,7 +6,14 @@ from pathlib import Path
 
 from characterize import characterize
 from model import MetricName, OutputFormat
-from render import render_csv, render_fit_csv, render_fit_markdown, render_json, render_markdown
+from render import (
+    render_csv,
+    render_fit_csv,
+    render_fit_json,
+    render_fit_markdown,
+    render_json,
+    render_markdown,
+)
 from scan import scan_results
 from summary import SummaryTable
 
@@ -51,7 +58,9 @@ def main(argv: list[str] | None = None) -> int:
     table = SummaryTable.from_measurements(measurements, metric_override=metric_override)
     if args.fit:
         chars = characterize(table)
-        if args.format == OutputFormat.CSV.value:
+        if args.format == OutputFormat.JSON.value:
+            render_fit_json(chars, sys.stdout)
+        elif args.format == OutputFormat.CSV.value:
             render_fit_csv(chars, sys.stdout)
         else:
             render_fit_markdown(chars, sys.stdout)

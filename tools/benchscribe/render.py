@@ -6,7 +6,7 @@ from dataclasses import asdict
 import datetime as dt
 from typing import TextIO
 
-from characterize import Characterization
+from characterize import ALPHA_MAX_BYTES, Characterization
 from model import Status, SummaryRow
 from summary import SummaryTable
 
@@ -147,6 +147,26 @@ def render_fit_csv(chars: list[Characterization], out: TextIO) -> None:
                 char.points,
             ]
         )
+
+
+def render_fit_json(chars: list[Characterization], out: TextIO) -> None:
+    """Machine-readable α-β characterization, for the plotting tools.
+
+    Same numbers as render_fit_csv, but typed and versioned so a figure script
+    does not have to re-parse CSV or re-implement the fit. `schema_version` is
+    the contract - bump it on any incompatible change.
+    """
+    json.dump(
+        {
+            "schema_version": 1,
+            "generated": dt.datetime.now().isoformat(timespec="seconds"),
+            "alpha_max_bytes": ALPHA_MAX_BYTES,
+            "fits": [asdict(char) for char in chars],
+        },
+        out,
+        indent=2,
+    )
+    out.write("\n")
 
 
 def render_json(table: SummaryTable, out: TextIO) -> None:

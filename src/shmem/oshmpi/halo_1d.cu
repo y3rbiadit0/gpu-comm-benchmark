@@ -28,8 +28,10 @@
 // with shmem_barrier_all. Point-to-point waits (shmem_*_wait_until on a spin flag)
 // can deadlock inter-node when passive RMA needs target-side progress, so we use a
 // barrier handshake (a collective that always makes progress), as the other OSHMPI
-// binaries do. The timed loop therefore reflects neighbour latency plus device
-// completion and barrier overhead.
+// binaries do. Completion is per batch, not per exchange, so the timed loop
+// reflects neighbour latency plus one device completion and one barrier per
+// batch - the `isolated` case (one exchange per batch) is where that overhead
+// shows up undivided.
 //
 // Symmetric device buffer (via the OSHMPI CUDA memory space), identical layout
 // on every PE:
@@ -75,7 +77,11 @@ int main(int argc, char** argv) {
     const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
     const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
     const auto halo_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_halo);
-    const auto batch_samples = gpu_bench::parse_positive_int_env("GPU_BENCH_BATCH_SAMPLES", 10);
+    const int batch_samples = gpu_bench::parse_positive_int_env("GPU_BENCH_BATCH_SAMPLES", 10);
+    const int isolated_samples =
+        gpu_bench::parse_positive_int_env("GPU_BENCH_ISOLATED_SAMPLES", 100);
+    // One symmetric gather buffer serves both cases, so size it for the larger.
+    const int max_samples = std::max(batch_samples, isolated_samples);
 
     const int left = (pe - 1 + pes) % pes;
     const int right = (pe + 1) % pes;
@@ -105,7 +111,7 @@ int main(int argc, char** argv) {
       throw std::runtime_error("failed to allocate OSHMPI CUDA symmetric memory");
     }
     auto* sample_gather = static_cast<double*>(
-        shmem_malloc(gpu_bench::collective_gather_elements(pes, batch_samples) * sizeof(double)));
+        shmem_malloc(gpu_bench::collective_gather_elements(pes, max_samples) * sizeof(double)));
     auto* oks = static_cast<int*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(int)));
     if (sample_gather == nullptr || oks == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI symmetric scratch");
@@ -134,10 +140,12 @@ int main(int argc, char** argv) {
       const std::size_t halo_bytes = halo * sizeof(float);
 
       for (const int batch_iters : gpu_bench::batch_iteration_counts(iterations)) {
+        const int samples =
+            gpu_bench::batch_samples_for(batch_iters, batch_samples, isolated_samples);
         const char* case_name = batch_iters == 1 ? "isolated" : "steady";
         int local_ok = 1;
         const auto stats = gpu_bench::run_batched_benchmark(
-            warmup, batch_iters, batch_samples,
+            warmup, batch_iters, samples,
             [&]() {
               check_cuda(cudaMemset(recv_left, 0xA5, halo_bytes), "cudaMemset(recv_left)");
               check_cuda(cudaMemset(recv_right, 0xA5, halo_bytes), "cudaMemset(recv_right)");
@@ -145,15 +153,24 @@ int main(int argc, char** argv) {
               shmem_barrier_all();
             },
             [&](int count) {
+              // Every exchange in a batch moves the same bytes into the same
+              // slots, so the puts may all be in flight at once: the ring
+              // dependency only has to hold at the batch boundary, where the
+              // halos are read back and validated. Completing each exchange
+              // individually - quiet, device sync and a global barrier per put
+              // pair - is exactly what the `isolated` case (count == 1)
+              // measures. Doing it here as well would leave OSHMPI the only
+              // backend whose `steady` case cannot pipeline, and its bandwidth
+              // column would then report barrier cost rather than transport.
               for (int i = 0; i < count; ++i) {
-                // CUDA-space RMA may enqueue device work that outlives
-                // shmem_quiet. Close that work before the barrier and timer end.
                 shmem_putmem_nbi(recv_left, send_right, halo_bytes, right);
                 shmem_putmem_nbi(recv_right, send_left, halo_bytes, left);
-                shmem_quiet();
-                check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(halo exchange)");
-                shmem_barrier_all();
               }
+              // CUDA-space RMA may enqueue device work that outlives
+              // shmem_quiet. Close that work before the barrier and timer end.
+              shmem_quiet();
+              check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(halo batch)");
+              shmem_barrier_all();
             },
             [&]() {
               host_left.assign(halo, 0.0F);
@@ -207,7 +224,7 @@ int main(int argc, char** argv) {
           report.valid = global_ok != 0;
           report.extra = "case=" + std::string(case_name) + " timing=batch batch_iters=" +
                          std::to_string(batch_iters) + " batch_samples=" +
-                         std::to_string(batch_samples) +
+                         std::to_string(samples) +
                           " submission=host-rma completion=quiet-device-sync-barrier halo_elems=" +
                          std::to_string(halo) + " topology=ring bw=sendrecv sync=barrier";
           gpu_bench::print_report(report);

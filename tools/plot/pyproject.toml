@@ -1,0 +1,40 @@
+[project]
+name = "gpu-bench-plot"
+version = "0.1.0"
+description = "Figures for gpu-comm-bench results, drawn from Benchscribe JSON"
+readme = "README.md"
+authors = [
+    { name = "Franco N. Merenda", email = "merenda.franco83@gmail.com" },
+]
+requires-python = ">=3.10"
+
+# matplotlib 3.7 is the floor: the figure legends rely on the "outside *" loc
+# values, which constrained_layout only honours from 3.6, and 3.7 is the first
+# release where they behave with `sharey="col"`.
+dependencies = [
+    "matplotlib>=3.7",
+]
+
+[project.scripts]
+gpu-bench-plot = "gpu_bench_plot.cli:main"
+gpu-bench-plot-sample = "gpu_bench_plot.sample_data:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.3,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

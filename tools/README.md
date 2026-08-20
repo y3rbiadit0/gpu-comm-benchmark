@@ -76,3 +76,66 @@ the model and how to read the result.
   `--metric gbytes_per_s` when you want to force a specific comparison metric.
 
 Only stdlib is required (Python 3.10+). No build step.
+
+### JSON output
+
+`--format json` carries more than the Markdown and CSV views, which collapse
+each point to one number. It keeps `runs[]` (each job's within-run iteration
+distribution — for box plots) and `across_runs` (spread across independent jobs
+— for error bands). `--fit --format json` does the same for the α–β numbers.
+Both files carry a `schema_version`; that is the contract `tools/plot` reads
+against, so bump it on any incompatible change.
+
+## `plot_bench`
+
+Draws the figures for the results, straight from Benchscribe JSON. It never
+re-parses Slurm output and never re-implements the fit — Benchscribe owns both.
+
+Unlike Benchscribe, this one needs matplotlib, so it is a self-contained `uv`
+project (`tools/plot`) with its dependencies declared and locked in its own
+`pyproject.toml`/`uv.lock`. Benchscribe stays stdlib-only.
+
+```bash
+python3 tools/benchscribe results --format json       > points.json
+python3 tools/benchscribe results --fit --format json > fit.json
+
+uv run --project tools/plot gpu-bench-plot \
+    --points points.json --fit fit.json \
+    --benchmark halo_1d --figure all --outdir docs/analysis/figures
+```
+
+`--project tools/plot` leaves the working directory alone, so the paths above
+stay relative to the repository root.
+
+| Figure | What it shows |
+| --- | --- |
+| `sweep` | per-exchange time vs message size, log-log, panel per case × topology |
+| `bandwidth` | bus GB/s vs message size, same panel grid |
+| `fit` | α, B∞ and n½ as grouped bars, one panel per measure (needs `--fit`) |
+| `heatmap` | speedup vs the `cuda_mpi` baseline, backend × message size |
+| `dist` | per-job timing distributions at one message size, as box plots (`--size`) |
+
+`--figure` picks one of those or `all`; `--theme light|dark` and
+`--format svg|png|pdf` control output; `--size` chooses the message size the
+`dist` figure shows.
+
+The `dist` box plots separate the two dispersions Benchscribe tracks: box height
+is within-run spread, while the offset between a backend's boxes is spread across
+independent jobs — the one that actually speaks to reproducibility.
+
+Every figure writes a companion `.csv` beside it, and colours are fixed per
+backend so a hue means the same backend in every figure. Both are contracts, not
+conveniences — [`tools/plot/README.md`](plot/README.md) explains why, along with
+the rest of the design rules and the schema handshake with Benchscribe.
+
+### Trying it without a cluster
+
+`gpu-bench-plot-sample` writes a synthetic `results/` tree from an α–β model so
+the whole pipeline can be exercised offline. Its output is **not measured
+data** — never cite or commit it.
+
+```bash
+uv run --project tools/plot gpu-bench-plot-sample /tmp/demo-results
+python3 tools/benchscribe /tmp/demo-results --format json > /tmp/points.json
+uv run --project tools/plot gpu-bench-plot --points /tmp/points.json --outdir /tmp/figures
+```

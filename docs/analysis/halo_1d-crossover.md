@@ -17,7 +17,7 @@ Nsight Systems timelines instead of just wall-clock numbers.
 Each backend runs the same kernel: a **periodic ring** where rank `r` exchanges a
 halo of width `H` with `left=(r-1+P)%P` and `right=(r+1)%P`, using GPU-resident
 buffers. Synchronisation in the timed loop is point-to-point for the MPI, NCCL,
-oneCCL, and NVSHMEM implementations; OSHMPI instead completes each exchange with
+oneCCL, and NVSHMEM implementations; OSHMPI instead completes each **batch** with
 `shmem_quiet`, CUDA device synchronization, and a global `shmem_barrier_all`.
 `H` is swept; for each
 `H` the harness reduces the per-iteration times across ranks with MAX and
@@ -68,10 +68,19 @@ n½ = α · B∞          (m at which you reach 50% of B∞)
 small, frequent halos that real stencil codes send*. Two backends can share the
 same `B∞` and still differ by 10× at `H = 16` purely because of `α`.
 
-**How to get α and B∞ from the data:** linear-fit `time_per_iter_s` against
-`m = 16·H` across the sweep. Intercept = `α`, `1/slope = B∞`. Do it per
-`(backend, topology)`. (`tools/benchscribe` gives the per-H rows; the fit is a
-two-line least-squares — add it there if you want it automated.)
+**How to get α and B∞ from the data:** linear-fit against `m = 16·H` across the
+sweep. Intercept = `α`, `1/slope = B∞`. Do it per `(backend, topology)`.
+(`tools/benchscribe` gives the per-H rows; the fit is a two-line least-squares —
+add it there if you want it automated.)
+
+Fit **`min_usec`, not `usec`**, for the `isolated` case. Each isolated sample is
+one exchange preceded by a barrier, and barrier-exit skew is strictly additive:
+it inflates the mean but leaves the floor alone. The skew is also
+backend-dependent (`MPI_Barrier` vs `nvshmem_barrier_all` vs
+`shmem_barrier_all`), so fitting `usec` compares three barrier implementations
+as much as three transports. `min_usec` is the minimum of the same MAX-reduced
+series, which is the cleanest available estimator of the latency floor. Use
+`usec` for the `steady` case, where the batch already amortizes the skew.
 
 ## 3. Hardware ceilings to anchor B∞ (confirm on node)
 
@@ -92,7 +101,7 @@ while NCCL hit 30%."
 | Backend | Mechanism | Predicted α | Predicted B∞ | Where it wins |
 | --- | --- | --- | --- | --- |
 | `cuda_nvshmem` | persistent cooperative multi-block puts, in-kernel signal wait | **lowest steady-state** — no host or MPI match per exchange | high intra-node; proxy-limited inter-node without IBGDA | small H and large intra-node halos |
-| `oshmpi` | host one-sided NBI puts + `quiet` + CUDA sync + global barrier | low–moderate | moderate | small H, when device-kernel issue isn't available |
+| `oshmpi` | host one-sided NBI puts, `quiet` + CUDA sync + global barrier once per batch | low–moderate | moderate | small H, when device-kernel issue isn't available |
 | `cuda_mpi` | CUDA-aware `Isend`/`Irecv`/`Waitall` | moderate (host + UCX) | good | the baseline; large H |
 | `sycl_mpi` | SYCL-aware `Isend`/`Irecv` | ≈ `cuda_mpi` | ≈ `cuda_mpi` | sanity check vs `cuda_mpi` |
 | `cuda_nccl` | grouped `ncclSend`/`ncclRecv` | **high** — kernel launch + proxy thread per exchange | high once amortised | only large H |

@@ -153,9 +153,11 @@ different window (it waits for the ping before replying), so the initiator's
 round trip is the measurement by definition.
 
 Each `halo_1d` binary emits `case=isolated` with `batch_iters=1` and
-`case=steady` with `batch_iters=<iterations>`. Both cases contain
-`GPU_BENCH_BATCH_SAMPLES` completed-batch samples (default `10`) and are grouped
-separately by Benchscribe.
+`case=steady` with `batch_iters=<iterations>`. The `steady` case records
+`GPU_BENCH_BATCH_SAMPLES` completed-batch samples (default `10`); the `isolated`
+case records `GPU_BENCH_ISOLATED_SAMPLES` (default `100`), because each of its
+samples is a single exchange and averages nothing internally. Every line carries
+its own `batch_samples=`. The two cases are grouped separately by Benchscribe.
 
 MoE emits one line per routing `case`; an unsupported oneCCL point-to-point capability is
 reported as `NOT_IMPLEMENTED`/`SKIP` rather than as a timing failure.
@@ -173,6 +175,17 @@ prints a comparison table where every backend is normalized to the `cuda_mpi` ba
 python3 tools/benchscribe                       # Markdown, all benchmarks
 python3 tools/benchscribe --benchmark allreduce
 python3 tools/benchscribe --format csv > summary.csv
+```
+
+Figures are drawn from that JSON by [`tools/plot`](tools/plot/README.md), a
+separate `uv` project so matplotlib stays out of Benchscribe — message-size
+sweeps, bandwidth curves, the α/B∞/n½ bars, and a speedup heatmap:
+
+```bash
+python3 tools/benchscribe --format json       > points.json
+python3 tools/benchscribe --fit --format json > fit.json
+uv run --project tools/plot gpu-bench-plot --points points.json --fit fit.json \
+    --benchmark halo_1d --outdir docs/analysis/figures
 ```
 
 See [`tools/README.md`](tools/README.md) for details.
