@@ -16,23 +16,32 @@ export SYCL_DEVICE_FILTER=${SYCL_DEVICE_FILTER:-cuda}
 # reduce with the host `ompi_op` (ompi_op_avx_2buff_add_float_avx2), so Open MPI
 # has to stage device->host->device inside the collective.
 #
-# Measured on Leonardo, allreduce 1n4g, cuda_mpi (2026-08-20):
+# Measured on Leonardo, allreduce, cuda_mpi (2026-08-20). UCC on / UCC off:
 #
-#     message     UCC off      UCC on    speedup
-#      16 MiB   48655 us      351 us      138.7x
-#       4 MiB   11783 us      134 us       87.9x
-#     512 KiB     432 us       68 us        6.4x
-#      64 KiB      83 us       59 us        1.4x
-#       4 KiB      33 us       57 us        0.6x   <- UCC loses here
-#         64 B      24 us       37 us        0.7x   <- and here
+#     message        1n4g          2n4g
+#      16 MiB      138.7x         35.7x
+#       4 MiB       87.9x         27.0x
+#       1 MiB        9.7x          5.7x
+#     256 KiB        3.8x          2.7x
+#      64 KiB        1.4x          1.0x   <- crossover
+#      16 KiB        0.7x          0.4x   <- UCC loses below here
+#         4 B        0.6x          0.3x
 #
-# The crossover is around 32-64 KiB: UCC has a higher latency floor for small
-# messages and a bad step at 4-16 KiB, but everything from 64 KiB up is
-# transformative, and with it off the large-message curve *falls* with size,
-# which is a fallback, not a bandwidth curve. Since cuda_mpi is the suite's
-# baseline, running it crippled distorted every normalized number.
+# Two regimes, and the trade-off is sharper inter-node. Above ~64 KiB UCC is
+# transformative: without it the large-message curve *falls* with size (0.42
+# GB/s at 16 MiB on 2n4g), which is a host-staged fallback, not a bandwidth
+# curve. Below ~64 KiB UCC costs a higher latency floor - 3.1x at 4 B on 2n4g
+# (25.8 -> 78.6 us), 1.7x on 1n4g.
 #
-# Set OMPI_MCA_coll_ucc_enable=0 to reproduce the old behaviour.
+# On balance UCC is on: a broken large-message baseline distorted every
+# normalized number in the suite, and cuda_mpi is what everything is compared
+# against. Note this affects COLLECTIVES only - halo_1d and pingpong are
+# point-to-point and unchanged, so the latency-floor cost lands on allreduce,
+# alltoall, cg_step and moe.
+#
+# The crossover is itself a result worth reporting rather than a setting to
+# hide: sweeping OMPI_MCA_coll_ucc_enable=0/1 gives two alpha-beta curves for
+# the same transport. Set it to 0 to reproduce the old behaviour.
 export OMPI_MCA_coll_hcoll_enable=${OMPI_MCA_coll_hcoll_enable:-0}
 export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-1}
 export OMPI_MCA_btl=${OMPI_MCA_btl:-^openib}
