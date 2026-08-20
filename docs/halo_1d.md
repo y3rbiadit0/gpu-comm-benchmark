@@ -32,8 +32,9 @@ timing reflects the communication layer alone.
   staging.
 - **Backend-specific completion in the timed loop.** MPI, NCCL, oneCCL, and
   NVSHMEM use point-to-point completion. OSHMPI completes its two remote writes
-  with `shmem_quiet` followed by `shmem_barrier_all`; the barrier guarantees
-  progress for its passive RMA path, so OSHMPI timings include global barrier
+  with `shmem_quiet`, closes CUDA-space work with `cudaDeviceSynchronize`, then
+  calls `shmem_barrier_all`; the barrier guarantees progress for its passive RMA
+  path, so OSHMPI timings include device synchronization and global barrier
   overhead.
 
 ---
@@ -95,7 +96,8 @@ recv_right must equal  2*(right+1)       // right neighbor's left boundary
 
 This also verifies orientation (a left/right swap would be caught), and scales
 to thousands of ranks without the float losing exactness. The per-rank result
-is combined with an AND-reduction across ranks.
+is combined with an AND-reduction across ranks. Receive halos are poisoned
+before and validated after every measured batch, outside the timed interval.
 
 ### Bytes and bandwidth convention
 
@@ -112,18 +114,14 @@ these numbers against a vendor's unidirectional figure.)
 
 ### Timing
 
-The shared `run_benchmark` harness (`include/timing.hpp`) runs `warmup` untimed
-iterations, then `iterations` timed ones, each a fully-completed exchange, and
-keeps every per-iteration sample. For every `H` the samples are reduced across
-ranks iteration by iteration with MAX (`include/stats/collective.hpp`), and
-`time_per_iter_s` is the mean of that reduced series — the **average slowest
-rank per iteration**, not the slowest rank's average. `min`/`max` and the
-quartiles bracket the same reduced series. Only rank/PE 0 prints.
-
-The separately named `cuda_nvshmem_halo_1d_optimized` variant is not part of
-that directly comparable six-backend series. Its iterations execute inside one
-persistent kernel, so it can report only `MAX(AVG)` of the amortized PE times;
-its output is marked `variant=persistent-multiblock`.
+The shared batch harness (`include/timing.hpp`) reports two cases for every
+`H`: `isolated` uses one exchange per batch, while `steady` uses `iterations`
+exchanges per batch. A timed sample is the completed batch duration divided by
+its exchange count. Each case records `GPU_BENCH_BATCH_SAMPLES` samples
+(default `10`), reduced across ranks sample by sample with MAX, so
+`time_per_iter_s` remains the **average slowest-rank amortized exchange**.
+`min`/`max` and the quartiles describe that same reduced sample series. Only
+rank/PE 0 prints.
 
 ---
 
@@ -138,17 +136,20 @@ All six binaries share one interface:
 | Arg | Meaning | Default |
 | --- | --- | --- |
 | `max_halo_elems` | largest halo width; sizes the allocation | `1048576` (1 Mi elems = 4 MiB) |
-| `iterations` | timed iterations per halo width | `100` |
+| `iterations` | exchanges per steady-state batch | `100` |
 | `warmup` | untimed iterations per halo width | `20` |
 | `halo sizes` | explicit comma-separated sweep | powers of two up to `max_halo_elems` |
 
-One line is printed per swept `H` (the standard `print_report` format, which
+Two lines are printed per swept `H` (the standard `print_report` format, which
 `tools/benchscribe` parses):
 
 ```
+cuda_nvshmem_halo_1d n=1024 ranks=4 bytes=16384 iters=1 warmup=20 \
+  time_per_iter_s=4.2e-06 usec=4.2 gbytes_per_s=3.90 case=isolated \
+  timing=batch batch_iters=1 batch_samples=10 validation=PASS
 cuda_nvshmem_halo_1d n=1024 ranks=4 bytes=16384 iters=100 warmup=20 \
-  time_per_iter_s=3.1e-06 usec=3.1 min_usec=2.9 max_usec=3.4 gbytes_per_s=5.28 \
-  halo_elems=1024 topology=ring bw=sendrecv sync=signal validation=PASS
+  time_per_iter_s=3.1e-06 usec=3.1 gbytes_per_s=5.28 case=steady \
+  timing=batch batch_iters=100 batch_samples=10 validation=PASS
 ```
 
 `n` is the halo width `H`; `bytes` is `4*H*sizeof(float)`; the `extra` tail
@@ -165,62 +166,57 @@ the whole point.
 
 | Target | Source | Transport / sync | Init |
 | --- | --- | --- | --- |
-| `cuda_mpi_halo_1d` | `src/mpi/cuda/halo_1d.cu` | CUDA-aware `MPI_Isend`/`MPI_Irecv` + `MPI_Waitall` | host two-sided |
+| `cuda_mpi_halo_1d` | `src/mpi/cuda/halo_1d.cu` | Persistent CUDA-aware MPI requests | host two-sided |
 | `cuda_nccl_halo_1d` | `src/xccl/cuda/halo_1d.cu` | grouped `ncclSend`/`ncclRecv` on a stream | host two-sided |
-| `cuda_nvshmem_halo_1d` | `src/shmem/nvshmem/halo_1d.cu` | `nvshmemx_float_put_signal_nbi_block` + `nvshmem_signal_wait_until` | **device** one-sided |
-| `oshmpi_halo_1d` | `src/shmem/oshmpi/halo_1d.cu` | `shmem_putmem` + `shmem_quiet` + `shmem_barrier_all` | host one-sided |
-| `sycl_mpi_halo_1d` | `src/mpi/sycl/halo_1d.cpp` | SYCL-aware `MPI_Isend`/`MPI_Irecv` + `MPI_Waitall` (USM) | host two-sided |
+| `cuda_nvshmem_halo_1d` | `src/shmem/nvshmem/halo_1d.cu` | Persistent cooperative multi-block puts + signals | **device** one-sided |
+| `oshmpi_halo_1d` | `src/shmem/oshmpi/halo_1d.cu` | NBI puts + `quiet` + CUDA sync + barrier | host one-sided |
+| `sycl_mpi_halo_1d` | `src/mpi/sycl/halo_1d.cpp` | Persistent SYCL-aware MPI requests (USM) | host two-sided |
 | `sycl_oneccl_halo_1d` | `src/xccl/sycl/halo_1d.cpp` | point-to-point `ccl::send`/`ccl::recv` (events) | host two-sided |
 
 ### cuda_mpi / sycl_mpi — two-sided MPI
 
-Post two `Irecv`s (left halo, right halo) and two `Isend`s (right boundary, left
-boundary), then `Waitall`. Tags separate rightward (`0`) from leftward (`1`)
-messages so the pairing is unambiguous even at `P = 2`. Pointers are device
-(CUDA) / USM (SYCL), so these test **CUDA-aware / SYCL-aware** MPI, not host
-staging. The two are line-for-line the same algorithm on different runtimes,
-which makes them the cleanest apples-to-apples pair.
+Create two persistent receives and two persistent sends for each halo width.
+Every exchange calls `MPI_Startall` and `MPI_Waitall`; requests are reused for
+warmup and both measured cases. Tags separate rightward (`0`) from leftward
+(`1`) messages even at `P = 2`. Pointers are device (CUDA) / USM (SYCL), so
+these test **CUDA-aware / SYCL-aware** MPI, not host staging.
 
 ### cuda_nccl — grouped point-to-point
 
 NCCL has no halo collective, so the exchange is modeled with
-`ncclGroupStart()` … two `ncclRecv` + two `ncclSend` … `ncclGroupEnd()` issued on
-a CUDA stream, then a `cudaStreamSynchronize`. NCCL matches send/recv per peer by
-posting order; the order here (recv-left, recv-right, send-right, send-left) is
-correct for `P ≥ 2` including the two-rank case. MPI is used only to broadcast
-the `ncclUniqueId` at startup and to reduce the timing result.
+`ncclGroupStart()` ... two `ncclRecv` + two `ncclSend` ... `ncclGroupEnd()` issued
+on a CUDA stream. A batch queues that group repeatedly, then calls
+`cudaStreamSynchronize` once. NCCL matches send/recv per peer by posting order.
+MPI is used only to bootstrap NCCL and reduce the timing result.
 
 ### cuda_nvshmem — device-initiated, signal sync
 
-The exchange runs **inside a kernel**: one block issues two
-`nvshmemx_float_put_signal_nbi_block` calls — each writes a boundary into the
-neighbor's halo *and* sets a remote signal in one operation — then the leader
-thread waits on its two incoming signals with `nvshmem_signal_wait_until`. The
-signal value is a monotonic counter, so the flags need no reset between
-iterations. There is **no `barrier_all` in the timed loop**: synchronization is
-purely neighbor-to-neighbor. This is the implementation that demonstrates GPU
-threads issuing communication directly, with no host round-trip per exchange.
-(The target is built with `CUDA_SEPARABLE_COMPILATION ON` for the device NVSHMEM
-calls.)
+Each batch runs inside one persistent cooperative kernel. Multiple blocks split
+the halo into chunks and issue cooperative NBI puts; after every active block
+completes its operations, block 0 publishes one signal in each direction and
+waits for the matching incoming signals. A grid synchronization carries the
+dependency into the next exchange. Signal values are monotonic and there is no
+global barrier inside the batch. The target uses separable CUDA compilation for
+device-side NVSHMEM calls.
 
 ### oshmpi — host-initiated one-sided, barrier completion
 
-Two `shmem_putmem`s write the boundaries into the neighbors' halos (on
+Two `shmem_putmem_nbi`s write the boundaries into the neighbors' halos (on
 device-symmetric memory from the OSHMPI CUDA memory space). `shmem_quiet`
-completes the outgoing puts before `shmem_barrier_all` confirms that every PE's
-incoming halos have arrived. Point-to-point flag waits are not used because
-passive RMA can require target-side progress on inter-node paths. The timed loop
-therefore includes one global barrier per exchange. Per-PE timings are reduced
-to PE 0 through the symmetric heap (there is no direct MPI use here). Launch
-with `oshrun`.
+completes the OpenSHMEM operations, then `cudaDeviceSynchronize` closes
+CUDA-space work that OSHMPI may have enqueued. `shmem_barrier_all` confirms that
+every PE has reached the completion boundary. Point-to-point flag waits are not
+used because passive RMA can require target-side progress on inter-node paths.
+The timed loop therefore includes device synchronization and one global barrier
+per exchange. Per-PE timings are reduced to PE 0 through the symmetric heap
+(there is no direct MPI use here). Launch with `oshrun`.
 
 ### sycl_oneccl — oneCCL point-to-point
 
 Models the ring with oneCCL `ccl::recv`/`ccl::send` (the natural analog of
 `ncclSend`/`ncclRecv`): group both receives and both sends with
-`ccl::group_start()`/`ccl::group_end()`, then wait on all four events. Grouping
-ensures every operation is enqueued before execution and avoids an in-order
-stream deadlock. **Caveat:**
+`ccl::group_start()`/`ccl::group_end()`. A batch queues every group before
+waiting on its events. Grouping avoids an in-order stream deadlock. **Caveat:**
 not every oneCCL build implements point-to-point send/recv (the UNISA
 NCCL-backed fork in particular); if they are missing this binary reports a
 backend error instead of results. See the

@@ -61,6 +61,8 @@ int main(int argc, char** argv) {
     const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
     const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
     const auto halo_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_halo);
+    const int batch_samples = gpu_bench::parse_positive_int_env("GPU_BENCH_BATCH_SAMPLES", 10);
+    const auto batch_counts = gpu_bench::batch_iteration_counts(iterations);
 
     const int left = (rank - 1 + ranks) % ranks;
     const int right = (rank + 1) % ranks;
@@ -107,6 +109,7 @@ int main(int argc, char** argv) {
 
     std::vector<float> host_left;
     std::vector<float> host_right;
+    int all_cases_ok = 1;
 
     for (const std::size_t halo : halo_sizes) {
       float* send_left = interior;
@@ -114,62 +117,82 @@ int main(int argc, char** argv) {
       float* recv_left = interior - halo;
       float* recv_right = interior + n_local;
 
-      MPI_Barrier(MPI_COMM_WORLD);
-      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
-        // Grouping prevents an in-order stream from blocking on the first
-        // unmatched receive before its matching sends have been enqueued.
-        gpu_bench::ccl_group_scope group;
-        auto er = ccl::recv(recv_left, halo, ccl::datatype::float32, left, comm, stream);
-        auto el = ccl::recv(recv_right, halo, ccl::datatype::float32, right, comm, stream);
-        auto sr = ccl::send(send_right, halo, ccl::datatype::float32, right, comm, stream);
-        auto sl = ccl::send(send_left, halo, ccl::datatype::float32, left, comm, stream);
-        group.end();
-        er.wait();
-        el.wait();
-        sr.wait();
-        sl.wait();
-      });
+      for (const int batch_iters : batch_counts) {
+        const char* case_name = batch_iters == 1 ? "isolated" : "steady";
+        int local_ok = 1;
+        const auto stats = gpu_bench::run_batched_benchmark(
+            warmup, batch_iters, batch_samples,
+            [&]() {
+              queue.fill(recv_left, 0.0F, halo);
+              queue.fill(recv_right, 0.0F, halo);
+              queue.wait_and_throw();
+              MPI_Barrier(MPI_COMM_WORLD);
+            },
+            [&](int exchange_count) {
+              std::vector<ccl::event> events;
+              events.reserve(static_cast<std::size_t>(exchange_count) * 4U);
+              for (int i = 0; i < exchange_count; ++i) {
+                // Grouping prevents an in-order stream from blocking on the first
+                // unmatched receive before its matching sends have been enqueued.
+                gpu_bench::ccl_group_scope group;
+                events.push_back(ccl::recv(recv_left, halo, ccl::datatype::float32, left, comm, stream));
+                events.push_back(ccl::recv(recv_right, halo, ccl::datatype::float32, right, comm, stream));
+                events.push_back(ccl::send(send_right, halo, ccl::datatype::float32, right, comm, stream));
+                events.push_back(ccl::send(send_left, halo, ccl::datatype::float32, left, comm, stream));
+                group.end();
+              }
+              for (auto& event : events) {
+                event.wait();
+              }
+              queue.wait_and_throw();
+            },
+            [&]() {
+              host_left.assign(halo, 0.0F);
+              host_right.assign(halo, 0.0F);
+              queue.copy(recv_left, host_left.data(), halo).wait();
+              queue.copy(recv_right, host_right.data(), halo).wait();
+              for (std::size_t i = 0; i < halo; ++i) {
+                if (!gpu_bench::nearly_equal(host_left[i], expect_left) ||
+                    !gpu_bench::nearly_equal(host_right[i], expect_right)) {
+                  local_ok = 0;
+                  break;
+                }
+              }
+            });
 
-      host_left.assign(halo, 0.0F);
-      host_right.assign(halo, 0.0F);
-      queue.copy(recv_left, host_left.data(), halo).wait();
-      queue.copy(recv_right, host_right.data(), halo).wait();
-      int local_ok = 1;
-      for (std::size_t i = 0; i < halo; ++i) {
-        if (!gpu_bench::nearly_equal(host_left[i], expect_left) ||
-            !gpu_bench::nearly_equal(host_right[i], expect_right)) {
-          local_ok = 0;
-          break;
+        int global_ok = 1;
+        MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
+        all_cases_ok = all_cases_ok && global_ok;
+        const auto global = gpu_bench::collective_stats(stats);
+
+        if (rank == 0) {
+          gpu_bench::bench_report report;
+          report.name = "sycl_oneccl_halo_1d";
+          report.n = halo;
+          report.ranks = ranks;
+          report.bytes_per_iter = 4U * halo * sizeof(float);
+          report.iterations = batch_iters;
+          report.warmup = warmup;
+          report.time_per_iter_s = global.avg_s;
+          report.min_s = global.min_s;
+          report.max_s = global.max_s;
+          gpu_bench::set_distribution(report, global);
+          report.valid = global_ok != 0;
+          report.extra = std::string("case=") + case_name + " timing=batch batch_iters=" +
+                         std::to_string(batch_iters) + " batch_samples=" +
+                         std::to_string(batch_samples) +
+                         " submission=host-stream completion=event-wait halo_elems=" +
+                         std::to_string(halo) + " topology=ring bw=sendrecv device=\"" +
+                         queue.get_device().get_info<sycl::info::device::name>() + "\"";
+          gpu_bench::print_report(report);
         }
-      }
-
-      int global_ok = 1;
-      MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
-      const auto global = gpu_bench::collective_stats(stats);
-
-      if (rank == 0) {
-        gpu_bench::bench_report report;
-        report.name = "sycl_oneccl_halo_1d";
-        report.n = halo;
-        report.ranks = ranks;
-        report.bytes_per_iter = 4U * halo * sizeof(float);
-        report.iterations = iterations;
-        report.warmup = warmup;
-        report.time_per_iter_s = global.avg_s;
-        report.min_s = global.min_s;
-        report.max_s = global.max_s;
-        gpu_bench::set_distribution(report, global);
-        report.valid = global_ok != 0;
-        report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv device=\"" +
-                       queue.get_device().get_info<sycl::info::device::name>() + "\"";
-        gpu_bench::print_report(report);
       }
     }
 
     sycl::free(buf, queue);
 
     MPI_Finalize();
-    return 0;
+    return all_cases_ok ? 0 : 1;
   } catch (const std::exception& error) {
     std::cerr << "rank " << rank << ": " << error.what() << '\n';
     MPI_Abort(MPI_COMM_WORLD, 1);

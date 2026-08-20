@@ -133,6 +133,18 @@ class BenchscribeTest(unittest.TestCase):
         self.assertIsNone(failed.speedup_vs_base)
         self.assertNotIn("oshmpi", {item.backend for item in characterize(table)})
 
+    def test_halo_batch_cases_remain_separate(self):
+        measurements = self.scan_lines(
+            "cuda_mpi_halo_1d n=8 case=isolated batch_iters=1 usec=5 validation=PASS status=OK",
+            "cuda_mpi_halo_1d n=8 case=steady batch_iters=100 usec=2 validation=PASS status=OK",
+        )
+
+        table = SummaryTable.from_measurements(measurements)
+
+        self.assertEqual({measurement.case for measurement in measurements}, {"isolated", "steady"})
+        self.assertEqual(table.rows_for("halo_1d", "1n2g", 8, "isolated")[0].value, 5.0)
+        self.assertEqual(table.rows_for("halo_1d", "1n2g", 8, "steady")[0].value, 2.0)
+
     def test_characterize_uses_small_message_median_for_alpha(self):
         measurements = self.scan_lines(
             "cuda_mpi_pingpong n=1 usec=15 bytes=4 gbytes_per_s=0.001 validation=PASS status=OK",

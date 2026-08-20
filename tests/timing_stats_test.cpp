@@ -69,10 +69,31 @@ void test_wall_timing_samples_completed_bodies() {
           "benchmark total does not match its raw samples");
 }
 
+void test_batched_timing_amortizes_completed_operations() {
+  int before_calls = 0;
+  int after_calls = 0;
+  int completed_operations = 0;
+  const auto stats = gpu_bench::run_batched_benchmark(
+      2, 3, 4, [&]() { ++before_calls; }, [&](int count) {
+        completed_operations += count;
+        std::this_thread::sleep_for(std::chrono::milliseconds(count));
+      }, [&]() { ++after_calls; });
+
+  require(before_calls == 5, "batch setup did not run before warmup and timed batches");
+  require(after_calls == 4, "batch validation did not run after every timed batch");
+  require(completed_operations == 14, "batched benchmark executed the wrong operation count");
+  require(stats.iterations == 4, "batched benchmark reported the wrong sample count");
+  require(stats.samples.size() == 4U, "batched benchmark did not retain every batch sample");
+  require(std::all_of(stats.samples.begin(), stats.samples.end(),
+                      [](double sample) { return sample > 0.0; }),
+          "batched benchmark recorded a non-positive amortized time");
+}
+
 }  // namespace
 
 int main() {
   test_average_of_iteration_maxima();
   test_wall_timing_samples_completed_bodies();
+  test_batched_timing_amortizes_completed_operations();
   return 0;
 }

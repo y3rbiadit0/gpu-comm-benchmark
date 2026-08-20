@@ -24,15 +24,6 @@ target_link_libraries(cuda_nvshmem_halo_1d PRIVATE
   ${NVSHMEM_DEVICE_LIBRARY}
 )
 
-add_executable(cuda_nvshmem_halo_1d_optimized halo_1d-optimized.cu)
-target_include_directories(cuda_nvshmem_halo_1d_optimized PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_halo_1d_optimized PRIVATE
-  gpu_bench_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
 add_executable(cuda_nvshmem_pingpong pingpong.cu)
 target_include_directories(cuda_nvshmem_pingpong PRIVATE ${NVSHMEM_INCLUDE_DIR})
 target_link_libraries(cuda_nvshmem_pingpong PRIVATE
@@ -99,9 +90,5 @@ set_target_properties(cuda_nvshmem_pingpong PROPERTIES
 )
 
 set_target_properties(cuda_nvshmem_halo_1d PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
-
-set_target_properties(cuda_nvshmem_halo_1d_optimized PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )

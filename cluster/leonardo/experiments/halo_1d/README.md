@@ -1,6 +1,6 @@
 # Leonardo Halo 1D Experiments
 
-All backends benchmark a **comm-only** 1D halo exchange on Leonardo: a periodic ring where each rank/PE exchanges a halo with both neighbors over a swept halo width, with GPU-resident buffers and slice-local allocation. Timing uses the shared warmup/iteration harness and reports the slowest-rank average per halo width (`print_report` format).
+All backends benchmark a **comm-only** 1D halo exchange on Leonardo: a periodic ring where each rank/PE exchanges a halo with both neighbors over a swept halo width, with GPU-resident buffers and slice-local allocation. Every size reports isolated (`batch_iters=1`) and steady-state (`batch_iters=iterations`) results from completed batches.
 
 Args: `<max_halo_elems> <iterations> <warmup> [comma-separated halo sizes]` (e.g. `1048576 100 20`).
 
@@ -8,8 +8,8 @@ Build setup is documented in [`cluster/leonardo/README.md`](../../README.md).
 
 ## Topologies
 
-Every backend, including `cuda_nvshmem_optimized`, provides these valid ring
-topologies. Each launch starts at least two ranks/PEs.
+Every backend provides these valid ring topologies. Each launch starts at least
+two ranks/PEs.
 
 | Script | Nodes | GPUs/node | Path |
 | --- | ---: | ---: | --- |
@@ -22,12 +22,12 @@ topologies. Each launch starts at least two ranks/PEs.
 
 | Backend | Halo Exchange Model |
 | --- | --- |
-| `cuda_mpi` | CUDA-aware `MPI_Isend`/`MPI_Irecv`/`MPI_Waitall` neighbor exchange (comm-only ring) |
-| `cuda_nccl` | Grouped `ncclSend`/`ncclRecv` with both neighbors (comm-only ring) |
-| `cuda_nvshmem` | Device-initiated `nvshmemx_float_put_signal_nbi_block` + `nvshmem_signal_wait_until` P2P sync (comm-only ring) |
-| `oshmpi` | One-sided `shmem_putmem` + `shmem_quiet` + global barrier completion (comm-only ring) |
-| `sycl_mpi` | SYCL-aware `MPI_Isend`/`MPI_Irecv`/`MPI_Waitall` neighbor exchange (comm-only ring) |
-| `sycl_oneccl` | Grouped point-to-point `ccl::send`/`ccl::recv` with both neighbors through native NCCL groups |
+| `cuda_mpi` | Persistent CUDA-aware MPI requests, started and completed once per exchange |
+| `cuda_nccl` | Grouped `ncclSend`/`ncclRecv`, with one stream synchronization per batch |
+| `cuda_nvshmem` | Persistent cooperative multi-block puts with neighbor completion signals |
+| `oshmpi` | GPU-space NBI puts, with `quiet`, CUDA sync, and global barrier per exchange |
+| `sycl_mpi` | Persistent SYCL-aware MPI requests, started and completed once per exchange |
+| `sycl_oneccl` | Grouped `ccl::send`/`ccl::recv`, with event completion at batch end |
 
 ## Submit
 
@@ -40,9 +40,10 @@ GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/c
 GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/2n4g.sh
 ```
 
-Backend directories are `cuda_mpi`, `cuda_nccl`, `cuda_nvshmem`,
-`cuda_nvshmem_optimized`, `oshmpi`, `sycl_mpi`, and `sycl_oneccl`. oneCCL
-scripts use `mpirun`; all other launchers use the shared default launcher.
+Backend directories are `cuda_mpi`, `cuda_nccl`, `cuda_nvshmem`, `oshmpi`,
+`sycl_mpi`, and `sycl_oneccl`. oneCCL scripts use `mpirun`; all other launchers
+use the shared default launcher. Set `GPU_BENCH_BATCH_SAMPLES` to change the
+number of completed batches measured per case (default `10`).
 
 Outputs are written to:
 
@@ -115,15 +116,22 @@ Notes:
 
 ## Comparability
 
-The implementations solve the same numerical stencil and validate the same output, but they are not all strict apples-to-apples communication benchmarks.
+The implementations exchange and validate the same GPU-resident halos. Backend
+completion models remain visible in each report because synchronization costs
+differ.
 
 Closest fair comparisons:
 
-- `cuda_mpi` vs `sycl_mpi`: both use host-side `MPI_Sendrecv` for boundary exchange, then accelerator stencil compute.
-- `cuda_nvshmem` vs `oshmpi`: both use SHMEM-style one-sided remote writes into neighbor ghost cells and report max elapsed across PEs.
-- `cuda_nccl` stands as the native NCCL point-to-point version: GPU-resident `ncclSend`/`ncclRecv` boundary exchange plus NCCL point-to-point gather.
+- `cuda_mpi` vs `sycl_mpi`: persistent two-sided MPI over device buffers.
+- `cuda_nvshmem` vs `oshmpi`: one-sided remote writes, with neighbor signals
+  versus a global barrier.
+- `cuda_nccl` vs `sycl_oneccl`: queued point-to-point operations with one
+  completion boundary per batch.
 
 Important caveats:
 
-- The MPI variants are portable host-mediated baselines, not CUDA-aware/SYCL-aware device-buffer MPI halo implementations.
-- `sycl_oneccl` uses full-buffer collective emulation with `allreduce(sum)`, so it is useful for correctness and model coverage but should not be treated as a natural halo-exchange performance competitor.
+- MPI/NCCL/oneCCL are host-submitted, NVSHMEM is device-initiated, and OSHMPI is
+  host-initiated one-sided communication.
+- OSHMPI includes CUDA device synchronization and a global barrier per exchange
+  because CUDA-space RMA completion and passive target-side progress must both
+  be closed inside the timed interval.

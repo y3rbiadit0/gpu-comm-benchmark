@@ -18,7 +18,8 @@ Each backend runs the same kernel: a **periodic ring** where rank `r` exchanges 
 halo of width `H` with `left=(r-1+P)%P` and `right=(r+1)%P`, using GPU-resident
 buffers. Synchronisation in the timed loop is point-to-point for the MPI, NCCL,
 oneCCL, and NVSHMEM implementations; OSHMPI instead completes each exchange with
-`shmem_quiet` followed by a global `shmem_barrier_all`. `H` is swept; for each
+`shmem_quiet`, CUDA device synchronization, and a global `shmem_barrier_all`.
+`H` is swept; for each
 `H` the harness reduces the per-iteration times across ranks with MAX and
 reports the mean of that series via `print_report`.
 
@@ -90,8 +91,8 @@ while NCCL hit 30%."
 
 | Backend | Mechanism | Predicted α | Predicted B∞ | Where it wins |
 | --- | --- | --- | --- | --- |
-| `cuda_nvshmem` | device-initiated `put_signal_nbi_block`, in-kernel signal wait | **lowest** — no host, no MPI match, IPC/IBGDA path | possibly **capped** at large H (single-block put) | small/medium H, especially inter-node |
-| `oshmpi` | host one-sided `putmem` + `quiet` + global barrier | low–moderate | moderate | small H, when device-kernel issue isn't available |
+| `cuda_nvshmem` | persistent cooperative multi-block puts, in-kernel signal wait | **lowest steady-state** — no host or MPI match per exchange | high intra-node; proxy-limited inter-node without IBGDA | small H and large intra-node halos |
+| `oshmpi` | host one-sided NBI puts + `quiet` + CUDA sync + global barrier | low–moderate | moderate | small H, when device-kernel issue isn't available |
 | `cuda_mpi` | CUDA-aware `Isend`/`Irecv`/`Waitall` | moderate (host + UCX) | good | the baseline; large H |
 | `sycl_mpi` | SYCL-aware `Isend`/`Irecv` | ≈ `cuda_mpi` | ≈ `cuda_mpi` | sanity check vs `cuda_mpi` |
 | `cuda_nccl` | grouped `ncclSend`/`ncclRecv` | **high** — kernel launch + proxy thread per exchange | high once amortised | only large H |
@@ -99,13 +100,11 @@ while NCCL hit 30%."
 
 The headline crossover story to validate:
 
-1. **Small H is an α contest, and one-sided wins it.** NVSHMEM issues the whole
-   exchange from a single kernel — no host round-trip, no tag matching, no proxy
-   thread — so its `α` is a small multiple of a kernel launch + a signal
-   handshake. NCCL pays a kernel launch *and* a proxy handoff per exchange, so it
-   is worst here. The old (pre-rewrite) table showed exactly this shape: NVSHMEM
-   ~15× the MPI baseline intra-node, NCCL ~0.12×. The α–β fit should reproduce
-   the *ordering of α*; treat the specific multiples as the thing to re-measure.
+1. **Small H is an α contest.** Compare the `isolated` case to expose submission
+   and completion latency, then `steady` to measure how much persistent or queued
+   work amortizes it. NVSHMEM pays one cooperative launch per batch and performs
+   each exchange in-kernel without tag matching. Treat all pre-batch numbers as
+   historical and re-measure the ordering for both cases.
 
 2. **Going inter-node widens the one-sided lead.** Crossing to IB raises every
    `α` (network RTT) and lowers every `B∞`, but the host-mediated backends pay
@@ -114,13 +113,10 @@ The headline crossover story to validate:
    from 1n4g → 2n4g (the old table moved 15× → 21×). Confirm, and explain via the
    `α` gap from the fit.
 
-3. **Large H can flip the winner.** NVSHMEM's single-block put is a known
-   bandwidth ceiling (one block cannot saturate NVLink). So there should be an
-   `H` beyond which a bandwidth-optimised backend (NCCL, or CUDA-aware MPI)
-   overtakes NVSHMEM on `gbytes_per_s` even though NVSHMEM still wins latency.
-   **Finding that crossover H is the most interesting single result in this
-   study** — it is the concrete "use one-sided for small frequent halos, switch
-   to NCCL/MPI for bulk" guidance. If the sweep doesn't reach it, extend `GPU_BENCH_N`.
+3. **Large H tests transport saturation.** NVSHMEM now splits the payload across
+   a cooperative grid, removing the former single-block ceiling. The remaining
+   crossover question is whether NCCL/MPI saturate the inter-node transport more
+   effectively than NVSHMEM's proxy path when IBGDA is disabled.
 
 ## 5. Profiling with Nsight Systems
 
@@ -155,8 +151,8 @@ Knobs: `GPU_BENCH_NSYS_TRACE` (default `cuda,nvtx,mpi`; add `ucx` to see the IB 
 
 | Backend | On the timeline | `α` is dominated by |
 | --- | --- | --- |
-| `cuda_nvshmem` | one `halo_exchange_kernel` per iter on the CUDA row; **no host MPI in the hot loop**; put + `signal_wait` live inside the kernel | kernel launch + signal handshake → the kernel's own duration is your latency proxy |
-| `cuda_mpi` | host `MPI_Isend/Irecv/Waitall` on the OS-runtime row, transfers on the UCX row, device buffers | host issue + UCX transfer + the `Waitall` stall |
+| `cuda_nvshmem` | one persistent cooperative kernel per batch; **no host MPI in the hot loop**; puts + `signal_wait` live inside the kernel | isolated: launch + signal handshake; steady: in-kernel exchange dependency |
+| `cuda_mpi` | host `MPI_Startall/Waitall` on persistent requests, transfers on the UCX row, device buffers | host issue + UCX transfer + the `Waitall` stall |
 | `cuda_nccl` | an `ncclDevKernel` on the CUDA row **plus** a proxy-progress thread on a CPU row | kernel launch *and* proxy handoff — the gap before the kernel runs is the tell |
 
 Concretely, for each backend at a fixed small `H`: measure the per-iteration
@@ -166,10 +162,10 @@ when they don't, the timeline usually reveals a serialisation the wall clock hid
 
 ## 6. Results
 
-### 6.0 First finding — α is fabric-bound, B∞ is mechanism-bound (`cuda_nvshmem`)
+### 6.0 Historical single-block finding
 
-Running the full H-sweep intra-node (1n4g, NVLink) and inter-node (2n4g, IB) and
-changing *only the topology* isolates what the fabric controls:
+These results predate the canonical persistent multi-block implementation and
+explain why it replaced the single-block design:
 
 - **α moves with the fabric, but only a little.** 13.6 µs (NVLink) → 16.7 µs (IB):
   the network adds just **~3.1 µs**. So ~80% of the latency floor is kernel launch +
@@ -182,9 +178,8 @@ changing *only the topology* isolates what the fabric controls:
   ~16.1 GB/s plateau at the same ≥32 MB threshold — disproving an IB-saturation
   explanation (the intra-node run shows the identical cliff with no IB at all).
 
-Actionable consequence: a **multi-block / grid-strided** put should lift the
-33→16 GB/s ceiling, while α (launch-bound) stays put. That is the concrete
-optimisation this analysis points at.
+The canonical implementation applies that multi-block design. Re-run both batch
+cases before using the following historical values in a current comparison.
 
 ### 6.1 Latency / bandwidth (α from small-message floor, B∞ from peak bus BW)
 

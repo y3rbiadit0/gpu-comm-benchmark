@@ -112,4 +112,21 @@ inline int parse_positive_int_arg(int argc, char** argv, int index, int default_
   return static_cast<int>(value);
 }
 
+inline int parse_positive_int_env(const char* name, int default_value) {
+  const char* input = std::getenv(name);
+  if (input == nullptr || *input == '\0') {
+    return default_value;
+  }
+
+  char* end = nullptr;
+  errno = 0;
+  const auto value = std::strtol(input, &end, 10);
+  if (has_leading_minus(input) || errno == ERANGE || end == input || *end != '\0' || value <= 0 ||
+      value > INT_MAX) {
+    throw std::invalid_argument(std::string(name) + " must be a positive integer");
+  }
+
+  return static_cast<int>(value);
+}
+
 }  // namespace gpu_bench

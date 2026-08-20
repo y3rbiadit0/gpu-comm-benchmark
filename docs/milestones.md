@@ -156,7 +156,7 @@ retains the retired names.
 
 Remove invalid `1n1g` halo launchers, add `1n2g` for pure intra-node exchange and `2n1g`
 for pure inter-node exchange, and retain `1n4g` and `2n4g`. Apply the same valid topology
-coverage to the optimized NVSHMEM halo.
+coverage to the NVSHMEM halo.
 
 **Done when:** no halo launcher starts fewer than two ranks and every supported backend
 passes `1n2g`, `1n4g`, `2n1g`, and `2n4g` validation.

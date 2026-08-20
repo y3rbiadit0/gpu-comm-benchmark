@@ -1,11 +1,13 @@
 #include <mpi.h>
 
+#include <cooperative_groups.h>
 #include <cuda_runtime.h>
 #include <nvshmem.h>
 #include <nvshmemx.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
@@ -13,29 +15,35 @@
 #include <vector>
 
 #include "cli.hpp"
-#include "stats/collective_mpi.hpp"
 #include "report.hpp"
+#include "stats/collective_mpi.hpp"
 #include "timing.hpp"
 #include "validation.hpp"
 
-// Comm-only 1D halo exchange benchmark, NVSHMEM (device-initiated).
+namespace cg = cooperative_groups;
+
+// Canonical comm-only 1D halo exchange benchmark for NVSHMEM.
 //
-// Periodic ring with a swept halo width H. Unlike the MPI/NCCL backends, the
-// exchange is issued from *inside a kernel*: each PE writes its boundary
-// directly into the neighbour's halo with a block-scoped put, then sets a remote
-// signal. Synchronisation is point-to-point (signal wait), not a global
-// barrier_all, so the timed loop reflects neighbour latency rather than barrier
-// scalability.
+// The implementation uses a persistent multi-block execution model for a
+// repeated GPU-resident halo workload:
 //
-// Symmetric buffer, identical layout on every PE:
+//  1. Bandwidth. Many blocks each move a chunk of the halo, so copy bandwidth
+//     can scale beyond one SM.
 //
-//   [ left_halo(cap) | interior(2*cap) | right_halo(cap) ]   cap = max halo width
+//  2. Submission. The whole batch runs inside one persistent cooperative
+//     kernel; grid.sync() carries the ring dependency between iterations, so
+//     launch cost is paid once per measured batch.
 //
-// Because the layout is symmetric, the destination address on a neighbour is the
-// same pointer we use locally (recv_left / recv_right); only the target PE
-// differs. Interior markers (exact in float) let each PE validate locally. MPI
-// is used for init and cross-PE reductions. Reported GB/s is send+receive
-// ("bus") bandwidth: 4 * H * sizeof(float).
+// The payload is split across blocks as plain (signal-less) puts. Each block
+// completes its own issued operations before a grid sync, then block 0 raises a
+// single signal per direction, which the waiter gates on. Earlier this used a
+// per-block SIGNAL_ADD counted up to
+// (iteration * active_blocks); on the IBGDA-less proxy path those many concurrent
+// signal-adds could be dropped and deadlock the wait, so it was collapsed to one
+// signal per direction per iteration (see the kernel comment for the full story).
+//
+// Launched with nvshmemx_collective_launch so that both grid.sync() and
+// in-kernel NVSHMEM point-to-point synchronization are legal across PEs.
 
 namespace {
 
@@ -56,23 +64,54 @@ __global__ void fill_interior_kernel(float* interior, std::size_t n_local, std::
   }
 }
 
-// One block performs the full exchange. recv_left/recv_right are symmetric
-// addresses, so they name the right slot on the neighbour too.
-__global__ void halo_exchange_kernel(float* recv_left, float* recv_right, const float* send_left,
-                                     const float* send_right, std::uint64_t* signals, std::size_t halo,
-                                     std::uint64_t value, int left, int right) {
-  // The block API keeps the transfer cooperative across all halo sizes.
-  nvshmemx_float_put_signal_nbi_block(recv_left, send_right, halo, signals + sig_left, value,
-                                      NVSHMEM_SIGNAL_SET, right);
-  nvshmemx_float_put_signal_nbi_block(recv_right, send_left, halo, signals + sig_right, value,
-                                      NVSHMEM_SIGNAL_SET, left);
-  __syncthreads();
-  if (threadIdx.x == 0) {
-    // Incoming signals acknowledge neighbours' puts, not this PE's outbound
-    // NBI operations. Complete those before allowing the timed kernel to end.
-    nvshmem_quiet();
-    nvshmem_signal_wait_until(signals + sig_left, NVSHMEM_CMP_GE, value);
-    nvshmem_signal_wait_until(signals + sig_right, NVSHMEM_CMP_GE, value);
+// Persistent, multi-block ring exchange. Block b owns the contiguous chunk
+// [b*chunk, min((b+1)*chunk, halo)) of each boundary and moves it with a plain
+// (signal-less) block put. Blocks with an empty chunk still take part in the
+// grid.sync() barriers but issue nothing.
+//
+// Robustness fix vs. the per-block SIGNAL_ADD design: without IBGDA every block's
+// remote signal is a separate proxied op, and many concurrent signal-adds per
+// iteration can be dropped on the proxy path, leaving signal_wait_until spinning
+// forever (the intermittent hang). Here the data goes as N plain puts, each
+// active block completes its cooperative operations, and only block 0 raises
+// one signal per direction after the grid-wide completion point.
+// One signal per direction per iteration (not one per block) removes the race.
+// The single writer per counter means SIGNAL_ADD(+1) is safe; the threshold is
+// base + it. Data correctness is still checked by the host-side halo validation.
+__global__ void halo_persistent_kernel(float* recv_left, float* recv_right,
+                                        const float* send_left, const float* send_right,
+                                        std::uint64_t* signals, std::size_t halo,
+                                        std::size_t chunk, int left, int right,
+                                        int iters, std::uint64_t base) {
+  cg::grid_group grid = cg::this_grid();
+  const std::size_t off = static_cast<std::size_t>(blockIdx.x) * chunk;
+  const std::size_t len = off < halo ? (halo - off < chunk ? halo - off : chunk) : 0U;
+
+  for (int it = 1; it <= iters; ++it) {
+    const std::uint64_t threshold = base + static_cast<std::uint64_t>(it);
+    if (len != 0U) {
+      // My right boundary chunk -> right neighbour's left halo; my left chunk ->
+      // left neighbour's right halo. Data only -- the signal is raised once, below.
+      nvshmemx_float_put_nbi_block(recv_left + off, send_right + off, len, right);
+      nvshmemx_float_put_nbi_block(recv_right + off, send_left + off, len, left);
+    }
+    __syncthreads();
+    if (len != 0U && threadIdx.x == 0) {
+      // Complete the cooperative NBI operations issued by this block before
+      // the grid leader publishes the iteration-complete signals.
+      nvshmem_quiet();
+    }
+    grid.sync();  // every active block has completed its data puts
+    if (blockIdx.x == 0 && threadIdx.x == 0) {
+      // One signal per direction, after the data is complete. sig_left on the right
+      // neighbour = "its left halo is ready"; sig_right on the left neighbour = "its
+      // right halo is ready".
+      nvshmemx_signal_op(signals + sig_left, 1U, NVSHMEM_SIGNAL_ADD, right);
+      nvshmemx_signal_op(signals + sig_right, 1U, NVSHMEM_SIGNAL_ADD, left);
+      nvshmem_signal_wait_until(signals + sig_left, NVSHMEM_CMP_GE, threshold);
+      nvshmem_signal_wait_until(signals + sig_right, NVSHMEM_CMP_GE, threshold);
+    }
+    grid.sync();  // reopen the next iteration only after this one's signal + wait
   }
 }
 
@@ -95,6 +134,18 @@ int main(int argc, char** argv) {
     }
     check_cuda(cudaSetDevice(mpi_rank % device_count), "cudaSetDevice");
 
+    int coop_supported = 0;
+    check_cuda(cudaDeviceGetAttribute(&coop_supported, cudaDevAttrCooperativeLaunch,
+                                      mpi_rank % device_count),
+               "cudaDeviceGetAttribute(cooperative)");
+    if (coop_supported == 0) {
+      throw std::runtime_error("device does not support cooperative launch");
+    }
+    int sm_count = 0;
+    check_cuda(cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount,
+                                      mpi_rank % device_count),
+               "cudaDeviceGetAttribute(SM count)");
+
     nvshmemx_init_attr_t attr = {};
     MPI_Comm mpi_comm = MPI_COMM_WORLD;
     attr.mpi_comm = &mpi_comm;
@@ -114,6 +165,8 @@ int main(int argc, char** argv) {
     const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
     const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
     const auto halo_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_halo);
+    const int batch_samples = gpu_bench::parse_positive_int_env("GPU_BENCH_BATCH_SAMPLES", 10);
+    const auto batch_counts = gpu_bench::batch_iteration_counts(iterations);
 
     const int left = (pe - 1 + pes) % pes;
     const int right = (pe + 1) % pes;
@@ -135,18 +188,45 @@ int main(int argc, char** argv) {
     check_cuda(cudaMemset(signals, 0, 2U * sizeof(std::uint64_t)), "cudaMemset(signals)");
 
     float* interior = buf + cap;
+    constexpr int block_size = 256;
     {
-      constexpr int block_size = 256;
       const auto grid_size = static_cast<int>((n_local + block_size - 1U) / block_size);
       fill_interior_kernel<<<grid_size, block_size>>>(interior, n_local, cap, left_marker, right_marker);
       check_cuda(cudaGetLastError(), "fill_interior_kernel");
       check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(fill)");
     }
+
+    // Largest grid that can run concurrently -- the cooperative-launch ceiling.
+    int blocks_per_sm = 0;
+    check_cuda(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+                   &blocks_per_sm, halo_persistent_kernel, block_size, 0),
+               "cudaOccupancyMaxActiveBlocksPerMultiprocessor");
+    std::size_t max_grid =
+        static_cast<std::size_t>(blocks_per_sm > 0 ? blocks_per_sm : 1) * static_cast<std::size_t>(sm_count);
+
+    // Transport-aware block cap. Without IBGDA, every block's remote put is a
+    // separate proxied IB operation, so many blocks flood the host proxy and the
+    // multi-block optimization backfires inter-node. Cap the grid when the job
+    // spans nodes (8 by default); GPU_BENCH_NVSHMEM_MAX_BLOCKS overrides for sweeping the
+    // optimum. Intra-node (IPC) the cap is unset, so bandwidth still scales.
+    std::size_t block_cap = 0;
+    if (const char* cap_env = std::getenv("GPU_BENCH_NVSHMEM_MAX_BLOCKS")) {
+      block_cap = std::strtoull(cap_env, nullptr, 10);
+    } else if (const char* nodes_env = std::getenv("GPU_BENCH_JOB_NODES")) {
+      if (std::strtol(nodes_env, nullptr, 10) > 1) {
+        block_cap = 8;
+      }
+    }
+    if (block_cap > 0 && block_cap < max_grid) {
+      max_grid = block_cap;
+    }
+
     nvshmem_barrier_all();
 
     std::vector<float> host_left;
     std::vector<float> host_right;
-    std::uint64_t value = 0;
+    std::uint64_t base = 0;  // running signal total; never reset (see launch note)
+    int all_cases_ok = 1;
 
     for (const std::size_t halo : halo_sizes) {
       float* send_left = interior;
@@ -154,59 +234,103 @@ int main(int argc, char** argv) {
       float* recv_left = interior - halo;
       float* recv_right = interior + n_local;
 
-      constexpr int block_size = 256;
+      // Use up to one block per element, capped by the cooperative ceiling.
+      std::size_t nblocks = halo < max_grid ? halo : max_grid;
+      if (nblocks == 0U) {
+        nblocks = 1U;
+      }
+      std::size_t chunk = (halo + nblocks - 1U) / nblocks;
+      if (chunk == 0U) {
+        chunk = 1U;
+      }
+
       std::size_t halo_v = halo;
+      std::size_t chunk_v = chunk;
       int left_v = left;
       int right_v = right;
-      MPI_Barrier(MPI_COMM_WORLD);
-      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
-        ++value;
-        void* args[] = {&recv_left, &recv_right, &send_left, &send_right, &signals,
-                        &halo_v, &value, &left_v, &right_v};
+      int launch_iters = warmup;
+      std::uint64_t base_v = base;
+      void* args[] = {&recv_left, &recv_right, &send_left, &send_right, &signals,
+                      &halo_v,    &chunk_v,    &left_v,     &right_v,
+                      &launch_iters, &base_v};
+      const dim3 grid(static_cast<unsigned>(nblocks));
+      const dim3 block(block_size);
+
+      // The signal counters are never reset -- a memset races with in-flight
+      // proxied signals and can drop one, deadlocking the wait. Instead each launch
+      // waits for a monotonic threshold base + it; base is the running signal total
+      // (one per direction per iteration) every PE has sent, identical across PEs.
+      auto launch = [&](int iters) {
+        launch_iters = iters;
+        base_v = base;
         const int status = nvshmemx_collective_launch(
-            reinterpret_cast<const void*>(halo_exchange_kernel), dim3(1), dim3(block_size), args, 0, 0);
+            reinterpret_cast<const void*>(halo_persistent_kernel), grid, block, args, 0, 0);
         if (status != 0) {
           throw std::runtime_error("nvshmemx_collective_launch failed");
         }
-        check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(halo)");
-      });
+      };
 
-      host_left.assign(halo, 0.0F);
-      host_right.assign(halo, 0.0F);
-      check_cuda(cudaMemcpy(host_left.data(), recv_left, halo * sizeof(float), cudaMemcpyDeviceToHost),
-                 "cudaMemcpy(recv_left)");
-      check_cuda(cudaMemcpy(host_right.data(), recv_right, halo * sizeof(float), cudaMemcpyDeviceToHost),
-                 "cudaMemcpy(recv_right)");
-      int local_ok = 1;
-      for (std::size_t i = 0; i < halo; ++i) {
-        if (!gpu_bench::nearly_equal(host_left[i], expect_left) ||
-            !gpu_bench::nearly_equal(host_right[i], expect_right)) {
-          local_ok = 0;
-          break;
+      for (const int batch_iters : batch_counts) {
+        const char* case_name = batch_iters == 1 ? "isolated" : "steady";
+        int local_ok = 1;
+        const auto stats = gpu_bench::run_batched_benchmark(
+            warmup, batch_iters, batch_samples,
+            [&]() {
+              check_cuda(cudaMemset(recv_left, 0xA5, halo * sizeof(float)), "cudaMemset(recv_left)");
+              check_cuda(cudaMemset(recv_right, 0xA5, halo * sizeof(float)), "cudaMemset(recv_right)");
+              check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(poison halos)");
+              nvshmem_barrier_all();
+            },
+            [&](int count) {
+              launch(count);
+              check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(halo batch)");
+              base += static_cast<std::uint64_t>(count);
+            },
+            [&]() {
+              host_left.assign(halo, 0.0F);
+              host_right.assign(halo, 0.0F);
+              check_cuda(cudaMemcpy(host_left.data(), recv_left, halo * sizeof(float),
+                                    cudaMemcpyDeviceToHost), "cudaMemcpy(recv_left)");
+              check_cuda(cudaMemcpy(host_right.data(), recv_right, halo * sizeof(float),
+                                    cudaMemcpyDeviceToHost), "cudaMemcpy(recv_right)");
+              for (std::size_t i = 0; i < halo; ++i) {
+                if (!gpu_bench::nearly_equal(host_left[i], expect_left) ||
+                    !gpu_bench::nearly_equal(host_right[i], expect_right)) {
+                  local_ok = 0;
+                  break;
+                }
+              }
+            });
+
+        int global_ok = 1;
+        MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
+        all_cases_ok = all_cases_ok && global_ok;
+        const auto global = gpu_bench::collective_stats(stats);
+
+        if (pe == 0) {
+          gpu_bench::bench_report report;
+          report.name = "cuda_nvshmem_halo_1d";
+          report.n = halo;
+          report.ranks = pes;
+          report.bytes_per_iter = 4U * halo * sizeof(float);
+          report.iterations = batch_iters;
+          report.warmup = warmup;
+          report.time_per_iter_s = global.avg_s;
+          report.min_s = global.min_s;
+          report.max_s = global.max_s;
+          gpu_bench::set_distribution(report, global);
+          report.valid = global_ok != 0;
+          report.extra = std::string("case=") + case_name +
+                         " timing=batch batch_iters=" + std::to_string(batch_iters) +
+                         " batch_samples=" + std::to_string(batch_samples) +
+                         " submission=device-persistent completion=quiet-signal halo_elems=" +
+                         std::to_string(halo) +
+                         " topology=ring bw=sendrecv sync=quiet-signal blocks=" +
+                         std::to_string(nblocks);
+          gpu_bench::print_report(report);
         }
+        nvshmem_barrier_all();
       }
-
-      int global_ok = 1;
-      MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
-      const auto global = gpu_bench::collective_stats(stats);
-
-      if (pe == 0) {
-        gpu_bench::bench_report report;
-        report.name = "cuda_nvshmem_halo_1d";
-        report.n = halo;
-        report.ranks = pes;
-        report.bytes_per_iter = 4U * halo * sizeof(float);
-        report.iterations = iterations;
-        report.warmup = warmup;
-        report.time_per_iter_s = global.avg_s;
-        report.min_s = global.min_s;
-        report.max_s = global.max_s;
-        gpu_bench::set_distribution(report, global);
-        report.valid = global_ok != 0;
-        report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv sync=signal";
-        gpu_bench::print_report(report);
-      }
-      nvshmem_barrier_all();
     }
 
     nvshmem_free(signals);
@@ -215,7 +339,7 @@ int main(int argc, char** argv) {
     nvshmem_initialized = false;
 
     MPI_Finalize();
-    return 0;
+    return all_cases_ok ? 0 : 1;
   } catch (const std::exception& error) {
     std::cerr << "rank " << mpi_rank << ": " << error.what() << '\n';
     if (nvshmem_initialized) {

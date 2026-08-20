@@ -24,11 +24,12 @@
 // Comm-only 1D halo exchange benchmark, OSHMPI (OpenSHMEM over MPI).
 //
 // Periodic ring with a swept halo width H, host-initiated. Each PE puts its
-// boundary into both neighbours' halos, then synchronises with shmem_barrier_all.
-// Point-to-point waits (shmem_*_wait_until on a spin flag) can deadlock inter-node
-// when passive RMA needs target-side progress, so we use a barrier handshake (a
-// collective that always makes progress), as the other OSHMPI binaries do. The
-// timed loop therefore reflects neighbour latency plus barrier overhead.
+// boundary into both neighbours' halos, completes the CUDA work, then synchronises
+// with shmem_barrier_all. Point-to-point waits (shmem_*_wait_until on a spin flag)
+// can deadlock inter-node when passive RMA needs target-side progress, so we use a
+// barrier handshake (a collective that always makes progress), as the other OSHMPI
+// binaries do. The timed loop therefore reflects neighbour latency plus device
+// completion and barrier overhead.
 //
 // Symmetric device buffer (via the OSHMPI CUDA memory space), identical layout
 // on every PE:
@@ -74,6 +75,7 @@ int main(int argc, char** argv) {
     const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
     const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
     const auto halo_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_halo);
+    const auto batch_samples = gpu_bench::parse_positive_int_env("GPU_BENCH_BATCH_SAMPLES", 10);
 
     const int left = (pe - 1 + pes) % pes;
     const int right = (pe + 1) % pes;
@@ -103,7 +105,7 @@ int main(int argc, char** argv) {
       throw std::runtime_error("failed to allocate OSHMPI CUDA symmetric memory");
     }
     auto* sample_gather = static_cast<double*>(
-        shmem_malloc(gpu_bench::collective_gather_elements(pes, iterations) * sizeof(double)));
+        shmem_malloc(gpu_bench::collective_gather_elements(pes, batch_samples) * sizeof(double)));
     auto* oks = static_cast<int*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(int)));
     if (sample_gather == nullptr || oks == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI symmetric scratch");
@@ -122,6 +124,7 @@ int main(int argc, char** argv) {
 
     std::vector<float> host_left;
     std::vector<float> host_right;
+    int failures = 0;
 
     for (const std::size_t halo : halo_sizes) {
       float* send_left = interior;
@@ -130,58 +133,87 @@ int main(int argc, char** argv) {
       float* recv_right = interior + n_local;
       const std::size_t halo_bytes = halo * sizeof(float);
 
-      shmem_barrier_all();
-      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
-        // Put my right boundary into the right neighbour's left halo, and my
-        // left boundary into the left neighbour's right halo.
-        shmem_putmem(recv_left, send_right, halo_bytes, right);
-        shmem_putmem(recv_right, send_left, halo_bytes, left);
-        shmem_quiet();        // complete my puts before the barrier releases
-        shmem_barrier_all();  // neighbours' halos have arrived once this returns
-      });
-      const auto global = gpu_bench::collective_stats(stats, sample_gather, pe, pes);
+      for (const int batch_iters : gpu_bench::batch_iteration_counts(iterations)) {
+        const char* case_name = batch_iters == 1 ? "isolated" : "steady";
+        int local_ok = 1;
+        const auto stats = gpu_bench::run_batched_benchmark(
+            warmup, batch_iters, batch_samples,
+            [&]() {
+              check_cuda(cudaMemset(recv_left, 0xA5, halo_bytes), "cudaMemset(recv_left)");
+              check_cuda(cudaMemset(recv_right, 0xA5, halo_bytes), "cudaMemset(recv_right)");
+              check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(poison halos)");
+              shmem_barrier_all();
+            },
+            [&](int count) {
+              for (int i = 0; i < count; ++i) {
+                // CUDA-space RMA may enqueue device work that outlives
+                // shmem_quiet. Close that work before the barrier and timer end.
+                shmem_putmem_nbi(recv_left, send_right, halo_bytes, right);
+                shmem_putmem_nbi(recv_right, send_left, halo_bytes, left);
+                shmem_quiet();
+                check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(halo exchange)");
+                shmem_barrier_all();
+              }
+            },
+            [&]() {
+              host_left.assign(halo, 0.0F);
+              host_right.assign(halo, 0.0F);
+              check_cuda(cudaMemcpy(host_left.data(), recv_left, halo_bytes, cudaMemcpyDeviceToHost),
+                         "cudaMemcpy(recv_left)");
+              check_cuda(cudaMemcpy(host_right.data(), recv_right, halo_bytes, cudaMemcpyDeviceToHost),
+                         "cudaMemcpy(recv_right)");
+              for (std::size_t i = 0; i < halo; ++i) {
+                if (!gpu_bench::nearly_equal(host_left[i], expect_left) ||
+                    !gpu_bench::nearly_equal(host_right[i], expect_right)) {
+                  local_ok = 0;
+                  break;
+                }
+              }
+            });
+        const auto global = gpu_bench::collective_stats(stats, sample_gather, pe, pes);
 
-      host_left.assign(halo, 0.0F);
-      host_right.assign(halo, 0.0F);
-      check_cuda(cudaMemcpy(host_left.data(), recv_left, halo_bytes, cudaMemcpyDeviceToHost),
-                 "cudaMemcpy(recv_left)");
-      check_cuda(cudaMemcpy(host_right.data(), recv_right, halo_bytes, cudaMemcpyDeviceToHost),
-                 "cudaMemcpy(recv_right)");
-      int local_ok = 1;
-      for (std::size_t i = 0; i < halo; ++i) {
-        if (!gpu_bench::nearly_equal(host_left[i], expect_left) ||
-            !gpu_bench::nearly_equal(host_right[i], expect_right)) {
-          local_ok = 0;
-          break;
+        shmem_int_p(&oks[pe], local_ok, 0);
+        shmem_quiet();
+        shmem_barrier_all();
+
+        int global_ok = local_ok;
+        if (pe == 0) {
+          global_ok = 1;
+          for (int source = 0; source < pes; ++source) {
+            global_ok = global_ok && oks[source];
+          }
+          oks[0] = global_ok;
+          for (int target = 1; target < pes; ++target) {
+            shmem_int_p(oks, global_ok, target);
+          }
+          shmem_quiet();
         }
-      }
+        shmem_barrier_all();
+        global_ok = oks[0];
+        failures += global_ok == 0 ? 1 : 0;
 
-      shmem_int_p(&oks[pe], local_ok, 0);
-      shmem_quiet();
-      shmem_barrier_all();
-
-      if (pe == 0) {
-        int global_ok = 1;
-        for (int source = 0; source < pes; ++source) {
-          global_ok = global_ok && oks[source];
+        if (pe == 0) {
+          gpu_bench::bench_report report;
+          report.name = "oshmpi_halo_1d";
+          report.n = halo;
+          report.ranks = pes;
+          report.bytes_per_iter = 4U * halo * sizeof(float);
+          report.iterations = batch_iters;
+          report.warmup = warmup;
+          report.time_per_iter_s = global.avg_s;
+          report.min_s = global.min_s;
+          report.max_s = global.max_s;
+          gpu_bench::set_distribution(report, global);
+          report.valid = global_ok != 0;
+          report.extra = "case=" + std::string(case_name) + " timing=batch batch_iters=" +
+                         std::to_string(batch_iters) + " batch_samples=" +
+                         std::to_string(batch_samples) +
+                          " submission=host-rma completion=quiet-device-sync-barrier halo_elems=" +
+                         std::to_string(halo) + " topology=ring bw=sendrecv sync=barrier";
+          gpu_bench::print_report(report);
         }
-
-        gpu_bench::bench_report report;
-        report.name = "oshmpi_halo_1d";
-        report.n = halo;
-        report.ranks = pes;
-        report.bytes_per_iter = 4U * halo * sizeof(float);
-        report.iterations = iterations;
-        report.warmup = warmup;
-        report.time_per_iter_s = global.avg_s;
-        report.min_s = global.min_s;
-        report.max_s = global.max_s;
-        gpu_bench::set_distribution(report, global);
-        report.valid = global_ok != 0;
-        report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv sync=barrier";
-        gpu_bench::print_report(report);
+        shmem_barrier_all();
       }
-      shmem_barrier_all();
     }
 
     shmem_free(oks);
@@ -192,7 +224,7 @@ int main(int argc, char** argv) {
     gpu_bench_oshmpi_space_destroy(space);
 
     shmem_finalize();
-    return 0;
+    return failures == 0 ? 0 : 1;
   } catch (const std::exception& error) {
     std::cerr << "PE " << pe << ": " << error.what() << '\n';
     // Space cleanup is collective and is unsafe when another PE may still be

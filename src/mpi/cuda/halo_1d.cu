@@ -74,6 +74,8 @@ int main(int argc, char** argv) {
     const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
     const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
     const auto halo_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_halo);
+    const int batch_samples = gpu_bench::parse_positive_int_env("GPU_BENCH_BATCH_SAMPLES", 10);
+    const auto batch_iteration_counts = gpu_bench::batch_iteration_counts(iterations);
 
     const int left = (rank - 1 + ranks) % ranks;
     const int right = (rank + 1) % ranks;
@@ -108,6 +110,7 @@ int main(int argc, char** argv) {
 
     std::vector<float> host_left;
     std::vector<float> host_right;
+    bool all_cases_ok = true;
 
     for (const std::size_t halo : halo_sizes) {
       const int count = mpi_count(halo);
@@ -116,58 +119,82 @@ int main(int argc, char** argv) {
       float* recv_left = interior - halo;           // left halo region
       float* recv_right = interior + n_local;       // right halo region
 
-      MPI_Barrier(MPI_COMM_WORLD);
-      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
-        MPI_Request reqs[4];
-        // tag 0: messages travelling right; tag 1: messages travelling left.
-        MPI_Irecv(recv_left, count, MPI_FLOAT, left, 0, MPI_COMM_WORLD, &reqs[0]);
-        MPI_Irecv(recv_right, count, MPI_FLOAT, right, 1, MPI_COMM_WORLD, &reqs[1]);
-        MPI_Isend(send_right, count, MPI_FLOAT, right, 0, MPI_COMM_WORLD, &reqs[2]);
-        MPI_Isend(send_left, count, MPI_FLOAT, left, 1, MPI_COMM_WORLD, &reqs[3]);
-        MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
-      });
+      MPI_Request reqs[4];
+      // tag 0: messages travelling right; tag 1: messages travelling left.
+      MPI_Recv_init(recv_left, count, MPI_FLOAT, left, 0, MPI_COMM_WORLD, &reqs[0]);
+      MPI_Recv_init(recv_right, count, MPI_FLOAT, right, 1, MPI_COMM_WORLD, &reqs[1]);
+      MPI_Send_init(send_right, count, MPI_FLOAT, right, 0, MPI_COMM_WORLD, &reqs[2]);
+      MPI_Send_init(send_left, count, MPI_FLOAT, left, 1, MPI_COMM_WORLD, &reqs[3]);
 
-      host_left.assign(halo, 0.0F);
-      host_right.assign(halo, 0.0F);
-      check_cuda(cudaMemcpy(host_left.data(), recv_left, halo * sizeof(float), cudaMemcpyDeviceToHost),
-                 "cudaMemcpy(recv_left)");
-      check_cuda(cudaMemcpy(host_right.data(), recv_right, halo * sizeof(float), cudaMemcpyDeviceToHost),
-                 "cudaMemcpy(recv_right)");
-      int local_ok = 1;
-      for (std::size_t i = 0; i < halo; ++i) {
-        if (!gpu_bench::nearly_equal(host_left[i], expect_left) ||
-            !gpu_bench::nearly_equal(host_right[i], expect_right)) {
-          local_ok = 0;
-          break;
+      for (const int batch_iters : batch_iteration_counts) {
+        int local_ok = 1;
+        const auto stats = gpu_bench::run_batched_benchmark(
+            warmup, batch_iters, batch_samples,
+            [&]() {
+              check_cuda(cudaMemset(recv_left, 0, halo * sizeof(float)), "cudaMemset(recv_left)");
+              check_cuda(cudaMemset(recv_right, 0, halo * sizeof(float)), "cudaMemset(recv_right)");
+              check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(poison halos)");
+              MPI_Barrier(MPI_COMM_WORLD);
+            },
+            [&](int logical_exchanges) {
+              for (int i = 0; i < logical_exchanges; ++i) {
+                MPI_Startall(4, reqs);
+                MPI_Waitall(4, reqs, MPI_STATUSES_IGNORE);
+              }
+            },
+            [&]() {
+              host_left.assign(halo, 0.0F);
+              host_right.assign(halo, 0.0F);
+              check_cuda(cudaMemcpy(host_left.data(), recv_left, halo * sizeof(float),
+                                    cudaMemcpyDeviceToHost), "cudaMemcpy(recv_left)");
+              check_cuda(cudaMemcpy(host_right.data(), recv_right, halo * sizeof(float),
+                                    cudaMemcpyDeviceToHost), "cudaMemcpy(recv_right)");
+              for (std::size_t i = 0; i < halo; ++i) {
+                if (!gpu_bench::nearly_equal(host_left[i], expect_left) ||
+                    !gpu_bench::nearly_equal(host_right[i], expect_right)) {
+                  local_ok = 0;
+                  break;
+                }
+              }
+            });
+
+        int global_ok = 1;
+        MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
+        all_cases_ok = all_cases_ok && global_ok != 0;
+        const auto global = gpu_bench::collective_stats(stats);
+
+        if (rank == 0) {
+          const std::string case_name = batch_iters == 1 ? "isolated" : "steady";
+          gpu_bench::bench_report report;
+          report.name = "cuda_mpi_halo_1d";
+          report.n = halo;
+          report.ranks = ranks;
+          report.bytes_per_iter = 4U * halo * sizeof(float);  // 2 sends + 2 recvs per rank
+          report.iterations = batch_iters;
+          report.warmup = warmup;
+          report.time_per_iter_s = global.avg_s;
+          report.min_s = global.min_s;
+          report.max_s = global.max_s;
+          gpu_bench::set_distribution(report, global);
+          report.valid = global_ok != 0;
+          report.extra = "case=" + case_name + " timing=batch batch_iters=" +
+                         std::to_string(batch_iters) + " batch_samples=" +
+                         std::to_string(batch_samples) +
+                         " submission=host-persistent completion=waitall halo_elems=" +
+                         std::to_string(halo) + " topology=ring bw=sendrecv";
+          gpu_bench::print_report(report);
         }
       }
 
-      int global_ok = 1;
-      MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
-      const auto global = gpu_bench::collective_stats(stats);
-
-      if (rank == 0) {
-        gpu_bench::bench_report report;
-        report.name = "cuda_mpi_halo_1d";
-        report.n = halo;
-        report.ranks = ranks;
-        report.bytes_per_iter = 4U * halo * sizeof(float);  // 2 sends + 2 recvs per rank
-        report.iterations = iterations;
-        report.warmup = warmup;
-        report.time_per_iter_s = global.avg_s;
-        report.min_s = global.min_s;
-        report.max_s = global.max_s;
-        gpu_bench::set_distribution(report, global);
-        report.valid = global_ok != 0;
-        report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv";
-        gpu_bench::print_report(report);
+      for (MPI_Request& request : reqs) {
+        MPI_Request_free(&request);
       }
     }
 
     check_cuda(cudaFree(buf), "cudaFree(buf)");
 
     MPI_Finalize();
-    return 0;
+    return all_cases_ok ? 0 : 1;
   } catch (const std::exception& error) {
     std::cerr << "rank " << rank << ": " << error.what() << '\n';
     MPI_Abort(MPI_COMM_WORLD, 1);

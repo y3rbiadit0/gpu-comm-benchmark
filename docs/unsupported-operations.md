@@ -33,7 +33,7 @@ benchmark failure.
 | `sycl_oneccl` | `cg_step` halo using `ccl::send`/`ccl::recv` | Unexpected backend failures abort the job. | Test `1n2g` and `2n1g` first. Its multi-operation P2P pattern may share the intra-node limitation observed by `halo_1d`. |
 | `sycl_oneccl` | `moe` variable-count P2P dispatch and combine | Recognized missing P2P support already emits `NOT_IMPLEMENTED`; unexpected hangs or errors remain failures. | Test one routing case on `1n2g` and `2n1g` before the full routing matrix. |
 | `sycl_oneccl` | `alltoall` collective | A backend exception currently aborts the job. | Confirm whether the installed NCCL-backed fork implements `ccl::alltoall`; add explicit `NOT_IMPLEMENTED` output if absent. |
-| `cuda_nvshmem_optimized` | Cooperative `halo_1d` kernel | Throws an error when cooperative launch is unavailable. | Leonardo H100 supports the feature; retain this check for other systems and classify unsupported hardware explicitly if portability is required. |
+| `cuda_nvshmem` | Cooperative `halo_1d` kernel | Throws an error when cooperative launch is unavailable. | Leonardo A100 supports the feature; retain this check for other systems and classify unsupported hardware explicitly if portability is required. |
 
 `sycl_oneccl` allreduce has no known capability gap. The installed point-to-point
 implementation is also validated for two-endpoint pingpong on `1n2g` and `2n1g`.
@@ -47,11 +47,11 @@ its reported model must remain visible when interpreting performance.
 | --- | --- | --- | --- |
 | NCCL | No native all-to-all collective | Grouped `ncclSend`/`ncclRecv` to every peer | Measures NCCL P2P emulation, not a collective implementation. |
 | NCCL | No dedicated halo collective | Grouped neighbor `ncclSend`/`ncclRecv` | This is the native NCCL P2P expression of a halo exchange. |
-| OSHMPI | Inter-node point-to-point flag waits can deadlock without target-side progress | `putmem` + `quiet` + `shmem_barrier_all` in pingpong and halo | Timing includes a global barrier. |
+| OSHMPI | Inter-node point-to-point flag waits can deadlock without target-side progress | Halo uses NBI puts + `quiet` + CUDA device sync + `shmem_barrier_all`; pingpong uses its barrier handshake | Halo timing includes device completion and a global barrier. |
 | OSHMPI | No native device all-to-all is assumed | Per-peer one-sided `shmem_putmem` loop + barrier | Measures one-sided emulation. |
 | OSHMPI | Device-resident allreduce is unavailable in the current path | Host-symmetric `shmem_*_sum_to_all` buffers | Includes device/host staging where required. |
 | NVSHMEM | Host-callable neighbor signal wait is unavailable | Device-initiated signal waits for pingpong/halo; host-driven put + barrier for `cg_step` | The chosen progress model differs by benchmark and is part of the result. |
-| Optimized NVSHMEM | Multiple proxied signal-add operations were unreliable with IBGDA disabled | One `quiet` and one monotonic signal per direction; inter-node grid capped by default | Supported workaround for the validated Leonardo proxy path. |
+| NVSHMEM | Multiple proxied signal-add operations were unreliable with IBGDA disabled | Each active block completes its NBI puts before one monotonic signal per direction; inter-node grid capped by default | Supported workaround for the validated Leonardo proxy path. |
 
 ## Intentional Topology Exclusions
 
@@ -82,5 +82,5 @@ These are invalid benchmark shapes, not backend capability failures.
    existing capability classification if the failure is topology-specific.
 4. Decide whether OSHMPI barrier-based paths should remain in direct performance
    tables or move to a separate synchronization-model comparison.
-5. Revalidate optimized NVSHMEM with IBGDA enabled and remove proxy-path limits
+5. Revalidate NVSHMEM with IBGDA enabled and remove proxy-path limits
    only when the alternate transport is confirmed.

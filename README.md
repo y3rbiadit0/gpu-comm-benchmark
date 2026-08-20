@@ -132,16 +132,14 @@ Timed benchmarks built on `include/timing.hpp` and `include/report.hpp` emit a s
   [case=<case>] [status=OK|NOT_IMPLEMENTED|ERROR] validation=PASS|SKIP|FAIL
 ```
 
-Except for the persistent-kernel variant noted below, every rank times each
-iteration of the loop separately (after warmup). An iteration costs what its
+Every rank records the same number of samples. An exchange costs what its
 slowest participant took, so the reported series is the element-wise max across
-ranks of the per-iteration times, and
-`time_per_iter_s`/`usec` is the **mean of that series** — `AVG(MAX per
-iteration)`, not `MAX(AVG per rank)`. The two differ whenever the straggler
-changes from iteration to iteration, and only the former is the time an
-application actually waits. `include/stats/collective.hpp` defines the rule;
-`stats/collective_mpi.hpp` (an `MPI_Allreduce` over the whole series) and
-`stats/collective_shmem.hpp` (a gather to PE 0) carry it out.
+ranks and `time_per_iter_s`/`usec` is the mean of that series. Most benchmarks
+record one completed operation per sample. `halo_1d` instead records completed
+batches and amortizes each sample by the batch length; this preserves the same
+`AVG(MAX per sample)` estimator while supporting queued and persistent work.
+`include/stats/collective.hpp` defines the rule; `stats/collective_mpi.hpp` and
+`stats/collective_shmem.hpp` carry it out.
 
 `min_usec`, `max_usec` and the optional `median_usec`/`p25_usec`/`p75_usec`/`stddev_usec`
 describe that same reduced series, so every field on the line refers to one
@@ -154,11 +152,10 @@ It is the one benchmark not reduced across ranks — the peer's timings cover a
 different window (it waits for the ping before replying), so the initiator's
 round trip is the measurement by definition.
 
-`cuda_nvshmem_halo_1d_optimized` is the other timing exception. Its entire
-iteration loop runs inside one persistent kernel, so the host receives only one
-amortized duration per PE and reports `MAX(AVG)` rather than `AVG(MAX)`. Its
-output carries `variant=persistent-multiblock`; compare it separately from the
-standard per-iteration series.
+Each `halo_1d` binary emits `case=isolated` with `batch_iters=1` and
+`case=steady` with `batch_iters=<iterations>`. Both cases contain
+`GPU_BENCH_BATCH_SAMPLES` completed-batch samples (default `10`) and are grouped
+separately by Benchscribe.
 
 MoE emits one line per routing `case`; an unsupported oneCCL point-to-point capability is
 reported as `NOT_IMPLEMENTED`/`SKIP` rather than as a timing failure.

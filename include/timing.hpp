@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -38,6 +39,43 @@ bench_stats run_benchmark(int warmup_iterations, int timed_iterations, Body&& bo
     wall_timer timer;
     body();
     samples.push_back(timer.seconds());
+  }
+
+  return summarize(std::move(samples));
+}
+
+inline std::vector<int> batch_iteration_counts(int steady_iterations) {
+  if (steady_iterations <= 0) {
+    throw std::invalid_argument("steady iteration count must be positive");
+  }
+  return steady_iterations == 1 ? std::vector<int>{1} : std::vector<int>{1, steady_iterations};
+}
+
+// Measures completed batches and reports amortized time per logical operation.
+// `before_batch` and `after_batch` run outside timing. They should align/reset
+// participants and validate completion respectively. `body(count)` must
+// complete all `count` ordered operations.
+template <typename BeforeBatch, typename Body, typename AfterBatch>
+bench_stats run_batched_benchmark(int warmup_iterations, int batch_iterations,
+                                  int timed_batches, BeforeBatch&& before_batch, Body&& body,
+                                  AfterBatch&& after_batch) {
+  if (warmup_iterations < 0 || batch_iterations <= 0 || timed_batches <= 0) {
+    throw std::invalid_argument("invalid batched benchmark iteration count");
+  }
+
+  if (warmup_iterations > 0) {
+    before_batch();
+    body(warmup_iterations);
+  }
+
+  std::vector<double> samples;
+  samples.reserve(static_cast<std::size_t>(timed_batches));
+  for (int batch = 0; batch < timed_batches; ++batch) {
+    before_batch();
+    wall_timer timer;
+    body(batch_iterations);
+    samples.push_back(timer.seconds() / static_cast<double>(batch_iterations));
+    after_batch();
   }
 
   return summarize(std::move(samples));
