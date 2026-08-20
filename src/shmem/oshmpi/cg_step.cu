@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "cli.hpp"
-#include "collective_stats_shmem.hpp"
+#include "stats/collective_shmem.hpp"
 #include "oshmpi_space.h"
 #include "partition.hpp"
 #include "report.hpp"

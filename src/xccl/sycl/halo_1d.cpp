@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "cli.hpp"
-#include "collective_stats_mpi.hpp"
+#include "stats/collective_mpi.hpp"
 #include "oneccl.hpp"
 #include "report.hpp"
 #include "timing.hpp"

@@ -295,7 +295,7 @@ int main(int argc, char** argv) {
       /* The timed loop runs inside one persistent kernel, so there are no
        * per-iteration host samples to reduce: this variant can only report
        * MAX over PEs of the amortized average, not the AVG(MAX per iteration)
-       * the other benchmarks report (see include/collective_stats.hpp). */
+       * the other benchmarks report (see include/stats/collective.hpp). */
       int global_ok = 1;
       double max_avg = 0.0;
       double min_avg = 0.0;

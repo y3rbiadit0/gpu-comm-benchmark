@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-#include "collective_stats_shmem.hpp"
+#include "stats/collective_shmem.hpp"
 #include "moe.hpp"
 #include "oshmpi_space.h"
 #include "report.hpp"

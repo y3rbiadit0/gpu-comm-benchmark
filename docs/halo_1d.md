@@ -115,7 +115,7 @@ these numbers against a vendor's unidirectional figure.)
 The shared `run_benchmark` harness (`include/timing.hpp`) runs `warmup` untimed
 iterations, then `iterations` timed ones, each a fully-completed exchange, and
 keeps every per-iteration sample. For every `H` the samples are reduced across
-ranks iteration by iteration with MAX (`include/collective_stats.hpp`), and
+ranks iteration by iteration with MAX (`include/stats/collective.hpp`), and
 `time_per_iter_s` is the mean of that reduced series — the **average slowest
 rank per iteration**, not the slowest rank's average. `min`/`max` and the
 quartiles bracket the same reduced series. Only rank/PE 0 prints.

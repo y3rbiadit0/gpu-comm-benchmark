@@ -12,7 +12,7 @@
 #include <string>
 
 #include "cli.hpp"
-#include "collective_stats_shmem.hpp"
+#include "stats/collective_shmem.hpp"
 #include "report.hpp"
 #include "timing.hpp"
 #include "validation.hpp"

@@ -39,7 +39,7 @@ struct bench_stats {
   /* The raw per-iteration samples, in iteration order. Kept so that a caller
    * can reduce them across ranks iteration by iteration before summarizing;
    * summarizing first and reducing the summaries afterwards answers a different
-   * question (see collective_stats.hpp). */
+   * question (see stats/collective.hpp). */
   std::vector<double> samples;
 };
 

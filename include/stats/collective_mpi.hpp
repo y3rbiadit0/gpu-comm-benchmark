@@ -6,7 +6,7 @@
 #include <limits>
 #include <stdexcept>
 
-#include "collective_stats.hpp"
+#include "stats/collective.hpp"
 
 namespace gpu_bench {
 

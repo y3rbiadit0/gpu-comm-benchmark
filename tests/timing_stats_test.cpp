@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 
-#include "collective_stats.hpp"
+#include "stats/collective.hpp"
 #include "timing.hpp"
 
 namespace {

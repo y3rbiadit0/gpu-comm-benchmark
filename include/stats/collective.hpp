@@ -26,8 +26,8 @@ namespace gpu_bench {
  * of mixing a cross-rank headline with one rank's local spread.
  *
  * This header holds the definition; the transport that carries out the
- * element-wise max lives in the backend adapters (collective_stats_mpi.hpp,
- * collective_stats_shmem.hpp), which all expose it as `collective_stats(...)`.
+ * element-wise max lives in the backend adapters (stats/collective_mpi.hpp,
+ * stats/collective_shmem.hpp), which expose it as `collective_stats(...)`.
  *
  * `max_across_ranks(in, out, count)` must fill `out` with the element-wise max
  * of every rank's `in`. */

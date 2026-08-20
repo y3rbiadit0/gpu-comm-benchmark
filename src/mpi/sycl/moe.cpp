@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "collective_stats_mpi.hpp"
+#include "stats/collective_mpi.hpp"
 #include "moe.hpp"
 #include "report.hpp"
 #include "timing.hpp"
