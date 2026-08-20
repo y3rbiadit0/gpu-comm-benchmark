@@ -23,3 +23,22 @@ oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_alltoall 65536 100 
 oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_cg_step 512 50 10
 oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_moe 16384 256 100 20 uniform,locality80,hotspot80
 ```
+
+## CUDA memory space lifecycle
+
+`oshmpi_space.{h,c}` wraps the OSHMPI extension behind three calls so the
+benchmark sources stay readable. The order matters, and matches OSHMPI's own
+CUDA-space test:
+
+```
+shmemx_space_create(config with memkind = SHMEMX_MEM_CUDA)
+  -> shmemx_space_attach
+    -> shmemx_space_malloc  (device symmetric buffers)
+      -> shmem_putmem / shmem_getmem on those buffers
+    -> shmem_free           (there is no shmemx_space_free)
+  -> shmemx_space_detach
+-> shmemx_space_destroy
+```
+
+Buffers taken from a space are released with the ordinary `shmem_free`, before
+the space they came from is detached and destroyed.

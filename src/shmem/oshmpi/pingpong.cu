@@ -35,7 +35,6 @@ int main(int argc, char** argv) {
 
   const int pe = shmem_my_pe();
   const int pes = shmem_n_pes();
-  bool space_created = false;
   void* space = nullptr;
   float* device_send = nullptr;
   float* device_recv = nullptr;
@@ -63,8 +62,6 @@ int main(int argc, char** argv) {
     if (space == nullptr) {
       throw std::runtime_error("failed to create OSHMPI CUDA memory space");
     }
-    space_created = true;
-
     device_send = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, max_elems * sizeof(float)));
     device_recv = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, max_elems * sizeof(float)));
     if (device_send == nullptr || device_recv == nullptr) {
@@ -118,10 +115,14 @@ int main(int argc, char** argv) {
         report.bytes_per_iter = bytes;
         report.iterations = iterations;
         report.warmup = warmup;
+        /* One-way latency = half the measured round trip. Unlike the
+         * collectives, this is not reduced across ranks: the peer's own timings
+         * cover a different window (it waits for the ping before replying), so
+         * the initiator's round trip is the measurement by definition. */
         report.time_per_iter_s = 0.5 * stats.avg_s;
         report.min_s = 0.5 * stats.min_s;
         report.max_s = 0.5 * stats.max_s;
-        gpu_bench::set_local_distribution(report, stats, 0.5);
+        gpu_bench::set_distribution(report, stats, 0.5);
         report.valid = ok;
         gpu_bench::print_report(report);
       }
@@ -133,21 +134,13 @@ int main(int argc, char** argv) {
     shmem_free(device_send);
     device_send = nullptr;
     gpu_bench_oshmpi_space_destroy(space);
-    space_created = false;
 
     shmem_finalize();
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "PE " << pe << ": " << error.what() << '\n';
-    if (device_recv != nullptr) {
-      shmem_free(device_recv);
-    }
-    if (device_send != nullptr) {
-      shmem_free(device_send);
-    }
-    if (space_created) {
-      gpu_bench_oshmpi_space_destroy(space);
-    }
+    // Allocation cleanup and space detach are collective and are unsafe when
+    // another PE may still be inside the operation that failed locally.
     shmem_global_exit(1);
   }
 }

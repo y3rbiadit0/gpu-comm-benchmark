@@ -16,13 +16,14 @@ struct bench_report {
   std::size_t bytes_per_iter = 0;   // bytes communicated per timed iteration
   int iterations = 0;
   int warmup = 0;
-  double time_per_iter_s = 0.0;     // headline: slowest-rank average per iteration
+  double time_per_iter_s = 0.0;     // headline: mean per-iteration time of the operation
   double min_s = 0.0;
   double max_s = 0.0;
-  /* Within-run distribution of one rank, for box plots and for saying how noisy
-   * a single measurement was. Unlike the fields above it is not reduced across
-   * ranks: MAX-reducing p25 and p75 independently could take them from different
-   * ranks and yield p25 > p75. Set it with set_local_distribution(). */
+  /* Within-run spread of the same series `time_per_iter_s` averages, for box
+   * plots and for saying how noisy a single measurement was. Set it with
+   * set_distribution(), passing the same stats the headline came from - never a
+   * separately reduced quantity, or the quartiles would describe a different
+   * series than the mean. */
   bool has_distribution = false;
   double median_s = 0.0;
   double p25_s = 0.0;
@@ -56,11 +57,12 @@ inline std::string report_name(const bench_report& report) {
   return std::string(backend) + original.substr(split);
 }
 
-/* Records this rank's own iteration-to-iteration spread. benchscribe treats the
- * emitted fields as optional, so results produced before this existed still
- * parse. */
-inline void set_local_distribution(bench_report& report, const bench_stats& stats,
-                                   double scale = 1.0) {
+/* Records the iteration-to-iteration spread of the reported series. benchscribe
+ * treats the emitted fields as optional, so results produced before this existed
+ * still parse. `scale` converts the measured quantity into the reported one -
+ * pingpong reports half of each measured round trip. */
+inline void set_distribution(bench_report& report, const bench_stats& stats,
+                             double scale = 1.0) {
   report.median_s = scale * stats.median_s;
   report.p25_s = scale * stats.p25_s;
   report.p75_s = scale * stats.p75_s;

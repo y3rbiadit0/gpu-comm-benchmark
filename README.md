@@ -128,15 +128,38 @@ Timed benchmarks built on `include/timing.hpp` and `include/report.hpp` emit a s
 ```text
 <name> n=<elements> ranks=<n> bytes=<per-iter> iters=<n> warmup=<n> \
   time_per_iter_s=<s> usec=<us> min_usec=<us> max_usec=<us> gbytes_per_s=<gb/s> \
+  [median_usec=<us> p25_usec=<us> p75_usec=<us> stddev_usec=<us>] \
   [case=<case>] [status=OK|NOT_IMPLEMENTED|ERROR] validation=PASS|SKIP|FAIL
 ```
 
-`time_per_iter_s`/`usec` is the slowest-rank average over the timed loop (after warmup);
-`min_usec`/`max_usec` bound the per-iteration distribution. Compare `usec` for
-small-message latency and `gbytes_per_s` for bandwidth.
+Except for the persistent-kernel variant noted below, every rank times each
+iteration of the loop separately (after warmup). An iteration costs what its
+slowest participant took, so the reported series is the element-wise max across
+ranks of the per-iteration times, and
+`time_per_iter_s`/`usec` is the **mean of that series** — `AVG(MAX per
+iteration)`, not `MAX(AVG per rank)`. The two differ whenever the straggler
+changes from iteration to iteration, and only the former is the time an
+application actually waits. `include/collective_stats.hpp` defines the rule;
+`collective_stats_mpi.hpp` (an `MPI_Allreduce` over the whole series) and
+`collective_stats_shmem.hpp` (a gather to PE 0) carry it out.
+
+`min_usec`, `max_usec` and the optional `median_usec`/`p25_usec`/`p75_usec`/`stddev_usec`
+describe that same reduced series, so every field on the line refers to one
+distribution. Compare `usec` for small-message latency and `gbytes_per_s` for
+bandwidth.
 
 `pingpong` reports **one-way** figures (half the measured round trip): `usec` is one-way
 latency and `gbytes_per_s` is one-way bandwidth, with one line per swept message size.
+It is the one benchmark not reduced across ranks — the peer's timings cover a
+different window (it waits for the ping before replying), so the initiator's
+round trip is the measurement by definition.
+
+`cuda_nvshmem_halo_1d_optimized` is the other timing exception. Its entire
+iteration loop runs inside one persistent kernel, so the host receives only one
+amortized duration per PE and reports `MAX(AVG)` rather than `AVG(MAX)`. Its
+output carries `variant=persistent-multiblock`; compare it separately from the
+standard per-iteration series.
+
 MoE emits one line per routing `case`; an unsupported oneCCL point-to-point capability is
 reported as `NOT_IMPLEMENTED`/`SKIP` rather than as a timing failure.
 `case` is part of the result grouping key. Numeric summaries use only

@@ -111,10 +111,14 @@ int main(int argc, char** argv) {
         report.bytes_per_iter = size * sizeof(float);
         report.iterations = iterations;
         report.warmup = warmup;
+        /* One-way latency = half the measured round trip. Unlike the
+         * collectives, this is not reduced across ranks: the peer's own timings
+         * cover a different window (it waits for the ping before replying), so
+         * the initiator's round trip is the measurement by definition. */
         report.time_per_iter_s = 0.5 * stats.avg_s;
         report.min_s = 0.5 * stats.min_s;
         report.max_s = 0.5 * stats.max_s;
-        gpu_bench::set_local_distribution(report, stats, 0.5);
+        gpu_bench::set_distribution(report, stats, 0.5);
         report.valid = ok;
         report.extra = "device=\"" + queue.get_device().get_info<sycl::info::device::name>() + "\"";
         gpu_bench::print_report(report);

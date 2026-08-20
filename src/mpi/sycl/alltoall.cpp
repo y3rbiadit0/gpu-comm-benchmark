@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "cli.hpp"
+#include "collective_stats_mpi.hpp"
 #include "report.hpp"
 #include "timing.hpp"
 #include "validation.hpp"
@@ -57,12 +58,7 @@ int main(int argc, char** argv) {
       MPI_Alltoall(device_send, peer_count, MPI_FLOAT, device_recv, peer_count, MPI_FLOAT, MPI_COMM_WORLD);
     });
 
-    double time_per_iter = 0.0;
-    double min_time = 0.0;
-    double max_time = 0.0;
-    MPI_Reduce(&stats.avg_s, &time_per_iter, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&stats.min_s, &min_time, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&stats.max_s, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    const auto global = gpu_bench::collective_stats(stats);
 
     std::vector<float> host_recv(total);
     queue.copy(device_recv, host_recv.data(), total).wait();
@@ -81,10 +77,10 @@ int main(int argc, char** argv) {
       report.bytes_per_iter = total * sizeof(float);
       report.iterations = iterations;
       report.warmup = warmup;
-      report.time_per_iter_s = time_per_iter;
-      report.min_s = min_time;
-      report.max_s = max_time;
-      gpu_bench::set_local_distribution(report, stats);
+      report.time_per_iter_s = global.avg_s;
+      report.min_s = global.min_s;
+      report.max_s = global.max_s;
+      gpu_bench::set_distribution(report, global);
       report.valid = global_ok != 0;
       report.extra = "device=\"" + queue.get_device().get_info<sycl::info::device::name>() + "\"";
       gpu_bench::print_report(report);

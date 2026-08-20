@@ -19,8 +19,8 @@ halo of width `H` with `left=(r-1+P)%P` and `right=(r+1)%P`, using GPU-resident
 buffers. Synchronisation in the timed loop is point-to-point for the MPI, NCCL,
 oneCCL, and NVSHMEM implementations; OSHMPI instead completes each exchange with
 `shmem_quiet` followed by a global `shmem_barrier_all`. `H` is swept; for each
-`H` the harness reports the slowest-rank average per-iteration time via
-`print_report`.
+`H` the harness reduces the per-iteration times across ranks with MAX and
+reports the mean of that series via `print_report`.
 
 The bytes accounted per iteration are **bus bytes** — both sends and both
 receives:

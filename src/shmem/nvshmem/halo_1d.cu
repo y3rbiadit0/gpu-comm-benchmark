@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "cli.hpp"
+#include "collective_stats_mpi.hpp"
 #include "report.hpp"
 #include "timing.hpp"
 #include "validation.hpp"
@@ -57,25 +58,19 @@ __global__ void fill_interior_kernel(float* interior, std::size_t n_local, std::
 
 // One block performs the full exchange. recv_left/recv_right are symmetric
 // addresses, so they name the right slot on the neighbour too.
-//  API: --> https://docs.nvidia.com/nvshmem/api/gen/api/signal.html
 __global__ void halo_exchange_kernel(float* recv_left, float* recv_right, const float* send_left,
                                      const float* send_right, std::uint64_t* signals, std::size_t halo,
                                      std::uint64_t value, int left, int right) {
-  // Approach:
-  //  Send my right boundary into the right neighbour's left halo and raise its
-  //  sig_left; send my left boundary into the left neighbour's right halo and
-  //  raise its sig_right.
-  
-  // Note:
-  //  For a very small halo, a valid mental model also could be put + signal, but to make it consistent
-  //  across all halo sizes, we use _block format.
-
+  // The block API keeps the transfer cooperative across all halo sizes.
   nvshmemx_float_put_signal_nbi_block(recv_left, send_right, halo, signals + sig_left, value,
                                       NVSHMEM_SIGNAL_SET, right);
   nvshmemx_float_put_signal_nbi_block(recv_right, send_left, halo, signals + sig_right, value,
                                       NVSHMEM_SIGNAL_SET, left);
   __syncthreads();
   if (threadIdx.x == 0) {
+    // Incoming signals acknowledge neighbours' puts, not this PE's outbound
+    // NBI operations. Complete those before allowing the timed kernel to end.
+    nvshmem_quiet();
     nvshmem_signal_wait_until(signals + sig_left, NVSHMEM_CMP_GE, value);
     nvshmem_signal_wait_until(signals + sig_right, NVSHMEM_CMP_GE, value);
   }
@@ -160,12 +155,19 @@ int main(int argc, char** argv) {
       float* recv_right = interior + n_local;
 
       constexpr int block_size = 256;
+      std::size_t halo_v = halo;
+      int left_v = left;
+      int right_v = right;
       MPI_Barrier(MPI_COMM_WORLD);
       const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
         ++value;
-        halo_exchange_kernel<<<1, block_size>>>(recv_left, recv_right, send_left, send_right, signals,
-                                                halo, value, left, right);
-        check_cuda(cudaGetLastError(), "halo_exchange_kernel");
+        void* args[] = {&recv_left, &recv_right, &send_left, &send_right, &signals,
+                        &halo_v, &value, &left_v, &right_v};
+        const int status = nvshmemx_collective_launch(
+            reinterpret_cast<const void*>(halo_exchange_kernel), dim3(1), dim3(block_size), args, 0, 0);
+        if (status != 0) {
+          throw std::runtime_error("nvshmemx_collective_launch failed");
+        }
         check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(halo)");
       });
 
@@ -185,13 +187,8 @@ int main(int argc, char** argv) {
       }
 
       int global_ok = 1;
-      double max_avg = 0.0;
-      double min_min = 0.0;
-      double max_max = 0.0;
       MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
-      MPI_Reduce(&stats.avg_s, &max_avg, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-      MPI_Reduce(&stats.min_s, &min_min, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-      MPI_Reduce(&stats.max_s, &max_max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+      const auto global = gpu_bench::collective_stats(stats);
 
       if (pe == 0) {
         gpu_bench::bench_report report;
@@ -201,10 +198,10 @@ int main(int argc, char** argv) {
         report.bytes_per_iter = 4U * halo * sizeof(float);
         report.iterations = iterations;
         report.warmup = warmup;
-        report.time_per_iter_s = max_avg;
-        report.min_s = min_min;
-        report.max_s = max_max;
-        gpu_bench::set_local_distribution(report, stats);
+        report.time_per_iter_s = global.avg_s;
+        report.min_s = global.min_s;
+        report.max_s = global.max_s;
+        gpu_bench::set_distribution(report, global);
         report.valid = global_ok != 0;
         report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv sync=signal";
         gpu_bench::print_report(report);

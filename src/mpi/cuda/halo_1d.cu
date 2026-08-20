@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "cli.hpp"
+#include "collective_stats_mpi.hpp"
 #include "report.hpp"
 #include "timing.hpp"
 #include "validation.hpp"
@@ -142,13 +143,8 @@ int main(int argc, char** argv) {
       }
 
       int global_ok = 1;
-      double max_avg = 0.0;
-      double min_min = 0.0;
-      double max_max = 0.0;
       MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
-      MPI_Reduce(&stats.avg_s, &max_avg, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-      MPI_Reduce(&stats.min_s, &min_min, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-      MPI_Reduce(&stats.max_s, &max_max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+      const auto global = gpu_bench::collective_stats(stats);
 
       if (rank == 0) {
         gpu_bench::bench_report report;
@@ -158,10 +154,10 @@ int main(int argc, char** argv) {
         report.bytes_per_iter = 4U * halo * sizeof(float);  // 2 sends + 2 recvs per rank
         report.iterations = iterations;
         report.warmup = warmup;
-        report.time_per_iter_s = max_avg;
-        report.min_s = min_min;
-        report.max_s = max_max;
-        gpu_bench::set_local_distribution(report, stats);
+        report.time_per_iter_s = global.avg_s;
+        report.min_s = global.min_s;
+        report.max_s = global.max_s;
+        gpu_bench::set_distribution(report, global);
         report.valid = global_ok != 0;
         report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv";
         gpu_bench::print_report(report);

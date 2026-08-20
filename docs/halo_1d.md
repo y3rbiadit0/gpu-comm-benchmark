@@ -113,10 +113,17 @@ these numbers against a vendor's unidirectional figure.)
 ### Timing
 
 The shared `run_benchmark` harness (`include/timing.hpp`) runs `warmup` untimed
-iterations, then `iterations` timed ones, each a fully-completed exchange. For
-every `H` the per-rank average is reduced to the **slowest rank**
-(`time_per_iter_s = max over ranks of the average`); `min`/`max` bracket the
-distribution. Only rank/PE 0 prints.
+iterations, then `iterations` timed ones, each a fully-completed exchange, and
+keeps every per-iteration sample. For every `H` the samples are reduced across
+ranks iteration by iteration with MAX (`include/collective_stats.hpp`), and
+`time_per_iter_s` is the mean of that reduced series — the **average slowest
+rank per iteration**, not the slowest rank's average. `min`/`max` and the
+quartiles bracket the same reduced series. Only rank/PE 0 prints.
+
+The separately named `cuda_nvshmem_halo_1d_optimized` variant is not part of
+that directly comparable six-backend series. Its iterations execute inside one
+persistent kernel, so it can report only `MAX(AVG)` of the amortized PE times;
+its output is marked `variant=persistent-multiblock`.
 
 ---
 

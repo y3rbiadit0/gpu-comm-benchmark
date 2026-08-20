@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "cli.hpp"
+#include "collective_stats_shmem.hpp"
 #include "oshmpi_space.h"
 #include "report.hpp"
 #include "timing.hpp"
@@ -35,9 +36,9 @@ int main(int argc, char** argv) {
 
   const int pe = shmem_my_pe();
   const int pes = shmem_n_pes();
-  bool space_created = false;
   void* space = nullptr;
-  double* stats_by_pe = nullptr;
+  double* sample_gather = nullptr;
+  double* ok_by_pe = nullptr;
 
   try {
     const auto count = gpu_bench::parse_size_arg(argc, argv, 1U << 16U);
@@ -58,12 +59,13 @@ int main(int argc, char** argv) {
     if (space == nullptr) {
       throw std::runtime_error("failed to create OSHMPI CUDA memory space");
     }
-    space_created = true;
-
     auto* device_send = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, total * sizeof(float)));
     auto* device_recv = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, total * sizeof(float)));
-    stats_by_pe = static_cast<double*>(shmem_malloc(4U * static_cast<std::size_t>(pes) * sizeof(double)));
-    if (device_send == nullptr || device_recv == nullptr || stats_by_pe == nullptr) {
+    sample_gather = static_cast<double*>(
+        shmem_malloc(gpu_bench::collective_gather_elements(pes, iterations) * sizeof(double)));
+    ok_by_pe = static_cast<double*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(double)));
+    if (device_send == nullptr || device_recv == nullptr || sample_gather == nullptr ||
+        ok_by_pe == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI symmetric memory");
     }
 
@@ -89,36 +91,35 @@ int main(int argc, char** argv) {
       shmem_quiet();
       shmem_barrier_all();
     });
+    const auto global = gpu_bench::collective_stats(stats, sample_gather, pe, pes);
 
     std::vector<float> host_recv(total);
     check_cuda(cudaMemcpy(host_recv.data(), device_recv, total * sizeof(float), cudaMemcpyDeviceToHost),
                "cudaMemcpy(recv)");
-    int local_ok = gpu_bench::validate_alltoall(host_recv.data(),pe, pes, count) ? 1 : 0;
+    const int local_ok = gpu_bench::validate_alltoall(host_recv.data(), pe, pes, count) ? 1 : 0;
 
-    const double local_stats[4] = {stats.avg_s, stats.min_s, stats.max_s, static_cast<double>(local_ok)};
-    shmem_putmem(stats_by_pe + 4 * pe, local_stats, 4U * sizeof(double), 0);
+    const double local_value = static_cast<double>(local_ok);
+    shmem_putmem(ok_by_pe + pe, &local_value, sizeof(double), 0);
     shmem_quiet();
     shmem_barrier_all();
 
-    double time_per_iter = stats.avg_s;
-    double min_time = stats.min_s;
-    double max_time = stats.max_s;
     int global_ok = local_ok;
     if (pe == 0) {
       global_ok = 1;
       for (int source_pe = 0; source_pe < pes; ++source_pe) {
-        time_per_iter = std::max(time_per_iter, stats_by_pe[4 * source_pe + 0]);
-        min_time = std::min(min_time, stats_by_pe[4 * source_pe + 1]);
-        max_time = std::max(max_time, stats_by_pe[4 * source_pe + 2]);
-        if (stats_by_pe[4 * source_pe + 3] < 0.5) {
+        if (ok_by_pe[source_pe] < 0.5) {
           global_ok = 0;
         }
       }
     }
 
-    shmem_free(stats_by_pe);
+    shmem_free(ok_by_pe);
+    shmem_free(sample_gather);
+    // The space allocations go back before the space they came from does, as
+    // OSHMPI's own CUDA-space test does.
+    shmem_free(device_recv);
+    shmem_free(device_send);
     gpu_bench_oshmpi_space_destroy(space);
-    space_created = false;
 
     if (pe == 0) {
       gpu_bench::bench_report report;
@@ -128,10 +129,10 @@ int main(int argc, char** argv) {
       report.bytes_per_iter = total * sizeof(float);
       report.iterations = iterations;
       report.warmup = warmup;
-      report.time_per_iter_s = time_per_iter;
-      report.min_s = min_time;
-      report.max_s = max_time;
-      gpu_bench::set_local_distribution(report, stats);
+      report.time_per_iter_s = global.avg_s;
+      report.min_s = global.min_s;
+      report.max_s = global.max_s;
+      gpu_bench::set_distribution(report, global);
       report.valid = global_ok != 0;
       gpu_bench::print_report(report);
     }
@@ -140,9 +141,8 @@ int main(int argc, char** argv) {
     return global_ok ? 0 : 1;
   } catch (const std::exception& error) {
     std::cerr << "PE " << pe << ": " << error.what() << '\n';
-    if (space_created) {
-      gpu_bench_oshmpi_space_destroy(space);
-    }
+    // Space cleanup is collective and is unsafe when another PE may still be
+    // inside the operation that failed locally.
     shmem_global_exit(1);
   }
 }

@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "cli.hpp"
+#include "collective_stats_shmem.hpp"
 #include "oshmpi_space.h"
 #include "partition.hpp"
 #include "report.hpp"
@@ -113,7 +114,6 @@ int main(int argc, char** argv) {
 
   const int pe = shmem_my_pe();
   const int pes = shmem_n_pes();
-  bool space_created = false;
   void* space = nullptr;
   double* source = nullptr;
   double* result = nullptr;
@@ -121,7 +121,8 @@ int main(int argc, char** argv) {
   double* pwrk_qq = nullptr;
   long* psync_pq = nullptr;
   long* psync_qq = nullptr;
-  double* stats_by_pe = nullptr;
+  double* ok_by_pe = nullptr;
+  double* sample_gather = nullptr;
 
   try {
     const auto side = gpu_bench::parse_size_arg(argc, argv, 1U << 9U);
@@ -145,8 +146,6 @@ int main(int argc, char** argv) {
     if (space == nullptr) {
       throw std::runtime_error("failed to create OSHMPI CUDA memory space");
     }
-    space_created = true;
-
     float* p_field = nullptr;
     float* q_field = nullptr;
     double* partial_pq = nullptr;
@@ -166,10 +165,13 @@ int main(int argc, char** argv) {
     pwrk_qq = static_cast<double*>(shmem_malloc(SHMEM_REDUCE_MIN_WRKDATA_SIZE * sizeof(double)));
     psync_pq = static_cast<long*>(shmem_malloc(SHMEM_REDUCE_SYNC_SIZE * sizeof(long)));
     psync_qq = static_cast<long*>(shmem_malloc(SHMEM_REDUCE_SYNC_SIZE * sizeof(long)));
-    stats_by_pe = static_cast<double*>(shmem_malloc(4U * static_cast<std::size_t>(pes) * sizeof(double)));
+    ok_by_pe = static_cast<double*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(double)));
+    sample_gather = static_cast<double*>(
+        shmem_malloc(gpu_bench::collective_gather_elements(pes, iterations) * sizeof(double)));
     if (send_west == nullptr || send_east == nullptr || recv_west == nullptr || recv_east == nullptr ||
         source == nullptr || result == nullptr || pwrk_pq == nullptr || pwrk_qq == nullptr ||
-        psync_pq == nullptr || psync_qq == nullptr || stats_by_pe == nullptr) {
+        psync_pq == nullptr || psync_qq == nullptr || ok_by_pe == nullptr ||
+        sample_gather == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI symmetric memory");
     }
     for (int i = 0; i < SHMEM_REDUCE_SYNC_SIZE; ++i) {
@@ -225,6 +227,7 @@ int main(int argc, char** argv) {
       shmem_double_sum_to_all(&result[0], &source[0], 1, 0, 0, pes, pwrk_pq, psync_pq);
       shmem_double_sum_to_all(&result[1], &source[1], 1, 0, 0, pes, pwrk_qq, psync_qq);
     });
+    const auto global = gpu_bench::collective_stats(stats, sample_gather, pe, pes);
 
     const auto ones = [](std::size_t, std::size_t) { return 1.0F; };
     const auto qval = [&](std::size_t i, std::size_t jg) { return gpu_bench::stencil5(i, jg, side, ones); };
@@ -248,22 +251,16 @@ int main(int argc, char** argv) {
       }
     }
 
-    const double local_stats[4] = {stats.avg_s, stats.min_s, stats.max_s, static_cast<double>(local_ok)};
-    shmem_putmem(stats_by_pe + 4 * pe, local_stats, 4U * sizeof(double), 0);
+    const double local_value = static_cast<double>(local_ok);
+    shmem_putmem(ok_by_pe + pe, &local_value, sizeof(double), 0);
     shmem_quiet();
     shmem_barrier_all();
 
-    double time_per_iter = stats.avg_s;
-    double min_time = stats.min_s;
-    double max_time = stats.max_s;
     int global_ok = local_ok;
     if (pe == 0) {
       global_ok = 1;
       for (int source_pe = 0; source_pe < pes; ++source_pe) {
-        time_per_iter = std::max(time_per_iter, stats_by_pe[4 * source_pe + 0]);
-        min_time = std::min(min_time, stats_by_pe[4 * source_pe + 1]);
-        max_time = std::max(max_time, stats_by_pe[4 * source_pe + 2]);
-        if (stats_by_pe[4 * source_pe + 3] < 0.5) {
+        if (ok_by_pe[source_pe] < 0.5) {
           global_ok = 0;
         }
       }
@@ -273,15 +270,21 @@ int main(int argc, char** argv) {
     check_cuda(cudaFree(partial_pq), "cudaFree(partial_pq)");
     check_cuda(cudaFree(q_field), "cudaFree(q)");
     check_cuda(cudaFree(p_field), "cudaFree(p)");
-    shmem_free(stats_by_pe);
+    shmem_free(sample_gather);
+    shmem_free(ok_by_pe);
     shmem_free(psync_qq);
     shmem_free(psync_pq);
     shmem_free(pwrk_qq);
     shmem_free(pwrk_pq);
     shmem_free(result);
     shmem_free(source);
+    // The space allocations go back before the space they came from does, as
+    // OSHMPI's own CUDA-space test does.
+    shmem_free(recv_east);
+    shmem_free(recv_west);
+    shmem_free(send_east);
+    shmem_free(send_west);
     gpu_bench_oshmpi_space_destroy(space);
-    space_created = false;
 
     if (pe == 0) {
       gpu_bench::bench_report report;
@@ -291,10 +294,10 @@ int main(int argc, char** argv) {
       report.bytes_per_iter = 2U * side * sizeof(float);
       report.iterations = iterations;
       report.warmup = warmup;
-      report.time_per_iter_s = time_per_iter;
-      report.min_s = min_time;
-      report.max_s = max_time;
-      gpu_bench::set_local_distribution(report, stats);
+      report.time_per_iter_s = global.avg_s;
+      report.min_s = global.min_s;
+      report.max_s = global.max_s;
+      gpu_bench::set_distribution(report, global);
       report.valid = global_ok != 0;
       gpu_bench::print_report(report);
     }
@@ -303,9 +306,8 @@ int main(int argc, char** argv) {
     return global_ok ? 0 : 1;
   } catch (const std::exception& error) {
     std::cerr << "PE " << pe << ": " << error.what() << '\n';
-    if (space_created) {
-      gpu_bench_oshmpi_space_destroy(space);
-    }
+    // Space cleanup is collective and is unsafe when another PE may still be
+    // inside the operation that failed locally.
     shmem_global_exit(1);
   }
 }

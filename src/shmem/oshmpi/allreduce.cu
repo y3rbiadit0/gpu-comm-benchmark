@@ -12,6 +12,7 @@
 #include <string>
 
 #include "cli.hpp"
+#include "collective_stats_shmem.hpp"
 #include "report.hpp"
 #include "timing.hpp"
 #include "validation.hpp"
@@ -48,18 +49,20 @@ int main(int argc, char** argv) {
         gpu_bench::checked_size_multiply(pwrk_elements, sizeof(float), "allreduce work buffer");
     const auto psync_bytes = gpu_bench::checked_size_multiply(
         static_cast<std::size_t>(SHMEM_REDUCE_SYNC_SIZE), sizeof(long), "allreduce sync buffer");
-    const auto stats_elements = gpu_bench::checked_size_multiply(
-        4U, static_cast<std::size_t>(pes), "allreduce statistics buffer");
-    const auto stats_bytes =
-        gpu_bench::checked_size_multiply(stats_elements, sizeof(double), "allreduce statistics buffer");
+    const auto ok_bytes = gpu_bench::checked_size_multiply(
+        static_cast<std::size_t>(pes), sizeof(double), "allreduce validation buffer");
+    const auto gather_bytes =
+        gpu_bench::checked_size_multiply(gpu_bench::collective_gather_elements(pes, iterations),
+                                         sizeof(double), "allreduce sample buffer");
 
     auto* sym_source = static_cast<float*>(shmem_malloc(max_bytes));
     auto* sym_result = static_cast<float*>(shmem_malloc(max_bytes));
     auto* pwrk = static_cast<float*>(shmem_malloc(pwrk_bytes));
     auto* psync = static_cast<long*>(shmem_malloc(psync_bytes));
-    auto* stats_by_pe = static_cast<double*>(shmem_malloc(stats_bytes));
+    auto* ok_by_pe = static_cast<double*>(shmem_malloc(ok_bytes));
+    auto* sample_gather = static_cast<double*>(shmem_malloc(gather_bytes));
     if (sym_source == nullptr || sym_result == nullptr || pwrk == nullptr || psync == nullptr ||
-        stats_by_pe == nullptr) {
+        ok_by_pe == nullptr || sample_gather == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI symmetric memory");
     }
 
@@ -79,40 +82,37 @@ int main(int argc, char** argv) {
         shmem_float_sum_to_all(sym_result, sym_source, count, 0, 0, pes, pwrk, psync);
       });
 
+      const auto global = gpu_bench::collective_stats(stats, sample_gather, pe, pes);
+
       const int local_ok = validate_result(sym_result, count, expected) ? 1 : 0;
-      const double local_values[4] = {
-          stats.avg_s, stats.min_s, stats.max_s, static_cast<double>(local_ok)};
-      shmem_putmem(stats_by_pe + 4 * pe, local_values, 4U * sizeof(double), 0);
+      const double local_value = static_cast<double>(local_ok);
+      shmem_putmem(ok_by_pe + pe, &local_value, sizeof(double), 0);
       shmem_quiet();
       shmem_barrier_all();
 
-      double time_per_iter = stats.avg_s;
-      double min_time = stats.min_s;
-      double max_time = stats.max_s;
       int global_ok = local_ok;
       if (pe == 0) {
         global_ok = 1;
         for (int source_pe = 0; source_pe < pes; ++source_pe) {
-          time_per_iter = std::max(time_per_iter, stats_by_pe[4 * source_pe + 0]);
-          min_time = std::min(min_time, stats_by_pe[4 * source_pe + 1]);
-          max_time = std::max(max_time, stats_by_pe[4 * source_pe + 2]);
-          if (stats_by_pe[4 * source_pe + 3] < 0.5) {
+          if (ok_by_pe[source_pe] < 0.5) {
             global_ok = 0;
           }
         }
+        // Hand the verdict back to everyone so all PEs agree on the exit code.
+        // Slot 0 is PE 0's own flag, already consumed and rewritten next size.
         const double global_value = static_cast<double>(global_ok);
         for (int target_pe = 0; target_pe < pes; ++target_pe) {
-          shmem_putmem(stats_by_pe, &global_value, sizeof(global_value), target_pe);
+          shmem_putmem(ok_by_pe, &global_value, sizeof(global_value), target_pe);
         }
         shmem_quiet();
       }
       shmem_barrier_all();
-      global_ok = stats_by_pe[0] >= 0.5 ? 1 : 0;
+      global_ok = ok_by_pe[0] >= 0.5 ? 1 : 0;
       all_sizes_ok = std::min(all_sizes_ok, global_ok);
 
       if (pe == 0) {
         const double algorithm_gbytes_per_s =
-            time_per_iter > 0.0 ? static_cast<double>(bytes) / time_per_iter / 1.0e9 : 0.0;
+            global.avg_s > 0.0 ? static_cast<double>(bytes) / global.avg_s / 1.0e9 : 0.0;
         const double bus_gbytes_per_s =
             algorithm_gbytes_per_s * 2.0 * static_cast<double>(pes - 1) / static_cast<double>(pes);
 
@@ -123,10 +123,10 @@ int main(int argc, char** argv) {
         report.bytes_per_iter = bytes;
         report.iterations = iterations;
         report.warmup = warmup;
-        report.time_per_iter_s = time_per_iter;
-        report.min_s = min_time;
-        report.max_s = max_time;
-        gpu_bench::set_local_distribution(report, stats);
+        report.time_per_iter_s = global.avg_s;
+        report.min_s = global.min_s;
+        report.max_s = global.max_s;
+        gpu_bench::set_distribution(report, global);
         report.valid = global_ok != 0;
         report.extra = "datatype=float32 reduction=sum bus_gbytes_per_s=" +
                        std::to_string(bus_gbytes_per_s) + " memory=host_symmetric";
@@ -134,7 +134,8 @@ int main(int argc, char** argv) {
       }
     }
 
-    shmem_free(stats_by_pe);
+    shmem_free(sample_gather);
+    shmem_free(ok_by_pe);
     shmem_free(psync);
     shmem_free(pwrk);
     shmem_free(sym_result);

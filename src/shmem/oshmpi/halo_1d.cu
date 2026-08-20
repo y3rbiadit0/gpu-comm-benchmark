@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "cli.hpp"
+#include "collective_stats_shmem.hpp"
 #include "oshmpi_space.h"
 #include "report.hpp"
 #include "timing.hpp"
@@ -62,7 +63,6 @@ int main(int argc, char** argv) {
 
   const int pe = shmem_my_pe();
   const int pes = shmem_n_pes();
-  bool space_created = false;
   void* space = nullptr;
 
   try {
@@ -98,17 +98,14 @@ int main(int argc, char** argv) {
     if (space == nullptr) {
       throw std::runtime_error("failed to create OSHMPI CUDA memory space");
     }
-    space_created = true;
-
     auto* buf = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, total * sizeof(float)));
     if (buf == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI CUDA symmetric memory");
     }
-    auto* stat_avg = static_cast<double*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(double)));
-    auto* stat_min = static_cast<double*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(double)));
-    auto* stat_max = static_cast<double*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(double)));
+    auto* sample_gather = static_cast<double*>(
+        shmem_malloc(gpu_bench::collective_gather_elements(pes, iterations) * sizeof(double)));
     auto* oks = static_cast<int*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(int)));
-    if (stat_avg == nullptr || stat_min == nullptr || stat_max == nullptr || oks == nullptr) {
+    if (sample_gather == nullptr || oks == nullptr) {
       throw std::runtime_error("failed to allocate OSHMPI symmetric scratch");
     }
 
@@ -142,6 +139,7 @@ int main(int argc, char** argv) {
         shmem_quiet();        // complete my puts before the barrier releases
         shmem_barrier_all();  // neighbours' halos have arrived once this returns
       });
+      const auto global = gpu_bench::collective_stats(stats, sample_gather, pe, pes);
 
       host_left.assign(halo, 0.0F);
       host_right.assign(halo, 0.0F);
@@ -158,22 +156,13 @@ int main(int argc, char** argv) {
         }
       }
 
-      shmem_double_p(&stat_avg[pe], stats.avg_s, 0);
-      shmem_double_p(&stat_min[pe], stats.min_s, 0);
-      shmem_double_p(&stat_max[pe], stats.max_s, 0);
       shmem_int_p(&oks[pe], local_ok, 0);
       shmem_quiet();
       shmem_barrier_all();
 
       if (pe == 0) {
-        double max_avg = 0.0;
-        double min_min = stat_min[0];
-        double max_max = 0.0;
         int global_ok = 1;
         for (int source = 0; source < pes; ++source) {
-          max_avg = std::max(max_avg, stat_avg[source]);
-          min_min = std::min(min_min, stat_min[source]);
-          max_max = std::max(max_max, stat_max[source]);
           global_ok = global_ok && oks[source];
         }
 
@@ -184,10 +173,10 @@ int main(int argc, char** argv) {
         report.bytes_per_iter = 4U * halo * sizeof(float);
         report.iterations = iterations;
         report.warmup = warmup;
-        report.time_per_iter_s = max_avg;
-        report.min_s = min_min;
-        report.max_s = max_max;
-        gpu_bench::set_local_distribution(report, stats);
+        report.time_per_iter_s = global.avg_s;
+        report.min_s = global.min_s;
+        report.max_s = global.max_s;
+        gpu_bench::set_distribution(report, global);
         report.valid = global_ok != 0;
         report.extra = "halo_elems=" + std::to_string(halo) + " topology=ring bw=sendrecv sync=barrier";
         gpu_bench::print_report(report);
@@ -196,19 +185,18 @@ int main(int argc, char** argv) {
     }
 
     shmem_free(oks);
-    shmem_free(stat_max);
-    shmem_free(stat_min);
-    shmem_free(stat_avg);
+    shmem_free(sample_gather);
+    // The space allocation goes back before the space it came from does, as
+    // OSHMPI's own CUDA-space test does.
+    shmem_free(buf);
     gpu_bench_oshmpi_space_destroy(space);
-    space_created = false;
 
     shmem_finalize();
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "PE " << pe << ": " << error.what() << '\n';
-    if (space_created) {
-      gpu_bench_oshmpi_space_destroy(space);
-    }
+    // Space cleanup is collective and is unsafe when another PE may still be
+    // inside the operation that failed locally.
     shmem_global_exit(1);
   }
 }

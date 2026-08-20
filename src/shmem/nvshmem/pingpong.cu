@@ -148,7 +148,9 @@ int main(int argc, char** argv) {
           ok = gpu_bench::nearly_equal(host_recv[i], host_send[i]);
         }
 
-        // Amortized per-round-trip time; reported as one-way latency.
+        /* Amortized per-round-trip time; reported as one-way latency. The
+         * ping/pong loop runs inside one kernel launch, so there are no
+         * per-iteration samples and no distribution to report. */
         const double round_trip = elapsed / static_cast<double>(iterations);
         gpu_bench::bench_report report;
         report.name = "cuda_nvshmem_pingpong";

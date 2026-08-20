@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "cli.hpp"
+#include "collective_stats_mpi.hpp"
 #include "report.hpp"
 #include "timing.hpp"
 #include "validation.hpp"
@@ -81,13 +82,9 @@ int main(int argc, char** argv) {
       }
 
       int global_ok = 1;
-      double max_avg = 0.0;
-      double min_min = 0.0;
-      double max_max = 0.0;
       MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_LAND, MPI_COMM_WORLD);
-      MPI_Reduce(&stats.avg_s, &max_avg, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-      MPI_Reduce(&stats.min_s, &min_min, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-      MPI_Reduce(&stats.max_s, &max_max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+      const auto global = gpu_bench::collective_stats(stats);
+      const double max_avg = global.avg_s;
       all_sizes_ok = all_sizes_ok && global_ok;
 
       if (rank == 0) {
@@ -106,9 +103,9 @@ int main(int argc, char** argv) {
         report.iterations = iterations;
         report.warmup = warmup;
         report.time_per_iter_s = max_avg;
-        report.min_s = min_min;
-        report.max_s = max_max;
-        gpu_bench::set_local_distribution(report, stats);
+        report.min_s = global.min_s;
+        report.max_s = global.max_s;
+        gpu_bench::set_distribution(report, global);
         report.valid = global_ok != 0;
         report.extra = "datatype=float32 reduction=sum bus_gbytes_per_s=" + std::to_string(bus_gbytes_per_s) +
                        " device=\"" + queue.get_device().get_info<sycl::info::device::name>() + "\"";
