@@ -195,9 +195,9 @@ See [`tools/README.md`](tools/README.md) for details.
 Use the Slurm scripts for validation runs; they request the GPU partition and resources correctly.
 
 ```bash
-GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n2g.sh
-GPU_BENCH_MSG_SIZES=1,1024 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/allreduce/cuda_mpi/1n4g.sh
-GPU_BENCH_ROUTINGS=uniform,hotspot80 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/moe/cuda_mpi/1n4g.sh
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_mpi/1n2g.sh
+GPU_BENCH_MSG_SIZES=1,1024 GPU_BENCH_NTRIALS=1 tools/sbatch.sh cluster/leonardo/experiments/allreduce/cuda_mpi/1n4g.sh
+GPU_BENCH_ROUTINGS=uniform,hotspot80 GPU_BENCH_NTRIALS=1 tools/sbatch.sh cluster/leonardo/experiments/moe/cuda_mpi/1n4g.sh
 ```
 
 Leonardo setup, presets, and experiment notes live under [`cluster/leonardo`](cluster/leonardo/README.md).

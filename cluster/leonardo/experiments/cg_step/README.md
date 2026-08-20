@@ -27,12 +27,12 @@ halo. Validation is local (no gather). Build setup is in
 ## Submit
 
 ```bash
-sbatch cluster/leonardo/experiments/cg_step/cuda_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/cg_step/cuda_nccl/1n4g.sh
-sbatch cluster/leonardo/experiments/cg_step/cuda_nvshmem/1n4g.sh
-sbatch cluster/leonardo/experiments/cg_step/oshmpi/1n4g.sh
-sbatch cluster/leonardo/experiments/cg_step/sycl_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/cg_step/sycl_oneccl/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/cg_step/cuda_mpi/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/cg_step/cuda_nccl/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/cg_step/cuda_nvshmem/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/cg_step/oshmpi/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/cg_step/sycl_mpi/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/cg_step/sycl_oneccl/1n4g.sh
 ```
 
 ## Overrides

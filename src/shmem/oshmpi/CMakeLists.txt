@@ -19,7 +19,7 @@ target_include_directories(oshmpi_alltoall PRIVATE ${OSHMPI_INCLUDE_DIRS})
 target_link_libraries(oshmpi_alltoall PRIVATE gpu_bench_common ${OSHMPI_LIBRARIES})
 target_compile_definitions(oshmpi_alltoall PRIVATE USE_CUDA=1)
 
-add_executable(oshmpi_allreduce allreduce.cu)
+add_executable(oshmpi_allreduce allreduce.cu oshmpi_space.c)
 target_include_directories(oshmpi_allreduce PRIVATE ${OSHMPI_INCLUDE_DIRS})
 target_link_libraries(oshmpi_allreduce PRIVATE gpu_bench_common ${OSHMPI_LIBRARIES})
 target_compile_definitions(oshmpi_allreduce PRIVATE USE_CUDA=1)

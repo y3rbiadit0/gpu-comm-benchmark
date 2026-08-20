@@ -34,10 +34,10 @@ two ranks/PEs.
 Choose a backend directory and one of the four topology scripts. For example:
 
 ```bash
-GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n2g.sh
-GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
-GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/2n1g.sh
-GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_mpi/2n4g.sh
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_mpi/1n2g.sh
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_mpi/2n1g.sh
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_mpi/2n4g.sh
 ```
 
 Backend directories are `cuda_mpi`, `cuda_nccl`, `cuda_nvshmem`, `oshmpi`,
@@ -62,7 +62,7 @@ perturbs timing, so use a dedicated single-trial run and do not report its
 numbers:
 
 ```bash
-GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/cuda_nvshmem/2n4g.sh
+GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_nvshmem/2n4g.sh
 ```
 
 `GPU_BENCH_NSYS_TRACE` overrides the trace set (default `cuda,nvtx,mpi`; add `ucx` for

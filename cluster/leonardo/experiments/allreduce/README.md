@@ -1,7 +1,20 @@
 # Leonardo Allreduce Experiments
 
-These jobs benchmark a float32 sum allreduce over device-resident buffers (host-symmetric
-buffers for OSHMPI). Each rank contributes `n` elements and receives the elementwise sum.
+These jobs benchmark a float32 sum allreduce over device-resident buffers on every
+backend. Each rank contributes `n` elements and receives the elementwise sum.
+
+OSHMPI keeps its data GPU-resident and names the path it used in `memory=`.
+`GPU_BENCH_OSHMPI_ALLREDUCE_MEM=device` (the default) reduces straight on CUDA-space
+symmetric buffers, like NVSHMEM, and is the like-for-like collective.
+
+It requires `OMPI_MCA_coll_ucc_enable=1`, now the default in `runtime/oshmpi.sh`. With
+UCC off, OSHMPI's reduction falls through to a host Open MPI op that cannot read device
+memory and segfaults; the binary refuses to run that combination rather than crash.
+
+`=staged` is the fallback for a build without a device-capable reduction: it holds the
+data in `cudaMalloc`'d memory and times the D2H staging, the reduction, and the staging
+back. It is 34× slower at 16 MiB (12160 µs vs 354 µs on 1n4g), most of that pageable-memory
+PCIe traffic at roughly 7 GB/s, and it is what to use to measure the staging cost itself.
 By default each binary sweeps powers of two from 1 element through `GPU_BENCH_N`; `GPU_BENCH_MSG_SIZES`
 selects explicit comma-separated sizes. Build setup is in
 [`cluster/leonardo/README.md`](../../README.md).
@@ -19,12 +32,12 @@ selects explicit comma-separated sizes. Build setup is in
 ## Submit
 
 ```bash
-sbatch cluster/leonardo/experiments/allreduce/cuda_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/allreduce/cuda_nccl/1n4g.sh
-sbatch cluster/leonardo/experiments/allreduce/cuda_nvshmem/1n4g.sh
-sbatch cluster/leonardo/experiments/allreduce/oshmpi/1n4g.sh
-sbatch cluster/leonardo/experiments/allreduce/sycl_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/allreduce/sycl_oneccl/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/allreduce/cuda_mpi/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/allreduce/cuda_nccl/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/allreduce/cuda_nvshmem/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/allreduce/oshmpi/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/allreduce/sycl_mpi/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/allreduce/sycl_oneccl/1n4g.sh
 ```
 
 ## Overrides

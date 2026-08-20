@@ -116,8 +116,8 @@ ldd build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_allreduce \
 Run an explicit-size smoke test:
 
 ```bash
-GPU_BENCH_MSG_SIZES=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/allreduce/sycl_oneccl/1n4g.sh
-GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 sbatch cluster/leonardo/experiments/halo_1d/sycl_oneccl/1n2g.sh
+GPU_BENCH_MSG_SIZES=17 GPU_BENCH_NTRIALS=1 tools/sbatch.sh cluster/leonardo/experiments/allreduce/sycl_oneccl/1n4g.sh
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 tools/sbatch.sh cluster/leonardo/experiments/halo_1d/sycl_oneccl/1n2g.sh
 ```
 
 Expected result:

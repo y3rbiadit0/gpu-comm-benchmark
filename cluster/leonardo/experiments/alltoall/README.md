@@ -20,12 +20,12 @@ so the full permutation is validated **locally** (no gather). Build setup is in
 ## Submit
 
 ```bash
-sbatch cluster/leonardo/experiments/alltoall/cuda_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/alltoall/cuda_nccl/1n4g.sh
-sbatch cluster/leonardo/experiments/alltoall/cuda_nvshmem/1n4g.sh
-sbatch cluster/leonardo/experiments/alltoall/oshmpi/1n4g.sh
-sbatch cluster/leonardo/experiments/alltoall/sycl_mpi/1n4g.sh
-sbatch cluster/leonardo/experiments/alltoall/sycl_oneccl/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/alltoall/cuda_mpi/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/alltoall/cuda_nccl/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/alltoall/cuda_nvshmem/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/alltoall/oshmpi/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/alltoall/sycl_mpi/1n4g.sh
+tools/sbatch.sh cluster/leonardo/experiments/alltoall/sycl_oneccl/1n4g.sh
 ```
 
 ## Overrides
@@ -40,7 +40,7 @@ GPU_BENCH_NTRIALS=5        # job-level repeats
 Example:
 
 ```bash
-GPU_BENCH_N=262144 GPU_BENCH_ITERS=200 sbatch cluster/leonardo/experiments/alltoall/cuda_nccl/2n4g.sh
+GPU_BENCH_N=262144 GPU_BENCH_ITERS=200 tools/sbatch.sh cluster/leonardo/experiments/alltoall/cuda_nccl/2n4g.sh
 ```
 
 The binaries accept `<count_per_peer> [iterations] [warmup]`.

@@ -86,6 +86,30 @@ distribution — for box plots) and `across_runs` (spread across independent job
 Both files carry a `schema_version`; that is the contract `tools/plot` reads
 against, so bump it on any incompatible change.
 
+## `sbatch.sh`
+
+Submits a single job with the project's SLURM defaults applied.
+
+```bash
+tools/sbatch.sh cluster/leonardo/experiments/allreduce/oshmpi/1n4g.sh
+GPU_BENCH_N=17 tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_mpi/2n4g.sh
+tools/sbatch.sh --qos=boost_qos_dbg cluster/leonardo/experiments/cg_step/cuda_mpi/2n4g.sh
+```
+
+The job scripts carry no `-A`/`-p` directives on purpose, so anyone can point
+them at their own allocation — those defaults live in environment variables set
+by `cluster/leonardo/slurm.sh`. `tools/submit_all.sh` sources that file
+in-process and so always has them; a hand-run `sbatch cluster/.../1n4g.sh` from
+a fresh login shell does **not**, and silently lands on the cluster's default
+partition (`lrd_all_serial` on Leonardo), which fails with a confusing
+`QOSMaxCpuPerUserLimit` or `More processors requested than permitted`.
+
+This wrapper sources the defaults, prints the account and partition it is using,
+and passes everything else straight through — so sbatch flags still work and
+still win, the precedence being command line > environment > script directives.
+
+Use `tools/submit_all.sh` for whole sweeps; this is for one job at a time.
+
 ## `plot_bench`
 
 Draws the figures for the results, straight from Benchscribe JSON. It never

@@ -13,7 +13,11 @@ export OSHMPI_MPI_GPU_FEATURES=${OSHMPI_MPI_GPU_FEATURES:-all}
 export OSHMPI_VERBOSE=${OSHMPI_VERBOSE:-0}
 
 export OMPI_MCA_coll_hcoll_enable=${OMPI_MCA_coll_hcoll_enable:-0}
-export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-0}
+# UCC must be on: OSHMPI implements reductions over MPI, so with UCC disabled
+# shmem_*_to_all reaches the host `ompi_op` and segfaults on device pointers
+# (Leonardo jobs 53261883, 53263113). With it on, the device-resident reduction
+# validates (job 53263792) and runs 34x faster than host staging at 16 MiB.
+export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-1}
 export OMPI_MCA_btl=${OMPI_MCA_btl:-^openib}
 export OMPI_MCA_opal_cuda_support=${OMPI_MCA_opal_cuda_support:-1}
 export OMPI_MCA_osc=${OMPI_MCA_osc:-ucx}

@@ -8,7 +8,7 @@ CUDA examples using OSHMPI/OpenSHMEM CUDA memory spaces.
 | --- | --- | --- |
 | `oshmpi_halo_1d` | Comm-only 1D halo exchange, periodic ring, swept halo width. | One-sided `shmem_putmem` writes halos into symmetric neighbor buffers; `shmem_quiet` + `shmem_barrier_all` handshake (point-to-point `wait_until` can deadlock inter-node when passive RMA needs target-side progress, so the timed loop includes barrier overhead). |
 | `oshmpi_pingpong` | Two-endpoint one-way latency/bandwidth, internal size sweep. | One-sided `shmem_putmem` on device symmetric memory + `shmem_barrier_all` handshake between 2 PEs (barrier sync avoids an inter-node passive-progress deadlock; latency includes barrier overhead). |
-| `oshmpi_allreduce` | Float32 sum allreduce latency/bandwidth, internal size sweep. | `shmem_float_sum_to_all` over host-symmetric buffers. |
+| `oshmpi_allreduce` | Float32 sum allreduce latency/bandwidth, internal size sweep. | GPU-resident data. `GPU_BENCH_OSHMPI_ALLREDUCE_MEM=device` (default) reduces directly on CUDA-space symmetric buffers and needs `OMPI_MCA_coll_ucc_enable=1`; `=staged` falls back to D2H staging + `shmem_float_sum_to_all` + H2D staging. Reported in `memory=`. |
 | `oshmpi_alltoall` | All-to-all personalized exchange (bisection bandwidth). | One-sided `shmem_putmem` loop to every PE + `barrier_all` (no native device alltoall assumed). |
 | `oshmpi_cg_step` | CG iteration skeleton (SpMV halo + two reductions). | `shmem_putmem`+barrier halo + two `shmem_double_sum_to_all` (host-resident scalars). |
 | `oshmpi_moe` | Top-1 MoE dispatch + combine with variable expert loads. | Variable-byte `shmem_putmem` loops over CUDA symmetric memory, with `quiet` + `barrier_all` after dispatch and inverse combine. |

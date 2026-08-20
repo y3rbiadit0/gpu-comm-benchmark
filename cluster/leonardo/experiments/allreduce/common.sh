@@ -21,6 +21,9 @@ gpu_bench_experiment_defaults() {
 
 gpu_bench_experiment_extra_summary() {
   echo "message sizes: ${GPU_BENCH_MSG_SIZES:-powers-of-two}"
+  # OSHMPI-only knob, but recorded for every run so the job log always says
+  # which reduction memory path the results came from.
+  echo "oshmpi allreduce memory: ${GPU_BENCH_OSHMPI_ALLREDUCE_MEM:-staged}"
 }
 
 gpu_bench_allreduce_main() { gpu_bench_experiment_main; }

@@ -20,13 +20,13 @@ isolate the transport:
 ## Submit
 
 ```bash
-sbatch cluster/leonardo/experiments/pingpong/cuda_mpi/1n2g.sh
-sbatch cluster/leonardo/experiments/pingpong/cuda_mpi/2n1g.sh
-sbatch cluster/leonardo/experiments/pingpong/cuda_nccl/2n1g.sh
-sbatch cluster/leonardo/experiments/pingpong/cuda_nvshmem/2n1g.sh
-sbatch cluster/leonardo/experiments/pingpong/oshmpi/2n1g.sh
-sbatch cluster/leonardo/experiments/pingpong/sycl_mpi/2n1g.sh
-sbatch cluster/leonardo/experiments/pingpong/sycl_oneccl/2n1g.sh
+tools/sbatch.sh cluster/leonardo/experiments/pingpong/cuda_mpi/1n2g.sh
+tools/sbatch.sh cluster/leonardo/experiments/pingpong/cuda_mpi/2n1g.sh
+tools/sbatch.sh cluster/leonardo/experiments/pingpong/cuda_nccl/2n1g.sh
+tools/sbatch.sh cluster/leonardo/experiments/pingpong/cuda_nvshmem/2n1g.sh
+tools/sbatch.sh cluster/leonardo/experiments/pingpong/oshmpi/2n1g.sh
+tools/sbatch.sh cluster/leonardo/experiments/pingpong/sycl_mpi/2n1g.sh
+tools/sbatch.sh cluster/leonardo/experiments/pingpong/sycl_oneccl/2n1g.sh
 ```
 
 ## Overrides
@@ -42,8 +42,8 @@ GPU_BENCH_NTRIALS=5        # job-level repeats
 Example:
 
 ```bash
-GPU_BENCH_N=16777216 GPU_BENCH_ITERS=500 sbatch cluster/leonardo/experiments/pingpong/cuda_nvshmem/1n2g.sh
-GPU_BENCH_MSG_SIZES=1,8,64,1024,1048576 sbatch cluster/leonardo/experiments/pingpong/cuda_mpi/2n1g.sh
+GPU_BENCH_N=16777216 GPU_BENCH_ITERS=500 tools/sbatch.sh cluster/leonardo/experiments/pingpong/cuda_nvshmem/1n2g.sh
+GPU_BENCH_MSG_SIZES=1,8,64,1024,1048576 tools/sbatch.sh cluster/leonardo/experiments/pingpong/cuda_mpi/2n1g.sh
 ```
 
 ## Output

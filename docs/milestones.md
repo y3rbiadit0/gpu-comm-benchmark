@@ -129,8 +129,9 @@ every output element, and reports both algorithm bandwidth and normalized collec
 bandwidth. The Leonardo matrix covers `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g`.
 
 **Done when:** all six targets build, explicit and default size sweeps validate, results are
-parsed by Benchscribe, and intra-node, pure inter-node, and mixed runs complete. OSHMPI's
-host-symmetric reduction memory is identified in the output.
+parsed by Benchscribe, and intra-node, pure inter-node, and mixed runs complete. Every
+backend reduces GPU-resident data; OSHMPI's reduction memory path (`device_staged` or
+`device_symmetric`) is identified in the output.
 
 **Implementation status (2026-07-15):** sources, targets, launchers, reporting, and local
 static checks are complete. Leonardo backend builds and topology runs remain.
