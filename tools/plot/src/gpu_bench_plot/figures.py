@@ -85,9 +85,7 @@ def draw_sweep(sweep: Sweep, theme: dict, value_axis: str, outdir: Path,
                 ax.set_title(topology)
             if col == 0:
                 measure = (
-                    f"time per iteration ({sweep.unit})"
-                    if value_axis == "latency"
-                    else "GB/s (bus)"
+                    f"latency ({sweep.unit})" if value_axis == "latency" else "GB/s (bus)"
                 )
                 ax.set_ylabel(axis_label(case, measure))
             if row == len(cases) - 1:
@@ -96,8 +94,8 @@ def draw_sweep(sweep: Sweep, theme: dict, value_axis: str, outdir: Path,
     ordered = [backend for backend in sweep.backends() if backend in handles]
     figure_legend(fig, [handles[backend] for backend in ordered], ordered, theme)
     fig.suptitle(
-        "Per-iteration time vs message size" if value_axis == "latency"
-        else "Bus bandwidth vs message size",
+        "Latency vs message size" if value_axis == "latency"
+        else "Bandwidth vs message size",
         color=theme["text"], fontsize=12,
     )
 

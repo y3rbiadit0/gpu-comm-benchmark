@@ -109,7 +109,7 @@ def test_every_figure_ships_a_table_view(tmp_path, points, theme):
     outdir = tmp_path / "figures"
     assert main(["--points", str(source), "--outdir", str(outdir), "--theme", theme]) == 0
 
-    for stem in ("halo_1d-sweep", "halo_1d-bandwidth", "halo_1d-speedup", "halo_1d-dist"):
+    for stem in ("halo_1d-latency", "halo_1d-bandwidth", "halo_1d-speedup", "halo_1d-dist"):
         assert (outdir / f"{stem}.svg").stat().st_size > 0
         table = outdir / f"{stem}.csv"
         rows = list(csv.DictReader(table.open()))
@@ -136,7 +136,7 @@ def test_fit_figure_is_required_only_when_asked_for_by_name(tmp_path, points, ca
     assert main(["--points", str(source), "--figure", "fit", "--outdir", str(outdir)]) == 2
     # Without --fit, "all" still produces everything else rather than bailing out.
     assert main(["--points", str(source), "--figure", "all", "--outdir", str(outdir)]) == 0
-    assert (outdir / "halo_1d-sweep.svg").exists()
+    assert (outdir / "halo_1d-latency.svg").exists()
     assert not (outdir / "halo_1d-fit.svg").exists()
     assert "skipping fit figure" in capsys.readouterr().err
 
@@ -234,7 +234,7 @@ def test_a_caseless_benchmark_renders_end_to_end(tmp_path):
     source = write_points(tmp_path / "points.json", points)
     outdir = tmp_path / "figures"
     assert main(["--points", str(source), "--figure", "all", "--outdir", str(outdir)]) == 0
-    for stem in ("allreduce-sweep", "allreduce-bandwidth", "allreduce-dist", "allreduce-speedup"):
+    for stem in ("allreduce-latency", "allreduce-bandwidth", "allreduce-dist", "allreduce-speedup"):
         assert (outdir / f"{stem}.svg").stat().st_size > 0
         assert (outdir / f"{stem}.csv").stat().st_size > 0
 
@@ -248,13 +248,13 @@ def test_multiple_benchmarks_get_separate_figure_sets(tmp_path, points):
     ]
     source = write_points(tmp_path / "points.json", points + other)
     outdir = tmp_path / "figures"
-    assert main(["--points", str(source), "--figure", "sweep", "--outdir", str(outdir)]) == 0
+    assert main(["--points", str(source), "--figure", "latency", "--outdir", str(outdir)]) == 0
 
-    assert (outdir / "halo_1d-sweep.svg").exists()
-    assert (outdir / "allreduce-sweep.svg").exists()
+    assert (outdir / "halo_1d-latency.svg").exists()
+    assert (outdir / "allreduce-latency.svg").exists()
 
-    halo = list(csv.DictReader((outdir / "halo_1d-sweep.csv").open()))
-    allreduce = list(csv.DictReader((outdir / "allreduce-sweep.csv").open()))
+    halo = list(csv.DictReader((outdir / "halo_1d-latency.csv").open()))
+    allreduce = list(csv.DictReader((outdir / "allreduce-latency.csv").open()))
     # The caseless allreduce rows must not have leaked into the halo_1d table.
     assert {row["case"] for row in halo} == {"isolated", "steady"}
     assert {row["case"] for row in allreduce} == {""}
@@ -265,3 +265,12 @@ def test_unknown_benchmark_lists_what_is_available(tmp_path, points, capsys):
     assert main(["--points", str(source), "--benchmark", "nope",
                  "--outdir", str(tmp_path / "f")]) == 1
     assert "halo_1d" in capsys.readouterr().err
+
+
+def test_sweep_is_accepted_as_an_alias_for_latency(tmp_path, points):
+    """`sweep` was the original name; old commands must keep working."""
+    source = write_points(tmp_path / "points.json", points)
+    outdir = tmp_path / "figures"
+    assert main(["--points", str(source), "--figure", "sweep", "--outdir", str(outdir)]) == 0
+    assert (outdir / "halo_1d-latency.svg").exists()
+    assert not (outdir / "halo_1d-sweep.svg").exists()

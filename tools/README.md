@@ -133,7 +133,7 @@ stay relative to the repository root.
 
 | Figure | What it shows |
 | --- | --- |
-| `sweep` | per-exchange time vs message size, log-log, panel per case × topology |
+| `latency` | latency vs message size, log-log, panel per case × topology (`sweep` still accepted) |
 | `bandwidth` | bus GB/s vs message size, same panel grid |
 | `fit` | α, B∞ and n½ as grouped bars, one panel per measure (needs `--fit`) |
 | `heatmap` | speedup vs the `cuda_mpi` baseline, backend × message size |

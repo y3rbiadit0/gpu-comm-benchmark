@@ -16,7 +16,13 @@ from .data import (
 from .figures import draw_distribution, draw_fit, draw_heatmap, draw_sweep
 from .theme import THEMES, apply_theme
 
-FIGURES = ("sweep", "bandwidth", "fit", "heatmap", "dist")
+FIGURES = ("latency", "bandwidth", "fit", "heatmap", "dist")
+
+# "sweep" was the original name. It described the method (a message-size sweep)
+# rather than the quantity, which made the latency curve hard to find among
+# figures otherwise named for what they show. Accepted so old commands keep
+# working.
+FIGURE_ALIASES = {"sweep": "latency"}
 
 EPILOG = """\
 Produce the input with benchscribe:
@@ -39,7 +45,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="benchscribe --format json output")
     parser.add_argument("--fit", type=Path,
                         help="benchscribe --fit --format json output (needed for the fit figure)")
-    parser.add_argument("--figure", choices=(*FIGURES, "all"), default="all")
+    parser.add_argument("--figure", choices=(*FIGURES, *FIGURE_ALIASES, "all"), default="all")
     parser.add_argument("--benchmark", help="only plot this benchmark (e.g. halo_1d)")
     parser.add_argument("--outdir", type=Path, default=Path("figures"))
     parser.add_argument(
@@ -63,9 +69,9 @@ def render_benchmark(payload: dict, fit_payload: dict | None, benchmark: str,
     wanted = FIGURES if args.figure == "all" else (args.figure,)
     written: list[Path] = []
 
-    if "sweep" in wanted:
+    if "latency" in wanted:
         written.append(
-            draw_sweep(sweep, theme, "latency", args.outdir, f"{benchmark}-sweep", args.ext)
+            draw_sweep(sweep, theme, "latency", args.outdir, f"{benchmark}-latency", args.ext)
         )
     if "bandwidth" in wanted:
         written.append(
@@ -100,6 +106,7 @@ def render_benchmark(payload: dict, fit_payload: dict | None, benchmark: str,
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    args.figure = FIGURE_ALIASES.get(args.figure, args.figure)
     theme = THEMES[args.theme]
     apply_theme(theme)
 
