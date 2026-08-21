@@ -35,6 +35,24 @@ tools/sbatch.sh cluster/leonardo/experiments/cg_step/sycl_mpi/1n4g.sh
 tools/sbatch.sh cluster/leonardo/experiments/cg_step/sycl_oneccl/1n4g.sh
 ```
 
+### `sycl_oneccl_oshmpi`
+
+`cg_step` needs both point-to-point (the column-slab halo) and collectives (the
+two reductions), which makes it the sharpest test of the oneCCL OSHMPI backend.
+The NCCL-backed fork has a **documented intra-node point-to-point failure** —
+`docs/unsupported-operations.md` records `halo_1d` grouped `ccl::send`/`ccl::recv`
+stalling on `1n2g`, `1n4g` and `2n4g` — and flags `cg_step` as likely to share
+it. The OSHMPI backend routes point-to-point through its own slot mechanism
+(`CCL_OSHMPI_PT2PT_SLOT_SIZE`), so it may work where the NCCL fork does not.
+
+Run one topology before the rest; if it hangs, it is the same class of failure
+and belongs in `docs/unsupported-operations.md` rather than in the comparison:
+
+```bash
+GPU_BENCH_NTRIALS=1 tools/sbatch.sh \
+  cluster/leonardo/experiments/cg_step/sycl_oneccl_oshmpi/1n2g.sh
+```
+
 ## Overrides
 
 ```bash
