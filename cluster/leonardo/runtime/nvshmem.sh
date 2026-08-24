@@ -13,7 +13,9 @@ export OMPI_MCA_coll_hcoll_enable=${OMPI_MCA_coll_hcoll_enable:-0}
 # difference between runtime files is the transport actually under test.
 export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-1}
 export OMPI_MCA_btl=${OMPI_MCA_btl:-^openib}
-export OMPI_MCA_mpi_cuda_support=${OMPI_MCA_mpi_cuda_support:-1}
+# Open MPI 4.x renamed this; the old name still works but prints a
+# deprecation banner into every rank's stderr on every run.
+export OMPI_MCA_opal_cuda_support=${OMPI_MCA_opal_cuda_support:-1}
 
 export NVSHMEM_BOOTSTRAP=${NVSHMEM_BOOTSTRAP:-MPI}
 export NVSHMEM_REMOTE_TRANSPORT=${NVSHMEM_REMOTE_TRANSPORT:-ibrc}

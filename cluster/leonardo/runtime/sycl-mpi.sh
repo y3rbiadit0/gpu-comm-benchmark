@@ -45,7 +45,9 @@ export SYCL_DEVICE_FILTER=${SYCL_DEVICE_FILTER:-cuda}
 export OMPI_MCA_coll_hcoll_enable=${OMPI_MCA_coll_hcoll_enable:-0}
 export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-1}
 export OMPI_MCA_btl=${OMPI_MCA_btl:-^openib}
-export OMPI_MCA_mpi_cuda_support=${OMPI_MCA_mpi_cuda_support:-1}
+# Open MPI 4.x renamed this; the old name still works but prints a
+# deprecation banner into every rank's stderr on every run.
+export OMPI_MCA_opal_cuda_support=${OMPI_MCA_opal_cuda_support:-1}
 export OMPI_MCA_pml=${OMPI_MCA_pml:-ucx}
 
 if [[ ${GPU_BENCH_JOB_NODES:-1} -gt 1 ]]; then

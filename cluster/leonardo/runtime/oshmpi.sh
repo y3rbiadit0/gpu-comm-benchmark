@@ -22,7 +22,9 @@ export OMPI_MCA_btl=${OMPI_MCA_btl:-^openib}
 # OSHMPI hands device pointers straight to MPI, so CUDA-aware support matters
 # more here than anywhere else. This was the only MPI-using runtime leaving it
 # to the build default.
-export OMPI_MCA_mpi_cuda_support=${OMPI_MCA_mpi_cuda_support:-1}
+# Open MPI 4.x renamed this; the old name still works but prints a
+# deprecation banner into every rank's stderr on every run.
+export OMPI_MCA_opal_cuda_support=${OMPI_MCA_opal_cuda_support:-1}
 export OMPI_MCA_opal_cuda_support=${OMPI_MCA_opal_cuda_support:-1}
 export OMPI_MCA_osc=${OMPI_MCA_osc:-ucx}
 export OMPI_MCA_osc_base_verbose=${OMPI_MCA_osc_base_verbose:-0}

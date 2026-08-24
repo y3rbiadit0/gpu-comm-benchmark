@@ -17,7 +17,7 @@ gpu_bench_leonardo_print_env() {
     OMPI_MCA_osc
     OMPI_MCA_coll_hcoll_enable
     OMPI_MCA_coll_ucc_enable
-    OMPI_MCA_mpi_cuda_support
+    OMPI_MCA_opal_cuda_support
     # NCCL
     NCCL_IB_SL
     NCCL_ALGO
