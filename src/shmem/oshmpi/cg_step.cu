@@ -1,6 +1,8 @@
 #include <cuda_runtime.h>
 
 #include <cstddef>
+#include <cstdlib>
+#include <cstring>
 
 #ifndef USE_CUDA
 #define USE_CUDA 1
@@ -109,6 +111,37 @@ __global__ void cg_dot_kernel(const float* p, const float* q, double* partial_pq
 
 }  // namespace
 
+namespace {
+
+enum class reduce_memory { device, staged };
+
+/* Where the two scalar CG reductions happen.
+ *
+ * `device` (default) keeps them on the GPU, as the other five backends do:
+ * partial, result and pWrk all come from the OSHMPI CUDA space, so
+ * shmem_double_sum_to_all is issued on device pointers. This needs UCC
+ * (cluster/leonardo/experiments/cg_step/common.sh enables it for this runtime);
+ * without it the reduction reaches a host Open MPI op and segfaults.
+ *
+ * `staged` is the old path: copy the two doubles device->host and reduce in the
+ * default symmetric heap. At 8 bytes that is actually faster, but it is not
+ * what the other backends do, so measuring it as though it were comparable
+ * flattered OSHMPI. Kept so the difference can be quantified.
+ */
+reduce_memory parse_reduce_memory() {
+  const char* value = std::getenv("GPU_BENCH_OSHMPI_CG_REDUCE_MEM");
+  if (value == nullptr || std::strcmp(value, "device") == 0) {
+    return reduce_memory::device;
+  }
+  if (std::strcmp(value, "staged") == 0) {
+    return reduce_memory::staged;
+  }
+  throw std::runtime_error(
+      "GPU_BENCH_OSHMPI_CG_REDUCE_MEM must be 'device' or 'staged', got: " + std::string(value));
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
   shmem_init();
 
@@ -125,6 +158,17 @@ int main(int argc, char** argv) {
   double* sample_gather = nullptr;
 
   try {
+    const auto reduce_mode = parse_reduce_memory();
+    if (reduce_mode == reduce_memory::device) {
+      const char* ucc = std::getenv("OMPI_MCA_coll_ucc_enable");
+      if (ucc != nullptr && std::strcmp(ucc, "0") == 0) {
+        throw std::runtime_error(
+            "GPU_BENCH_OSHMPI_CG_REDUCE_MEM=device needs OMPI_MCA_coll_ucc_enable=1; with UCC "
+            "disabled OSHMPI's reduction runs as a host Open MPI op and segfaults on device "
+            "memory. Use GPU_BENCH_OSHMPI_CG_REDUCE_MEM=staged instead.");
+      }
+    }
+
     const auto side = gpu_bench::parse_size_arg(argc, argv, 1U << 9U);
     const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 50);
     const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 10);
@@ -152,17 +196,37 @@ int main(int argc, char** argv) {
     double* partial_qq = nullptr;
     check_cuda(cudaMalloc(reinterpret_cast<void**>(&p_field), side * width * sizeof(float)), "cudaMalloc(p)");
     check_cuda(cudaMalloc(reinterpret_cast<void**>(&q_field), side * width * sizeof(float)), "cudaMalloc(q)");
-    check_cuda(cudaMalloc(reinterpret_cast<void**>(&partial_pq), sizeof(double)), "cudaMalloc(partial_pq)");
-    check_cuda(cudaMalloc(reinterpret_cast<void**>(&partial_qq), sizeof(double)), "cudaMalloc(partial_qq)");
     auto* send_west = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, side * sizeof(float)));
     auto* send_east = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, side * sizeof(float)));
     auto* recv_west = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, side * sizeof(float)));
     auto* recv_east = static_cast<float*>(gpu_bench_oshmpi_space_malloc(space, side * sizeof(float)));
 
-    source = static_cast<double*>(shmem_malloc(2U * sizeof(double)));
-    result = static_cast<double*>(shmem_malloc(2U * sizeof(double)));
-    pwrk_pq = static_cast<double*>(shmem_malloc(SHMEM_REDUCE_MIN_WRKDATA_SIZE * sizeof(double)));
-    pwrk_qq = static_cast<double*>(shmem_malloc(SHMEM_REDUCE_MIN_WRKDATA_SIZE * sizeof(double)));
+    // In device mode the reduction operands must be symmetric *device* memory,
+    // so partial/result/pWrk come from the CUDA space and the dot kernel writes
+    // straight into the reduction's source. pSync stays in the default heap: it
+    // is control data, and allreduce.cu uses the same split.
+    if (reduce_mode == reduce_memory::device) {
+      // Allocated from the space directly. An earlier version cudaMalloc'd them
+      // and freed them here, which fails with "invalid argument" once the CUDA
+      // memory space is attached -- the space owns the device allocator.
+      partial_pq = static_cast<double*>(gpu_bench_oshmpi_space_malloc(space, sizeof(double)));
+      partial_qq = static_cast<double*>(gpu_bench_oshmpi_space_malloc(space, sizeof(double)));
+      result = static_cast<double*>(gpu_bench_oshmpi_space_malloc(space, 2U * sizeof(double)));
+      pwrk_pq = static_cast<double*>(
+          gpu_bench_oshmpi_space_malloc(space, SHMEM_REDUCE_MIN_WRKDATA_SIZE * sizeof(double)));
+      pwrk_qq = static_cast<double*>(
+          gpu_bench_oshmpi_space_malloc(space, SHMEM_REDUCE_MIN_WRKDATA_SIZE * sizeof(double)));
+      source = result;  // unused in device mode; keeps the null-check uniform
+    } else {
+      check_cuda(cudaMalloc(reinterpret_cast<void**>(&partial_pq), sizeof(double)),
+                 "cudaMalloc(partial_pq)");
+      check_cuda(cudaMalloc(reinterpret_cast<void**>(&partial_qq), sizeof(double)),
+                 "cudaMalloc(partial_qq)");
+      source = static_cast<double*>(shmem_malloc(2U * sizeof(double)));
+      result = static_cast<double*>(shmem_malloc(2U * sizeof(double)));
+      pwrk_pq = static_cast<double*>(shmem_malloc(SHMEM_REDUCE_MIN_WRKDATA_SIZE * sizeof(double)));
+      pwrk_qq = static_cast<double*>(shmem_malloc(SHMEM_REDUCE_MIN_WRKDATA_SIZE * sizeof(double)));
+    }
     psync_pq = static_cast<long*>(shmem_malloc(SHMEM_REDUCE_SYNC_SIZE * sizeof(long)));
     psync_qq = static_cast<long*>(shmem_malloc(SHMEM_REDUCE_SYNC_SIZE * sizeof(long)));
     ok_by_pe = static_cast<double*>(shmem_malloc(static_cast<std::size_t>(pes) * sizeof(double)));
@@ -221,11 +285,20 @@ int main(int argc, char** argv) {
         spmv_kernel<<<grid2d, block2d>>>(p_field, q_field, side, local_cols, width);
         cg_dot_kernel<<<dot_grid, block1d>>>(p_field, q_field, partial_pq, partial_qq, side, local_cols, width);
       }
-      check_cuda(cudaMemcpy(&source[0], partial_pq, sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy(pq)");
-      check_cuda(cudaMemcpy(&source[1], partial_qq, sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy(qq)");
       // Two separate global reductions, as a real CG iteration performs.
-      shmem_double_sum_to_all(&result[0], &source[0], 1, 0, 0, pes, pwrk_pq, psync_pq);
-      shmem_double_sum_to_all(&result[1], &source[1], 1, 0, 0, pes, pwrk_qq, psync_qq);
+      if (reduce_mode == reduce_memory::device) {
+        // Operands stay on the GPU, matching the other five backends.
+        check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(dot)");
+        shmem_double_sum_to_all(&result[0], partial_pq, 1, 0, 0, pes, pwrk_pq, psync_pq);
+        shmem_double_sum_to_all(&result[1], partial_qq, 1, 0, 0, pes, pwrk_qq, psync_qq);
+      } else {
+        check_cuda(cudaMemcpy(&source[0], partial_pq, sizeof(double), cudaMemcpyDeviceToHost),
+                   "cudaMemcpy(pq)");
+        check_cuda(cudaMemcpy(&source[1], partial_qq, sizeof(double), cudaMemcpyDeviceToHost),
+                   "cudaMemcpy(qq)");
+        shmem_double_sum_to_all(&result[0], &source[0], 1, 0, 0, pes, pwrk_pq, psync_pq);
+        shmem_double_sum_to_all(&result[1], &source[1], 1, 0, 0, pes, pwrk_qq, psync_qq);
+      }
     });
     const auto global = gpu_bench::collective_stats(stats, sample_gather, pe, pes);
 
@@ -240,8 +313,20 @@ int main(int argc, char** argv) {
         ref_qq += q * q;
       }
     }
+    double final_pq = 0.0;
+    double final_qq = 0.0;
+    if (reduce_mode == reduce_memory::device) {
+      double host_result[2] = {0.0, 0.0};
+      check_cuda(cudaMemcpy(host_result, result, 2U * sizeof(double), cudaMemcpyDeviceToHost),
+                 "cudaMemcpy(result)");
+      final_pq = host_result[0];
+      final_qq = host_result[1];
+    } else {
+      final_pq = result[0];
+      final_qq = result[1];
+    }
     int local_ok =
-        gpu_bench::nearly_equal(result[0], ref_pq) && gpu_bench::nearly_equal(result[1], ref_qq) ? 1 : 0;
+        gpu_bench::nearly_equal(final_pq, ref_pq) && gpu_bench::nearly_equal(final_qq, ref_qq) ? 1 : 0;
     if (local_cols > 0) {
       std::vector<float> host_q(side * width);
       check_cuda(cudaMemcpy(host_q.data(), q_field, side * width * sizeof(float), cudaMemcpyDeviceToHost),
@@ -266,8 +351,6 @@ int main(int argc, char** argv) {
       }
     }
 
-    check_cuda(cudaFree(partial_qq), "cudaFree(partial_qq)");
-    check_cuda(cudaFree(partial_pq), "cudaFree(partial_pq)");
     check_cuda(cudaFree(q_field), "cudaFree(q)");
     check_cuda(cudaFree(p_field), "cudaFree(p)");
     shmem_free(sample_gather);
@@ -276,8 +359,17 @@ int main(int argc, char** argv) {
     shmem_free(psync_pq);
     shmem_free(pwrk_qq);
     shmem_free(pwrk_pq);
-    shmem_free(result);
-    shmem_free(source);
+    if (reduce_mode == reduce_memory::device) {
+      // Space allocations go back with shmem_free, before the space itself.
+      shmem_free(result);
+      shmem_free(partial_qq);
+      shmem_free(partial_pq);
+    } else {
+      shmem_free(result);
+      shmem_free(source);
+      check_cuda(cudaFree(partial_qq), "cudaFree(partial_qq)");
+      check_cuda(cudaFree(partial_pq), "cudaFree(partial_pq)");
+    }
     // The space allocations go back before the space they came from does, as
     // OSHMPI's own CUDA-space test does.
     shmem_free(recv_east);
@@ -299,6 +391,8 @@ int main(int argc, char** argv) {
       report.max_s = global.max_s;
       gpu_bench::set_distribution(report, global);
       report.valid = global_ok != 0;
+      report.extra = std::string("reduce_mem=") +
+                     (reduce_mode == reduce_memory::device ? "device_symmetric" : "host_staged");
       gpu_bench::print_report(report);
     }
 

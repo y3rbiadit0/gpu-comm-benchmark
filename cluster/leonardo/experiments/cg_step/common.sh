@@ -17,7 +17,18 @@ source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
 # below. allreduce sweeps across that boundary and keeps the global default;
 # cg_step, alltoall and moe each have one characteristic size and set the
 # setting that suits it. print-env.sh records the choice in every job log.
-export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-0}
+# UCC is per-backend here. cg_step's reductions are 8-byte scalars, where UCC
+# loses badly (cuda_mpi 2n4g: 245.6 us with UCC, 129.0 without -- 1.90x). But
+# OSHMPI needs UCC to issue the reduction on device pointers at all; without it
+# the call reaches a host Open MPI op and segfaults. Since every other backend
+# reduces on the GPU, OSHMPI must too for the comparison to mean anything, so it
+# gets UCC and the rest get `tuned`. GPU_BENCH_RUNTIME is set by the job script
+# before this file is sourced, and print-env.sh records the result per job.
+if [[ "${GPU_BENCH_RUNTIME:-}" == "oshmpi" ]]; then
+  export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-1}
+else
+  export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-0}
+fi
 
 
 # cg_step works on a square GPU_BENCH_N x GPU_BENCH_N grid; GPU_BENCH_N is the side length.
