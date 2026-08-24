@@ -29,7 +29,15 @@ gpu_bench_experiment_defaults() {
   GPU_BENCH_ITERS=${GPU_BENCH_ITERS:-100}
   GPU_BENCH_WARMUP=${GPU_BENCH_WARMUP:-20}
   # alltoall binaries accept: <count_per_peer> [iterations] [warmup]
+  # alltoall binaries accept: <max_count_per_peer> [iterations] [warmup] [sizes]
   GPU_BENCH_EXTRA_ARGS=${GPU_BENCH_EXTRA_ARGS:-"$GPU_BENCH_ITERS $GPU_BENCH_WARMUP"}
+  if [[ -n "${GPU_BENCH_MSG_SIZES:-}" ]]; then
+    GPU_BENCH_EXTRA_ARGS="$GPU_BENCH_EXTRA_ARGS $GPU_BENCH_MSG_SIZES"
+  fi
 }
 
 gpu_bench_alltoall_main() { gpu_bench_experiment_main; }
+
+gpu_bench_experiment_extra_summary() {
+  echo "message sizes: ${GPU_BENCH_MSG_SIZES:-powers-of-two}"
+}

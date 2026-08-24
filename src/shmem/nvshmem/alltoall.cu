@@ -56,62 +56,77 @@ int main(int argc, char** argv) {
       throw std::runtime_error("NVSHMEM PE layout does not match MPI rank layout");
     }
 
-    const auto count = gpu_bench::parse_size_arg(argc, argv, 1U << 16U);
+    const auto max_count = gpu_bench::parse_size_arg(argc, argv, 1U << 16U);
     const auto iterations = gpu_bench::parse_positive_int_arg(argc, argv, 2, 100);
     const auto warmup = gpu_bench::parse_positive_int_arg(argc, argv, 3, 20);
-    const auto total = static_cast<std::size_t>(pes) * count;
+    const auto message_sizes = gpu_bench::parse_size_list_arg(argc, argv, 4, max_count);
+    const auto max_total = static_cast<std::size_t>(pes) * max_count;
 
-    std::vector<float> host_send(total);
-    gpu_bench::fill_alltoall_send(host_send.data(), pe, pes, count);
-
-    auto* device_send = static_cast<float*>(nvshmem_malloc(total * sizeof(float)));
-    auto* device_recv = static_cast<float*>(nvshmem_malloc(total * sizeof(float)));
+    // Symmetric memory is allocated once at the largest swept size; each size
+    // uses the leading pes*count elements, matching the per-peer block layout.
+    auto* device_send = static_cast<float*>(nvshmem_malloc(max_total * sizeof(float)));
+    auto* device_recv = static_cast<float*>(nvshmem_malloc(max_total * sizeof(float)));
     if (device_send == nullptr || device_recv == nullptr) {
       throw std::runtime_error("failed to allocate NVSHMEM symmetric memory");
     }
-    check_cuda(cudaMemcpy(device_send, host_send.data(), total * sizeof(float), cudaMemcpyHostToDevice),
-               "cudaMemcpy(send)");
-    check_cuda(cudaMemset(device_recv, 0, total * sizeof(float)), "cudaMemset(recv)");
-    check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(init)");
 
-    nvshmem_barrier_all();
-    MPI_Barrier(MPI_COMM_WORLD);
-    const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
-      nvshmem_float_alltoall(NVSHMEM_TEAM_WORLD, device_recv, device_send, count);
-    });
+    std::vector<float> host_send(max_total);
+    std::vector<float> host_recv(max_total);
+    int all_sizes_ok = 1;
 
-    const auto global = gpu_bench::collective_stats(stats);
+    for (const auto count : message_sizes) {
+      const auto total = static_cast<std::size_t>(pes) * count;
+      const auto bytes = total * sizeof(float);
 
-    std::vector<float> host_recv(total);
-    check_cuda(cudaMemcpy(host_recv.data(), device_recv, total * sizeof(float), cudaMemcpyDeviceToHost),
-               "cudaMemcpy(recv)");
-    int local_ok = gpu_bench::validate_alltoall(host_recv.data(),pe, pes, count) ? 1 : 0;
-    int global_ok = 1;
-    MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+      // The per-peer block layout depends on count, so refill for each size.
+      gpu_bench::fill_alltoall_send(host_send.data(), pe, pes, count);
+      check_cuda(cudaMemcpy(device_send, host_send.data(), bytes, cudaMemcpyHostToDevice),
+                 "cudaMemcpy(send)");
+      check_cuda(cudaMemset(device_recv, 0, bytes), "cudaMemset(recv)");
+      check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(init)");
+
+      nvshmem_barrier_all();
+      MPI_Barrier(MPI_COMM_WORLD);
+      const auto stats = gpu_bench::run_benchmark(warmup, iterations, [&]() {
+        nvshmem_float_alltoall(NVSHMEM_TEAM_WORLD, device_recv, device_send, count);
+      });
+
+      const auto global = gpu_bench::collective_stats(stats);
+
+      check_cuda(cudaMemcpy(host_recv.data(), device_recv, bytes, cudaMemcpyDeviceToHost),
+                 "cudaMemcpy(recv)");
+      const int local_ok = gpu_bench::validate_alltoall(host_recv.data(), pe, pes, count) ? 1 : 0;
+      int global_ok = 1;
+      MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+      all_sizes_ok = all_sizes_ok && global_ok;
+
+      if (pe == 0) {
+        gpu_bench::bench_report report;
+        report.name = "cuda_nvshmem_alltoall";
+        report.n = count;
+        report.ranks = pes;
+        report.bytes_per_iter = bytes;
+        report.iterations = iterations;
+        report.warmup = warmup;
+        report.time_per_iter_s = global.avg_s;
+        report.min_s = global.min_s;
+        report.max_s = global.max_s;
+        gpu_bench::set_distribution(report, global);
+        report.valid = global_ok != 0;
+        report.extra = "datatype=float32 count_per_peer=" + std::to_string(count) +
+                       " bus_gbytes_per_s=" + std::to_string(gpu_bench::alltoall_bus_gbytes_per_s(
+                                                  bytes, global.avg_s, pes));
+        gpu_bench::print_report(report);
+      }
+    }
 
     nvshmem_free(device_send);
     nvshmem_free(device_recv);
     nvshmem_finalize();
     nvshmem_initialized = false;
 
-    if (pe == 0) {
-      gpu_bench::bench_report report;
-      report.name = "cuda_nvshmem_alltoall";
-      report.n = count;
-      report.ranks = pes;
-      report.bytes_per_iter = total * sizeof(float);
-      report.iterations = iterations;
-      report.warmup = warmup;
-      report.time_per_iter_s = global.avg_s;
-      report.min_s = global.min_s;
-      report.max_s = global.max_s;
-      gpu_bench::set_distribution(report, global);
-      report.valid = global_ok != 0;
-      gpu_bench::print_report(report);
-    }
-
     MPI_Finalize();
-    return global_ok ? 0 : 1;
+    return all_sizes_ok ? 0 : 1;
   } catch (const std::exception& error) {
     std::cerr << "rank " << mpi_rank << ": " << error.what() << '\n';
     if (nvshmem_initialized) {

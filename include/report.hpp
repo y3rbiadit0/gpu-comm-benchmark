@@ -70,6 +70,27 @@ inline void set_distribution(bench_report& report, const bench_stats& stats,
   report.has_distribution = true;
 }
 
+/* Bus bandwidth for an all-to-all personalized exchange.
+ *
+ * Each rank sends `count` elements to every rank *including itself*, and that
+ * self-block is a local copy that never crosses a link. Only (P-1)/P of the
+ * per-rank send volume is communication, so the raw algorithm figure overstates
+ * the transport by P/(P-1): 2x at two ranks, and unboundedly at one, where
+ * nothing is communicated at all.
+ *
+ * Unlike allreduce there is no factor of two - an all-to-all moves each element
+ * once, whereas a ring allreduce moves it twice (reduce-scatter + allgather).
+ *
+ * Returns 0 for a single rank, which is the honest answer: no bytes crossed.
+ */
+inline double alltoall_bus_gbytes_per_s(std::size_t bytes_per_iter, double seconds, int ranks) {
+  if (seconds <= 0.0 || ranks <= 1) {
+    return 0.0;
+  }
+  const double algorithm = static_cast<double>(bytes_per_iter) / seconds / 1.0e9;
+  return algorithm * static_cast<double>(ranks - 1) / static_cast<double>(ranks);
+}
+
 inline void print_report(const bench_report& report) {
   const double gbytes_per_s = (report.bytes_per_iter > 0 && report.time_per_iter_s > 0.0)
                                   ? static_cast<double>(report.bytes_per_iter) / report.time_per_iter_s / 1.0e9
