@@ -117,24 +117,26 @@ enum class reduce_memory { device, staged };
 
 /* Where the two scalar CG reductions happen.
  *
- * `device` (default) keeps them on the GPU, as the other five backends do:
+ * `device` keeps them on the GPU, as the other five backends do:
  * partial, result and pWrk all come from the OSHMPI CUDA space, so
  * shmem_double_sum_to_all is issued on device pointers. This needs UCC
  * (cluster/leonardo/experiments/cg_step/common.sh enables it for this runtime);
  * without it the reduction reaches a host Open MPI op and segfaults.
  *
- * `staged` is the old path: copy the two doubles device->host and reduce in the
+ * `staged` (default) copies the two doubles device->host and reduces in the
  * default symmetric heap. At 8 bytes that is actually faster, but it is not
- * what the other backends do, so measuring it as though it were comparable
- * flattered OSHMPI. Kept so the difference can be quantified.
+ * what the other backends do, so the difference must be reported rather than
+ * presented as a like-for-like result. Measured on Leonardo 2n4g, job 54065216:
+ * staged 81.4 us, device 221.9 us -- 2.73x, of which ~116 us is UCC's
+ * small-message penalty, which the device path cannot avoid.
  */
 reduce_memory parse_reduce_memory() {
   const char* value = std::getenv("GPU_BENCH_OSHMPI_CG_REDUCE_MEM");
-  if (value == nullptr || std::strcmp(value, "device") == 0) {
-    return reduce_memory::device;
-  }
-  if (std::strcmp(value, "staged") == 0) {
+  if (value == nullptr || std::strcmp(value, "staged") == 0) {
     return reduce_memory::staged;
+  }
+  if (std::strcmp(value, "device") == 0) {
+    return reduce_memory::device;
   }
   throw std::runtime_error(
       "GPU_BENCH_OSHMPI_CG_REDUCE_MEM must be 'device' or 'staged', got: " + std::string(value));
