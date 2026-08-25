@@ -45,10 +45,25 @@ stalling on `1n2g`, `1n4g` and `2n4g` — and flags `cg_step` as likely to share
 it. The OSHMPI backend routes point-to-point through its own slot mechanism
 (`CCL_OSHMPI_PT2PT_SLOT_SIZE`), so it may work where the NCCL fork does not.
 
-Run one topology before the rest; if it hangs, it is the same class of failure
-and belongs in `docs/unsupported-operations.md` rather than in the comparison:
+**Result (2026-08-21): the OSHMPI backend hangs; the NCCL backend works.**
+`sycl_oneccl_oshmpi` on `1n2g` ran the full 2-minute timeout at 0% CPU and was
+killed at oneCCL initialization. `sycl_oneccl` — the same benchmark, same
+topology, NCCL backend — completed in 2.0 s with `validation=PASS`. So this is
+an OSHMPI-backend fault, not a oneCCL grouped-point-to-point limitation.
+Recorded in [`docs/unsupported-operations.md`](../../../../docs/unsupported-operations.md).
+
+Do not read the working `1n2g` result as clearance for `sycl_oneccl` generally.
+On `1n2g` cg_step's non-periodic line gives each rank one neighbour, so the
+group holds two operations. `halo_1d`'s periodic ring gives it four, and that is
+the case that stalls. On `1n4g` cg_step's interior ranks have two neighbours and
+post four grouped operations — the same shape as the stalling `halo_1d` run:
 
 ```bash
+# the discriminating test
+GPU_BENCH_NTRIALS=1 tools/sbatch.sh \
+  cluster/leonardo/experiments/cg_step/sycl_oneccl/1n4g.sh
+
+# retest the OSHMPI backend against a fixed build
 GPU_BENCH_NTRIALS=1 tools/sbatch.sh \
   cluster/leonardo/experiments/cg_step/sycl_oneccl_oshmpi/1n2g.sh
 ```
