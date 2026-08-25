@@ -121,6 +121,13 @@ int main(int argc, char** argv) {
     sycl::context context(device);
     sycl::queue queue(context, device, sycl::property::queue::in_order());
 
+    // NOTE: kvs/comm/stream outlive both MPI_Finalize calls below. The other
+    // five oneCCL benchmarks scope them so they are destroyed first, because for
+    // the OSHMPI backend they hold shared-memory segments UCX still references
+    // and finalizing MPI first crashes in uct_mm_ep_flush. moe is not scoped
+    // because its early NOT_IMPLEMENTED path finalizes mid-function, which needs
+    // a restructure -- and moe has no sycl_oneccl_oshmpi variant, so the bug is
+    // latent. Fix this before adding one.
     ccl::shared_ptr_class<ccl::kvs> kvs;
     ccl::kvs::address_type address;
     if (rank == 0) {

@@ -54,7 +54,15 @@ int main(int argc, char** argv) {
     sycl::context context(device);
     sycl::queue queue(context, device, sycl::property::queue::in_order());
 
-    ccl::shared_ptr_class<ccl::kvs> kvs;
+    // oneCCL's communicator, stream and KVS hold resources bound to the MPI
+    // endpoints underneath -- for the OSHMPI backend, shared-memory segments
+    // that UCX still has endpoints into. They must therefore be destroyed
+    // *before* MPI_Finalize. Declared at try-block scope they outlived it, and
+    // MPI_Finalize tore down UCX while they were still alive: allreduce 2n4g
+    // completed and validated all 23 sizes, then died with SIGBUS in
+    // uct_mm_ep_flush. This scope closes them first.
+    {
+      ccl::shared_ptr_class<ccl::kvs> kvs;
     ccl::kvs::address_type address;
     if (rank == 0) {
       kvs = ccl::create_main_kvs();
@@ -127,6 +135,8 @@ int main(int argc, char** argv) {
 
     sycl::free(device_send, queue);
     sycl::free(device_recv, queue);
+
+    }  // oneCCL objects released here, before MPI_Finalize
 
     MPI_Finalize();
     return 0;
