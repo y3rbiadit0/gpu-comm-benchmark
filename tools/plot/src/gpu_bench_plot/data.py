@@ -15,7 +15,7 @@ from pathlib import Path
 SUPPORTED_POINTS_SCHEMA = 1
 SUPPORTED_FIT_SCHEMA = 1
 
-TOPOLOGY_ORDER = ("1n1g", "1n2g", "1n4g", "2n1g", "2n4g")
+TOPOLOGY_ORDER = ("1n1g", "1n2g", "1n4g", "2n1g", "2n4g", "4n4g", "8n4g")
 
 
 class SchemaMismatch(Exception):
@@ -57,7 +57,9 @@ def topology_key(topology: str) -> tuple[int, str]:
     try:
         return (TOPOLOGY_ORDER.index(topology), "")
     except ValueError:
-        return (len(TOPOLOGY_ORDER), topology)
+        # Unlisted topologies sort last, by rank count rather than by name, so a
+        # future `16n4g` lands after `8n4g` instead of between `1n4g` and `2n1g`.
+        return (len(TOPOLOGY_ORDER) + (topology_ranks(topology) or 0), topology)
 
 
 def format_bytes(value: float | int | None) -> str:

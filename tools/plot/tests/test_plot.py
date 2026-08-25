@@ -13,7 +13,7 @@ import json
 import pytest
 
 from gpu_bench_plot.cli import main
-from gpu_bench_plot.data import SchemaMismatch, Sweep, format_bytes, load_json
+from gpu_bench_plot.data import SchemaMismatch, Sweep, format_bytes, load_json, topology_key, topology_ranks
 from gpu_bench_plot.figures import select_size
 from gpu_bench_plot.theme import BACKEND_ORDER, THEMES, colour_for
 
@@ -317,3 +317,14 @@ def test_fit_figure_also_excludes_single_rank(tmp_path, points):
                  "--figure", "fit", "--outdir", str(outdir)]) == 0
     rows = list(csv.DictReader((outdir / "halo_1d-fit.csv").open()))
     assert {r["topology"] for r in rows} == {"1n2g", "1n4g"}
+
+
+def test_multi_node_topologies_sort_by_rank_count():
+    """4n4g/8n4g are listed; anything unlisted still orders by ranks, not name."""
+    known = ["8n4g", "1n2g", "4n4g", "2n4g", "1n1g", "1n4g", "2n1g"]
+    assert sorted(known, key=topology_key) == [
+        "1n1g", "1n2g", "1n4g", "2n1g", "2n4g", "4n4g", "8n4g"]
+    # 16n4g is not in TOPOLOGY_ORDER; it must still land after 8n4g.
+    assert sorted(["16n4g", "8n4g", "4n4g"], key=topology_key) == ["4n4g", "8n4g", "16n4g"]
+    assert topology_ranks("4n4g") == 16
+    assert topology_ranks("8n4g") == 32
