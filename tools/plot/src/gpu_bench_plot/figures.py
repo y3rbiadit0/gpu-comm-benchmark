@@ -8,7 +8,7 @@ from pathlib import Path
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
 from ._mpl import plt
-from .data import Sweep, format_bytes, topology_key, write_table
+from .data import Sweep, format_bytes, is_single_rank, topology_key, write_table
 from .theme import BACKEND_ORDER, BASELINE_BACKEND, colour_for, figure_legend, style_axes
 
 
@@ -119,7 +119,7 @@ FIT_MEASURES = (
 
 
 def draw_fit(fits: list[dict], theme: dict, benchmark: str | None, outdir: Path,
-             stem: str, ext: str) -> Path | None:
+             stem: str, ext: str, include_single_rank: bool = False) -> Path | None:
     """The three alpha-beta numbers as grouped bars, one panel per measure.
 
     Three measures on one pair of axes would be a dual-axis chart, which invents
@@ -127,6 +127,10 @@ def draw_fit(fits: list[dict], theme: dict, benchmark: str | None, outdir: Path,
     """
     fits = [fit for fit in fits if not benchmark or fit["benchmark"] == benchmark]
     fits = [fit for fit in fits if fit.get("alpha") is not None]
+    # This figure reads fit.json rather than the points, so it needs the same
+    # single-rank exclusion applied independently.
+    if not include_single_rank:
+        fits = [fit for fit in fits if not is_single_rank(fit["topology"])]
     if not fits:
         return None
 
@@ -427,3 +431,99 @@ def draw_distribution(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: s
         rows,
     )
     return out, size
+
+
+# Cases are a small categorical set (moe's three routings, halo_1d's two batch
+# modes), so they take the leading palette slots -- the only three validated for
+# all-pairs separation rather than just adjacent pairs.
+CASE_SLOTS = (0, 1, 2, 3)
+
+
+def short_case(case: str) -> str:
+    """`uniform,hidden=256` -> `uniform`. The qualifier is constant per run."""
+    return case.split(",")[0] or "(default)"
+
+
+def draw_cases(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str,
+               reference: float | None = None) -> Path | None:
+    """Metric per case, grouped by backend, one panel per topology.
+
+    For a benchmark whose `case` axis is the point of the experiment -- moe's
+    routing distributions, halo_1d's isolated/steady -- the size sweep is not
+    where the story is. This puts the cases side by side per backend so the
+    penalty one case pays relative to another is readable directly.
+
+    `reference` draws a horizontal line on the ratio row: for moe it is the
+    measured expert imbalance, so a bar reaching it means the backend is purely
+    imbalance-limited and one below it means the backend absorbed some skew.
+    """
+    cases = sweep.cases
+    if len(cases) < 2:
+        return None
+    topologies = sweep.topologies
+    backends = sweep.backends()
+    # The reference case leads, so the series read in order of departure from
+    # it: uniform -> locality -> hotspot for moe, isolated -> steady for halo_1d.
+    base = next((c for c in cases if "uniform" in c), cases[0])
+    cases = [base] + [c for c in cases if c != base]
+
+    fig, axes = panel_grid(2, len(topologies), width=3.4, height=3.0, sharey="row")
+    handles: dict[str, object] = {}
+    rows: list[list] = []
+    width = 0.8 / max(len(cases), 1)
+
+    for col, topology in enumerate(topologies):
+        top, bottom = axes[0][col], axes[1][col]
+        for ax in (top, bottom):
+            style_axes(ax, theme)
+
+        for slot, case in enumerate(cases):
+            xs, ys, rs = [], [], []
+            for position, backend in enumerate(backends):
+                series = sweep.curves.get((case, topology), {}).get(backend)
+                ref = sweep.curves.get((base, topology), {}).get(backend)
+                if not series or not ref:
+                    continue
+                value, ref_value = series[0]["value_mean"], ref[0]["value_mean"]
+                xs.append(position - 0.4 + slot * width + width / 2)
+                ys.append(value)
+                rs.append(value / ref_value if ref_value else 0.0)
+                rows.append([topology, backend, short_case(case), value,
+                             value / ref_value if ref_value else 0.0])
+            if not xs:
+                continue
+            colour = theme["series"][CASE_SLOTS[slot % len(CASE_SLOTS)]]
+            bars = top.bar(xs, ys, width=width * 0.88, color=colour, linewidth=0)
+            bottom.bar(xs, rs, width=width * 0.88, color=colour, linewidth=0)
+            handles.setdefault(short_case(case), bars)
+
+        if reference is not None:
+            bottom.axhline(reference, color=theme["text"], linewidth=1.0, linestyle=(0, (4, 3)))
+            if col == 0:
+                bottom.text(-0.4, reference, f" load imbalance {reference:.2f}x",
+                            va="bottom", ha="left", fontsize=7, color=theme["text"])
+        bottom.axhline(1.0, color=theme["grid"], linewidth=1.0)
+
+        for ax in (top, bottom):
+            ax.set_xticks(range(len(backends)))
+        top.set_xticklabels([])
+        bottom.set_xticklabels(backends, rotation=45, ha="right", fontsize=7)
+        # Absolute cost spans two orders of magnitude between intra- and
+        # inter-node; a shared linear axis would flatten every intra-node panel.
+        top.set_yscale("log")
+        top.set_title(topology)
+        if col == 0:
+            top.set_ylabel(f"time per iteration ({sweep.unit})")
+            bottom.set_ylabel(f"relative to {short_case(base)}")
+
+    ordered = [short_case(c) for c in cases if short_case(c) in handles]
+    figure_legend(fig, [handles[c] for c in ordered], ordered, theme)
+    fig.suptitle("Cost by case, and the penalty relative to the reference case",
+                 color=theme["text"], fontsize=12)
+
+    out = outdir / f"{stem}.{ext}"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    write_table(outdir / f"{stem}.csv",
+                ["topology", "backend", "case", sweep.unit, f"relative_to_{short_case(base)}"], rows)
+    return out

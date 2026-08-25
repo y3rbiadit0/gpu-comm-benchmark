@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from pathlib import Path
 
 SUPPORTED_POINTS_SCHEMA = 1
@@ -31,6 +32,24 @@ def load_json(path: Path, expected_schema: int, kind: str) -> dict:
             f"{expected_schema}. Regenerate it with the matching benchscribe."
         )
     return payload
+
+
+def topology_ranks(topology: str) -> int | None:
+    """Ranks implied by a topology label: `2n4g` -> 8. None if unparseable."""
+    m = re.fullmatch(r"(\d+)n(\d+)g", topology)
+    return int(m.group(1)) * int(m.group(2)) if m else None
+
+
+def is_single_rank(topology: str) -> bool:
+    """A single-rank topology communicates with nobody.
+
+    `1n1g` runs the benchmark on one rank: alltoall becomes a local memcpy with
+    zero bus bandwidth, moe's routing distributions are indistinguishable, and
+    allreduce reduces one contribution. Those points are legitimate controls --
+    cg_step's 1n1g isolates its compute term -- but they are not communication
+    measurements, so plotting them beside real ones invites misreading.
+    """
+    return topology_ranks(topology) == 1
 
 
 def topology_key(topology: str) -> tuple[int, str]:
@@ -70,15 +89,21 @@ def write_table(path: Path, header: list[str], rows: list[list]) -> None:
 class Sweep:
     """Benchscribe points reshaped into (case, topology) -> backend -> curve."""
 
-    def __init__(self, points: list[dict], benchmark: str | None = None):
+    def __init__(self, points: list[dict], benchmark: str | None = None,
+                 include_single_rank: bool = False):
         from .theme import BACKEND_ORDER
 
         self._backend_order = BACKEND_ORDER
+        self.excluded_topologies: list[str] = []
         self.metric = ""
         self.unit = ""
         self.curves: dict[tuple[str, str], dict[str, list[dict]]] = {}
         for point in points:
             if benchmark and point["benchmark"] != benchmark:
+                continue
+            if not include_single_rank and is_single_rank(point["topology"]):
+                if point["topology"] not in self.excluded_topologies:
+                    self.excluded_topologies.append(point["topology"])
                 continue
             # Only OK/validated points carry meaning; benchscribe already flags
             # the rest, and a figure must not average a failed run into a curve.

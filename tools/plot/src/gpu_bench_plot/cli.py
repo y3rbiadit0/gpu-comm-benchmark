@@ -13,10 +13,10 @@ from .data import (
     Sweep,
     load_json,
 )
-from .figures import draw_distribution, draw_fit, draw_heatmap, draw_sweep
+from .figures import draw_cases, draw_distribution, draw_fit, draw_heatmap, draw_sweep
 from .theme import THEMES, apply_theme
 
-FIGURES = ("latency", "bandwidth", "fit", "heatmap", "dist")
+FIGURES = ("latency", "bandwidth", "fit", "heatmap", "dist", "cases")
 
 # "sweep" was the original name. It described the method (a message-size sweep)
 # rather than the quantity, which made the latency curve hard to find among
@@ -49,9 +49,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--benchmark", help="only plot this benchmark (e.g. halo_1d)")
     parser.add_argument("--outdir", type=Path, default=Path("figures"))
     parser.add_argument(
+        "--imbalance", type=float, default=None,
+        help="reference line on the cases figure, e.g. moe's measured expert imbalance "
+             "(3.21 for hotspot80); a bar reaching it is purely imbalance-limited",
+    )
+    parser.add_argument(
         "--size", default="min",
         help="message size in bytes for the dist figure: 'min' (default), 'max', "
              "or a byte count, snapped to the nearest swept size",
+    )
+    parser.add_argument(
+        "--include-single-rank", action="store_true",
+        help="keep single-rank topologies (1n1g) in the figures; they contain no "
+             "communication and are excluded by default",
     )
     parser.add_argument("--theme", choices=tuple(THEMES), default="light")
     parser.add_argument("--format", dest="ext", choices=("svg", "png", "pdf"), default="svg")
@@ -61,10 +71,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def render_benchmark(payload: dict, fit_payload: dict | None, benchmark: str,
                      args: argparse.Namespace, theme: dict) -> tuple[list[Path], bool]:
     """Draw the requested figures for one benchmark. Returns (paths, ok)."""
-    sweep = Sweep(payload.get("points", []), benchmark)
+    sweep = Sweep(payload.get("points", []), benchmark, args.include_single_rank)
     if not sweep.curves:
         print(f"error: no valid points for benchmark {benchmark}", file=sys.stderr)
         return [], False
+
+    if sweep.excluded_topologies:
+        print(f"{benchmark}: excluding single-rank {', '.join(sweep.excluded_topologies)} "
+              f"(no communication); --include-single-rank to keep", file=sys.stderr)
 
     wanted = FIGURES if args.figure == "all" else (args.figure,)
     written: list[Path] = []
@@ -77,6 +91,12 @@ def render_benchmark(payload: dict, fit_payload: dict | None, benchmark: str,
         written.append(
             draw_sweep(sweep, theme, "bandwidth", args.outdir, f"{benchmark}-bandwidth", args.ext)
         )
+    if "cases" in wanted:
+        out = draw_cases(sweep, theme, args.outdir, f"{benchmark}-cases", args.ext, args.imbalance)
+        if out is None:
+            print(f"note: {benchmark} has a single case, skipping cases figure", file=sys.stderr)
+        else:
+            written.append(out)
     if "dist" in wanted:
         result = draw_distribution(sweep, theme, args.outdir, f"{benchmark}-dist",
                                    args.ext, args.size)
@@ -96,7 +116,7 @@ def render_benchmark(payload: dict, fit_payload: dict | None, benchmark: str,
             written.append(out)
     if "fit" in wanted and fit_payload is not None:
         out = draw_fit(fit_payload.get("fits", []), theme, benchmark,
-                       args.outdir, f"{benchmark}-fit", args.ext)
+                       args.outdir, f"{benchmark}-fit", args.ext, args.include_single_rank)
         if out is None:
             print(f"warning: {benchmark}: no usable fits, skipping fit figure", file=sys.stderr)
         else:

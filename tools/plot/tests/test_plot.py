@@ -274,3 +274,46 @@ def test_sweep_is_accepted_as_an_alias_for_latency(tmp_path, points):
     assert main(["--points", str(source), "--figure", "sweep", "--outdir", str(outdir)]) == 0
     assert (outdir / "halo_1d-latency.svg").exists()
     assert not (outdir / "halo_1d-sweep.svg").exists()
+
+
+def test_single_rank_topologies_are_excluded_by_default(tmp_path):
+    """1n1g has one rank and therefore no communication."""
+    pts = [make_point(bk, tp, "", n, 10.0 + n, 1.0)
+           for bk in ("cuda_mpi", "cuda_nccl") for tp in ("1n1g", "1n4g") for n in (1, 256)]
+    source = write_points(tmp_path / "points.json", pts)
+    outdir = tmp_path / "figures"
+    assert main(["--points", str(source), "--figure", "latency", "--outdir", str(outdir)]) == 0
+    rows = list(csv.DictReader((outdir / "halo_1d-latency.csv").open()))
+    assert {r["topology"] for r in rows} == {"1n4g"}
+
+    out2 = tmp_path / "figures2"
+    assert main(["--points", str(source), "--figure", "latency",
+                 "--include-single-rank", "--outdir", str(out2)]) == 0
+    rows2 = list(csv.DictReader((out2 / "halo_1d-latency.csv").open()))
+    assert {r["topology"] for r in rows2} == {"1n1g", "1n4g"}
+
+
+def test_topology_rank_counts():
+    from gpu_bench_plot.data import is_single_rank, topology_ranks
+    assert topology_ranks("1n1g") == 1 and topology_ranks("2n4g") == 8
+    assert topology_ranks("weird") is None
+    assert is_single_rank("1n1g") and not is_single_rank("1n2g")
+    assert not is_single_rank("weird")   # unparseable is never dropped
+
+
+def test_fit_figure_also_excludes_single_rank(tmp_path, points):
+    """draw_fit reads fit.json, not the points, so it needs its own filter."""
+    source = write_points(tmp_path / "points.json", points)
+    fit = tmp_path / "fit.json"
+    fit.write_text(json.dumps({
+        "schema_version": 1, "generated": "now", "alpha_max_bytes": 4096,
+        "fits": [{"benchmark": "halo_1d", "case": "steady", "topology": tp,
+                  "backend": "cuda_mpi", "unit": "us", "alpha": 4.0, "binf_gbs": 200.0,
+                  "peak_bytes": 1048576, "nhalf_bytes": 8e5, "tail_gbs": 190.0, "points": 3}
+                 for tp in ("1n1g", "1n2g", "1n4g")],
+    }))
+    outdir = tmp_path / "figures"
+    assert main(["--points", str(source), "--fit", str(fit),
+                 "--figure", "fit", "--outdir", str(outdir)]) == 0
+    rows = list(csv.DictReader((outdir / "halo_1d-fit.csv").open()))
+    assert {r["topology"] for r in rows} == {"1n2g", "1n4g"}
