@@ -60,6 +60,8 @@ int main(int argc, char** argv) {
     sycl::context context(device);
     sycl::queue queue(context, device, sycl::property::queue::in_order());
 
+    int global_ok = 1;  // must outlive the oneCCL scope below
+
     // oneCCL's communicator, stream and KVS hold resources bound to the MPI
     // endpoints underneath -- for the OSHMPI backend, shared-memory segments
     // that UCX still has endpoints into. They must therefore be destroyed
@@ -199,7 +201,6 @@ int main(int argc, char** argv) {
         local_ok = 0;
       }
     }
-    int global_ok = 1;
     MPI_Allreduce(&local_ok, &global_ok, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 
     sycl::free(p_field, queue);
