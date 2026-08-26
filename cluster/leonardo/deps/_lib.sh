@@ -84,3 +84,27 @@ gpu_bench_reset_cmake_dir() {
         rm -rf "$dir"
     fi
 }
+
+# gpu_bench_strip_debug <file>...
+#
+# OSHMPI is built under the sycl stack (gcc 12.2, binutils 2.42) but linked into
+# the CUDA benchmarks by nvc++, which drives /usr/bin/ld -- RHEL8 binutils 2.30.
+# The newer assembler writes compressed .debug_* sections that the older linker
+# cannot read, and it fails with
+#
+#   unable to initialize decompress status for section .debug_aranges
+#   file not recognized: File format not recognized
+#
+# on a library that is otherwise perfectly good. Debug info in a dependency buys
+# us nothing, so drop it and the two toolchains stop disagreeing. Stripping after
+# install rather than passing -gz=none during the build keeps this independent of
+# whether the upstream build script honours CFLAGS.
+gpu_bench_strip_debug() {
+    local f stripped=0
+    for f in "$@"; do
+        # Skip symlinks: liboshmpi.so and .so.0 point at .so.0.0.0.
+        [[ -f "$f" && ! -L "$f" ]] || continue
+        strip --strip-debug "$f" && stripped=$((stripped + 1))
+    done
+    gpu_bench_build_log "stripped debug sections from $stripped librar$( ((stripped == 1)) && echo y || echo ies )"
+}

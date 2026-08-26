@@ -45,6 +45,7 @@ if gpu_bench_build_done "$OSHMPI_INSTALL_PREFIX/include/shmem.h"; then
 else
     gpu_bench_build_log "patched OSHMPI"
     "$src/contrib/oshmpi/build_oshmpi.sh"
+    gpu_bench_strip_debug "$OSHMPI_INSTALL_PREFIX"/lib/liboshmpi.so*
 fi
 
 gpu_bench_build_log "oneCCL with the OSHMPI backend"
