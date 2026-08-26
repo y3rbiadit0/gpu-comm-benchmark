@@ -117,7 +117,7 @@ The Makefile is a thin wrapper over `CMakePresets.json`.
 | `leonardo-cuda-nvshmem` | cuda | NVSHMEM | `nvhpc` module |
 | `leonardo-oshmpi` | cuda | OSHMPI | `bootstrap.sh oneccl-oshmpi` |
 | `leonardo-sycl-mpi` | sycl | Open MPI, DPC++ | module, your DPC++ |
-| `leonardo-sycl-oneccl` | sycl | oneCCL with the NCCL backend | **no bootstrap target yet** - hand-built at `$ONECCL_NCCL_ROOT` |
+| `leonardo-sycl-oneccl` | sycl | oneCCL with the NCCL backend | `bootstrap.sh oneccl-nccl` -> `$ONECCL_NCCL_ROOT` |
 | `leonardo-sycl-oneccl-oshmpi` | sycl | OSHMPI, oneCCL with the OSHMPI backend | `bootstrap.sh` |
 
 A preset whose dependency is missing now fails at configure time naming the path it

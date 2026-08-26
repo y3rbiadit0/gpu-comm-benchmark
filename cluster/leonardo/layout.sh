@@ -30,9 +30,6 @@ export GPU_BENCH_BUILD_DIR=${GPU_BENCH_BUILD_DIR:-$GPU_BENCH_WORK_ROOT/build}
 # nvhpc module and belongs to env/cuda.sh.
 export OSHMPI_HOME=${OSHMPI_HOME:-$GPU_BENCH_PREFIX_ROOT/oshmpi}
 export ONECCL_OSHMPI_ROOT=${ONECCL_OSHMPI_ROOT:-$GPU_BENCH_PREFIX_ROOT/oneccl-oshmpi}
-# No deps/ target builds this one yet - it was installed by hand - so the default is
-# where it actually is rather than where the layout would put it. Moves to
-# $GPU_BENCH_PREFIX_ROOT/oneccl-nccl when deps/oneccl-nccl.sh exists.
-export ONECCL_NCCL_ROOT=${ONECCL_NCCL_ROOT:-$HOME/opt/oneccl-nccl-leonardo}
+export ONECCL_NCCL_ROOT=${ONECCL_NCCL_ROOT:-$GPU_BENCH_PREFIX_ROOT/oneccl-nccl}
 
 export GPU_BENCH_WORK_ROOT GPU_BENCH_PREFIX_ROOT

@@ -46,7 +46,7 @@ every path.
 ### Not yet bootstrapped
 
 `leonardo-sycl-oneccl` needs oneCCL built with the **NCCL** backend at
-`$ONECCL_NCCL_ROOT`. There is no `deps/` target for it yet; it is hand-built, and
+`$ONECCL_NCCL_ROOT`. It is built by `deps/oneccl-nccl.sh`, and
 `layout.sh` defaults to where that install already lives. See
 [`../../oneccl-unisa.md`](../../oneccl-unisa.md).
 
