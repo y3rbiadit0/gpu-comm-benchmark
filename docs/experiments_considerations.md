@@ -2,7 +2,7 @@
 
 Why these communication patterns, how they are classified, and how the suite maps onto the
 industry-standard benchmarks (OSU Micro-Benchmarks 7.5.2). This is the rationale behind the
-experiments under `cluster/leonardo/experiments/`.
+experiments under `cluster/harness/experiments/`.
 
 ## Scope
 

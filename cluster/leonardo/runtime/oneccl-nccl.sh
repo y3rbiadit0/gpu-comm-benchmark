@@ -56,6 +56,19 @@ export NCCL_SOCKET_IFNAME=${NCCL_SOCKET_IFNAME:-ib0}
 # Service level 1 enables adaptive routing on Leonardo's Dragonfly+ fabric.
 export NCCL_IB_SL=${NCCL_IB_SL:-1}
 
+# Multi-node startup. The bundled Intel MPI needs OFI to bootstrap across nodes, and
+# on Leonardo only the TCP provider works: with the default provider selection a
+# 2-node job dies inside MPI_Init, before oneCCL starts, with
+#
+#   MPIDI_OFI_mpi_init_hook
+#   Fatal error in internal_Init: Other MPI error
+#
+# Forcing tcp costs nothing measurable -- MPI is only the launch and bootstrap layer
+# here. Once oneCCL has built the NCCL communicator, every GPU payload goes over
+# NCCL on InfiniBand, which is what the benchmark actually times.
+#
+# FI_PROVIDER_PATH points at a directory holding only libtcp-fi.so, created below by
+# symlink: pointing it at the full prov/ directory lets libfabric load others first.
 if [[ ${GPU_BENCH_JOB_NODES:-1} -gt 1 ]]; then
   export I_MPI_HYDRA_BOOTSTRAP=${I_MPI_HYDRA_BOOTSTRAP:-slurm}
   export I_MPI_FABRICS=${I_MPI_FABRICS:-shm:ofi}

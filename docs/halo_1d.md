@@ -10,7 +10,7 @@ it, plus how to build, run, and read the output. For the performance modeling
 (α–β latency/bandwidth fit and the one-sided-vs-two-sided crossover) see
 [`docs/analysis/halo_1d-crossover.md`](analysis/halo_1d-crossover.md). For the
 Leonardo job scripts see
-[`cluster/leonardo/experiments/halo_1d/`](../cluster/leonardo/experiments/halo_1d/README.md).
+[`cluster/harness/experiments/halo_1d/`](../cluster/harness/experiments/halo_1d/README.md).
 
 ---
 
@@ -169,12 +169,12 @@ the whole point.
 
 | Target | Source | Transport / sync | Init |
 | --- | --- | --- | --- |
-| `cuda_mpi_halo_1d` | `src/mpi/cuda/halo_1d.cu` | Persistent CUDA-aware MPI requests | host two-sided |
-| `cuda_nccl_halo_1d` | `src/xccl/cuda/halo_1d.cu` | grouped `ncclSend`/`ncclRecv` on a stream | host two-sided |
-| `cuda_nvshmem_halo_1d` | `src/shmem/nvshmem/halo_1d.cu` | Persistent cooperative multi-block puts + signals | **device** one-sided |
-| `oshmpi_halo_1d` | `src/shmem/oshmpi/halo_1d.cu` | NBI puts + `quiet` + CUDA sync + barrier | host one-sided |
-| `sycl_mpi_halo_1d` | `src/mpi/sycl/halo_1d.cpp` | Persistent SYCL-aware MPI requests (USM) | host two-sided |
-| `sycl_oneccl_halo_1d` | `src/xccl/sycl/halo_1d.cpp` | point-to-point `ccl::send`/`ccl::recv` (events) | host two-sided |
+| `cuda_mpi_halo_1d` | `src/mpi/cuda/microbench/halo_1d.cu` | Persistent CUDA-aware MPI requests | host two-sided |
+| `cuda_nccl_halo_1d` | `src/xccl/cuda/microbench/halo_1d.cu` | grouped `ncclSend`/`ncclRecv` on a stream | host two-sided |
+| `cuda_nvshmem_halo_1d` | `src/shmem/nvshmem/microbench/halo_1d.cu` | Persistent cooperative multi-block puts + signals | **device** one-sided |
+| `oshmpi_halo_1d` | `src/shmem/oshmpi/microbench/halo_1d.cu` | NBI puts + `quiet` + CUDA sync + barrier | host one-sided |
+| `sycl_mpi_halo_1d` | `src/mpi/sycl/microbench/halo_1d.cpp` | Persistent SYCL-aware MPI requests (USM) | host two-sided |
+| `sycl_oneccl_halo_1d` | `src/xccl/sycl/microbench/halo_1d.cpp` | point-to-point `ccl::send`/`ccl::recv` (events) | host two-sided |
 
 ### cuda_mpi / sycl_mpi — two-sided MPI
 
@@ -275,7 +275,7 @@ mpirun -np 4 ./build/leonardo-cuda-mpi/src/mpi/cuda/cuda_mpi_halo_1d 4096 500 50
 ```
 
 On Leonardo, the SLURM job scripts under
-[`cluster/leonardo/experiments/halo_1d/`](../cluster/leonardo/experiments/halo_1d/README.md)
+[`cluster/harness/experiments/halo_1d/`](../cluster/harness/experiments/halo_1d/README.md)
 wrap these (including an `nsys` profiling mode).
 
 ---

@@ -10,11 +10,24 @@ implementations where both apply.
 ## Layout
 
 ```text
-src/
+src/<model>/<backend>/
+  microbench/    # pingpong, halo_1d, allreduce, alltoall
+  application/   # cg_step, moe
+
   mpi/      # CUDA MPI and SYCL MPI
   xccl/     # CUDA NCCL and SYCL oneCCL
   shmem/    # NVSHMEM and OSHMPI
+
+cluster/
+  harness/   # machine-independent: launcher, matrix, experiment definitions
+  leonardo/  # machine-specific: modules, runtime tuning, dependency builds
+
+tools/       # analysis only: benchscribe, plot, roofline
 ```
+
+Adding a cluster means one `cluster/<name>/cluster.sh` plus an `env/` and a
+`runtime/`, and nothing under `harness/` changes -- see
+[`cluster/leonardo/README.md`](cluster/leonardo/README.md).
 
 ## Benchmarks
 
@@ -48,6 +61,10 @@ that solver's reductions are 8 bytes; and NVSHMEM has the lowest latency floor
 in the suite (7.5 us) yet is the slowest backend on `cg_step` at 16 and 32 GPUs.
 A suite of microbenchmarks alone would have reported both the wrong way round.
 
+Why these six patterns, how they map onto OSU Micro-Benchmarks, and the α-β
+reasoning behind the classification are in
+[`docs/experiments_considerations.md`](docs/experiments_considerations.md).
+
 ## Implementations
 
 | Model | Backend | Details |
@@ -67,12 +84,37 @@ tracked in [`docs/unsupported-operations.md`](docs/unsupported-operations.md).
 Most presets need external libraries that the cluster does not provide. Build those
 first with the bootstrap, then build the benchmarks.
 
-### 1. Provide a DPC++ compiler
+### 1. Provide the two prerequisites the bootstrap cannot install
 
-The one prerequisite the bootstrap cannot install for you. Point `DPCPP_HOME` at an
-install (default `$HOME/opt/dpcpp_6.3`); it is needed by every SYCL preset and by the
-oneCCL the bootstrap builds. Everything else comes from cluster modules or from the
-bootstrap itself.
+Everything else comes from cluster modules or from the bootstrap. These two do not,
+because neither is packaged on Leonardo and both must be built once by hand.
+
+**A DPC++ compiler with the CUDA backend.** Needed by every SYCL preset and by both
+oneCCL builds. Stock oneAPI DPC++ will not do -- it has no NVPTX backend -- so this
+must be a source build of [intel/llvm](https://github.com/intel/llvm) configured with
+`--cuda`. Point `DPCPP_HOME` at it:
+
+```bash
+export DPCPP_HOME=$HOME/opt/dpcpp_6.3      # default
+```
+
+The layout expected underneath is intel/llvm's own build tree, because that is where
+its install lands:
+
+```text
+$DPCPP_HOME/llvm/build/install/bin/clang      -> $DPCPP_CLANG
+$DPCPP_HOME/llvm/build/install/bin/clang++    -> $DPCPP_CLANGXX
+```
+
+Override `DPCPP_INSTALL` directly if your install is laid out differently.
+
+**hwloc.** oneCCL links it, and the SYCL environment expects a local build rather
+than the module. Point `HWLOC_ROOT` at the prefix (default `$HOME/opt/hwloc`); its
+`bin`, `lib`, and `lib/pkgconfig` are added to the search paths.
+
+Both are resolved in
+[`cluster/leonardo/env/sycl.sh`](cluster/leonardo/env/sycl.sh), and both fail at
+configure time naming the path they searched rather than at link time.
 
 ### 2. Bootstrap the dependencies
 
@@ -80,9 +122,16 @@ bootstrap itself.
 ./cluster/leonardo/bootstrap.sh          # or: make bootstrap
 ```
 
-This clones and builds, in order, patched OSHMPI and oneCCL with the OSHMPI backend,
-then the `leonardo-sycl-oneccl-oshmpi` benchmarks. Sources and build trees go to
-`$SCRATCH`; install prefixes to `$HOME/opt/gpu-comm-bench`, both defined once in
+This clones and builds, in order:
+
+| target | produces |
+| --- | --- |
+| `oneccl-nccl` | oneCCL with the NCCL backend, at `$ONECCL_NCCL_ROOT` |
+| `oneccl-oshmpi` | patched OSHMPI at `$OSHMPI_HOME`, then oneCCL with the OSHMPI backend at `$ONECCL_OSHMPI_ROOT` |
+| `benchmarks` | the `leonardo-sycl-oneccl-oshmpi` binaries |
+
+Sources and build trees go to `$SCRATCH`; install prefixes to
+`$HOME/opt/gpu-comm-bench`, both defined once in
 [`cluster/leonardo/layout.sh`](cluster/leonardo/layout.sh). Re-running skips what is
 already installed; `GPU_BENCH_FORCE=1` rebuilds anyway.
 
@@ -211,7 +260,17 @@ See [`tools/README.md`](tools/README.md) for details.
 
 ## Leonardo
 
-Use the Slurm scripts for validation runs; they request the GPU partition and resources correctly.
+One entry point submits everything. `--all` runs the declared matrix; three
+arguments run one cell.
+
+```bash
+cluster/harness/launch.sh --all                       # every benchmark, backend, topology
+cluster/harness/launch.sh --all allreduce alltoall    # only these benchmarks
+cluster/harness/launch.sh allreduce cuda_mpi 1n2g     # one cell
+cluster/harness/launch.sh --explain allreduce cuda_mpi 1n2g   # resolve it, submit nothing
+```
+
+Overrides are environment variables, inherited by every job:
 
 ```bash
 GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 cluster/harness/launch.sh halo_1d cuda_mpi 1n2g

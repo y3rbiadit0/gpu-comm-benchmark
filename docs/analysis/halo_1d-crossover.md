@@ -137,11 +137,11 @@ report numbers from it):
 
 ```bash
 GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 \
-  tools/launch.sh halo_1d cuda_nvshmem 2n4g
+  cluster/harness/launch.sh halo_1d cuda_nvshmem 2n4g
 GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 \
-  tools/launch.sh halo_1d cuda_mpi 2n4g
+  cluster/harness/launch.sh halo_1d cuda_mpi 2n4g
 GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 \
-  tools/launch.sh halo_1d cuda_nccl 2n4g
+  cluster/harness/launch.sh halo_1d cuda_nccl 2n4g
 ```
 
 This writes one report per rank under
@@ -224,7 +224,7 @@ cases before using the following historical values in a current comparison.
 
 ```bash
 # clean timing sweep (numbers to report)
-GPU_BENCH_NTRIALS=5 tools/launch.sh halo_1d cuda_nvshmem 2n4g
+GPU_BENCH_NTRIALS=5 cluster/harness/launch.sh halo_1d cuda_nvshmem 2n4g
 # ... per backend/topology, then:
 python3 tools/benchscribe results/ --benchmark halo_1d        # normalise vs cuda_mpi
 python3 tools/benchscribe results/ --benchmark halo_1d --fit  # α, B∞, n½ per backend

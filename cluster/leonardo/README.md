@@ -43,12 +43,17 @@ against another's libraries.
 `environment.sh` sources `layout.sh`, so `make leonardo` and the bootstrap agree on
 every path.
 
-### Not yet bootstrapped
+### oneCCL with the NCCL backend
 
 `leonardo-sycl-oneccl` needs oneCCL built with the **NCCL** backend at
-`$ONECCL_NCCL_ROOT`. It is built by `deps/oneccl-nccl.sh`, and
-`layout.sh` defaults to where that install already lives. See
-[`../../oneccl-unisa.md`](../../oneccl-unisa.md).
+`$ONECCL_NCCL_ROOT`, produced by `deps/oneccl-nccl.sh`.
+
+It links oneCCL's *bundled Intel MPI*, not Leonardo's Open MPI: the executables call
+MPI directly for setup and validation, so their linked MPI and the one oneCCL dlopens
+must be the same, and mixing the two fails during transport initialization. The
+preset therefore sets `GPU_BENCH_ONECCL_USE_BUNDLED_MPI=ON`, and the jobs launch with
+`mpirun` rather than `srun` so the launcher comes from that same stack.
+`runtime/oneccl-nccl.sh` documents the multi-node OFI settings this requires.
 
 ## CUDA Stack
 
@@ -287,7 +292,7 @@ cluster/harness/launch.sh allreduce sycl_oneccl 1n4g
 ```
 
 Each `allreduce` backend also has `1n1g`, `1n2g` (NVLink), `2n1g` (InfiniBand), and `2n4g`
-launchers; see [`experiments/allreduce/README.md`](experiments/allreduce/README.md).
+launchers; see [`experiments/allreduce/README.md`](../harness/experiments/allreduce/README.md).
 
 Ping-pong (point-to-point one-way latency/bandwidth, 2 endpoints, internal size sweep):
 
@@ -302,7 +307,7 @@ cluster/harness/launch.sh pingpong sycl_oneccl 2n1g
 ```
 
 Only the `1n2g` (intra-node NVLink) and `2n1g` (inter-node InfiniBand) topologies exist for
-`pingpong`; see [`experiments/pingpong/README.md`](experiments/pingpong/README.md).
+`pingpong`; see [`experiments/pingpong/README.md`](../harness/experiments/pingpong/README.md).
 
 All-to-all (personalized exchange / bisection bandwidth):
 
@@ -316,7 +321,7 @@ cluster/harness/launch.sh alltoall sycl_oneccl 1n4g
 ```
 
 Each `alltoall` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers; see
-[`experiments/alltoall/README.md`](experiments/alltoall/README.md).
+[`experiments/alltoall/README.md`](../harness/experiments/alltoall/README.md).
 
 MoE (top-1 variable-count dispatch + combine under uniform, local, and hotspot routing):
 
@@ -332,7 +337,7 @@ cluster/harness/launch.sh moe sycl_oneccl 1n4g
 MoE is a skew-sensitive global personalized application pattern: unlike dense `alltoall`,
 its per-peer operation sizes and expert receive loads vary with routing. Each backend has
 `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers; see
-[`experiments/moe/README.md`](experiments/moe/README.md). oneCCL launchers use `mpirun`.
+[`experiments/moe/README.md`](../harness/experiments/moe/README.md). oneCCL launchers use `mpirun`.
 
 CG step (conjugate-gradient iteration skeleton: SpMV halo + two reductions):
 
@@ -346,7 +351,7 @@ cluster/harness/launch.sh cg_step sycl_oneccl 1n4g
 ```
 
 Each `cg_step` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers; see
-[`experiments/cg_step/README.md`](experiments/cg_step/README.md).
+[`experiments/cg_step/README.md`](../harness/experiments/cg_step/README.md).
 
 Useful overrides:
 

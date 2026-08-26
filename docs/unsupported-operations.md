@@ -37,6 +37,14 @@ benchmark failure.
 | `sycl_oneccl` | `alltoall` collective | A backend exception currently aborts the job. | Confirm whether the installed NCCL-backed fork implements `ccl::alltoall`; add explicit `NOT_IMPLEMENTED` output if absent. |
 | `cuda_nvshmem` | Cooperative `halo_1d` kernel | Throws an error when cooperative launch is unavailable. | Leonardo A100 supports the feature; retain this check for other systems and classify unsupported hardware explicitly if portability is required. |
 
+The NCCL-backed fork keeps `ccl_api_functions.cpp` backend-neutral and dispatches
+groups through the existing `group_impl` layer. Its NCCL path uses native
+`ncclGroupStart`/`ncclGroupEnd`, preserves outermost-group nesting, defers
+per-operation completion, and publishes SYCL stream events only after NCCL has
+enqueued the group. Grouped point-to-point is enabled by default for `halo_1d`,
+multi-rank `cg_step`, and `moe`, and the `halo_1d` ring is validated on `1n2g`,
+`1n4g`, `2n1g` and `2n4g`.
+
 `sycl_oneccl` allreduce has no known capability gap. The installed point-to-point
 implementation is also validated for two-endpoint pingpong on `1n2g` and `2n1g`.
 
