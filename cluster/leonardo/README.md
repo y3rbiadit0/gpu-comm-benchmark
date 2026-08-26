@@ -250,48 +250,51 @@ Reading it:
   neither oneCCL runtime, which have their own transport.
 - **Two entry points:** `harness/launch.sh` runs, `leonardo/bootstrap.sh` builds.
 
-### Running the SYCL stack on HPC-X
+### One MPI: HPC-X 2.19
 
-`sycl_mpi` normally links the `openmpi/4.1.6` module. That build has no UCC, and
-Open MPI's built-in `tuned` collectives reduce with host `ompi_op` functions, so
-an allreduce on device buffers stages through host memory at a flat 0.42 GB/s
-whatever the size. Collectives that only move bytes -- `alltoall` -- are
-unaffected and match `cuda_mpi` to within a few percent.
+Everything that calls MPI directly links the same bundle -- `cuda_mpi`,
+`sycl_mpi`, `oshmpi`, and the OSHMPI that `sycl_oneccl_oshmpi` sits on. So a
+`cuda_mpi` vs `sycl_mpi` comparison measures the programming model, by
+construction rather than by caveat. Two exceptions, both deliberate:
+`sycl_oneccl` links oneCCL's bundled Intel MPI (its executables must link the
+same MPI oneCCL dlopens), and NCCL/NVSHMEM do not use MPI for data movement.
 
-`GPU_BENCH_SYCL_MPI=hpcx` links the same HPC-X 2.19 the CUDA stack uses:
+The prefix is discovered by asking a login shell for `$HPCX_MPI_HOME`; the
+`hpcx-mpi` module is never loaded into the SYCL environment, because it pulls in
+nvhpc and would replace DPC++ and CUDA 12.2.
 
-```bash
-source cluster/leonardo/environment.sh cuda && echo $HPCX_MPI_HOME
-export GPU_BENCH_SYCL_MPI=hpcx GPU_BENCH_HPCX_OMPI_HOME=<that path>
-rm -rf build/leonardo-sycl-mpi && make configure PRESET=leonardo-sycl-mpi
-```
+**Why not the cluster's `openmpi/4.1.6`.** It has no UCC, and Open MPI's built-in
+`tuned` collectives reduce with host `ompi_op` functions, so an allreduce on
+device buffers stages through host memory at a flat 0.42 GB/s whatever the size:
 
-HPC-X is packaged *inside* nvhpc, and that module cannot be loaded here -- it
-would replace DPC++ and CUDA 12.2. So five things the module would have set have
-to be supplied by hand; `env/sycl.sh` does all of them, but they are listed here
-because four of the five fail in ways that do not name the cause:
+| 1n2g allreduce, 16 MiB | time | bandwidth |
+| --- | ---: | ---: |
+| HPC-X 2.19 (`cuda_mpi`) | 225.4 us | 74.43 GB/s |
+| HPC-X 2.19 (`sycl_mpi`) | 224.6 us | 74.69 GB/s |
+| openmpi/4.1.6 (`sycl_mpi`) | 39710 us | 0.42 GB/s |
+
+`alltoall`, which moves bytes without reducing them, matched `cuda_mpi` to within
+a few percent under *either* MPI -- which is what identifies the missing
+device-side reduction as the cause rather than the programming model. Measured
+2026-08-26; to reproduce, load `openmpi/4.1.6--gcc--12.2.0-cuda-12.2` in
+`env/sycl.sh` in place of the HPC-X block and run into a separate results tree
+(`GPU_BENCH_RESULTS_ROOT`), never the default one -- benchscribe keys on
+`(benchmark, backend, topology)` and would average the two together.
+
+Using HPC-X outside its module means supplying five things it would have set.
+`env/sycl.sh` does all of them; they are listed because four fail in ways that do
+not name the cause, and the fifth does not fail at all:
 
 | what | symptom if missing |
 | --- | --- |
-| the `ompi` prefix on `PATH` | CMake finds the stock `mpicxx` and nothing changes |
-| `OPAL_PREFIX` | no MCA components at all; failure inside `MPI_Init` |
-| `OMPI_CC` / `OMPI_CXX` | wrappers call `nvc`, which is absent: *"C compiler cannot create executables"* |
-| `$HPCX_ROOT/ucx/lib` | loads the system UCX 1.15, warns about API version, PML never initialises |
-| `$HPCX_ROOT/ucc/lib` | `libucc.so.1 => not found`; **silent** -- results look plausible and are wrong |
+| the `ompi` prefix on `PATH` | CMake finds another `mpicxx`; nothing changes |
+| `OPAL_PREFIX` | no MCA components; failure inside `MPI_Init` |
+| `OMPI_CC` / `OMPI_CXX` | wrappers call `nvc`, absent here: *"C compiler cannot create executables"* |
+| `$HPCX_ROOT/ucx/lib` | loads system UCX 1.15, warns, PML never initialises |
+| `$HPCX_ROOT/ucc/lib` | `libucc.so.1 => not found`; **silent** -- plausible, wrong numbers |
 
-The last one is the dangerous one: it produces numbers rather than an error.
-Verify before trusting a measurement from this mode:
-
-```bash
-ldd $GPU_BENCH_HPCX_OMPI_HOME/lib/openmpi/mca_coll_ucc.so | grep -i ucc
-ompi_info --param coll ucc --level 9 | head -1
-```
-
-The first must resolve under `hpcx-2.19/`, not `/lib64` and not `not found`.
-
-This mode applies to `sycl_mpi` only. The oneCCL presets link libraries built
-against whichever MPI `bootstrap.sh` used, so build them in the same mode or not
-at all -- mixing them is the failure this whole exercise is about.
+Every job log records `OPAL_PREFIX`, so a result can be traced to the MPI that
+produced it.
 
 ### Why `runtime/` is not inside `experiments/`
 

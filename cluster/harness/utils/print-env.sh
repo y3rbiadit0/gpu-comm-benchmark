@@ -44,10 +44,7 @@ gpu_bench_print_env() {
     # Host-side execution
     OMP_NUM_THREADS
     SLURM_CPU_BIND
-    # Which MPI the SYCL stack linked. Without this a job that silently ran with
-    # the wrong one -- the environment not exported at submit time -- is
-    # indistinguishable afterwards from one that ran correctly.
-    GPU_BENCH_SYCL_MPI
+    # Names the MPI install in use, so a job log says which one produced it.
     OPAL_PREFIX
   )
 
