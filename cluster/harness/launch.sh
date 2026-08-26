@@ -138,6 +138,17 @@ EOF
 
 if [[ "$mode" == "single" ]]; then
   if [[ ${#args[@]} -lt 3 ]]; then
+    # A bare benchmark name is the common slip: it reads like "run allreduce",
+    # but one cell needs a backend and a topology too. Name the likely intent
+    # rather than only restating the grammar.
+    if [[ ${#args[@]} -eq 1 && -f "$EXP/${args[0]}/common.sh" ]]; then
+      echo "error: '${args[0]}' is a benchmark, not a cell." >&2
+      echo "  every backend and topology:  cluster/harness/launch.sh --all ${args[0]}" >&2
+      echo "  one cell:                    cluster/harness/launch.sh ${args[0]} <backend> <topology>" >&2
+      echo "  backends:   $(gpu_bench_backend_names)" >&2
+      echo "  topologies: $(gpu_bench_matrix_topologies "${args[0]}")" >&2
+      exit 2
+    fi
     echo "usage: cluster/harness/launch.sh <benchmark> <backend> <topology> [sbatch args...]" >&2
     echo "       cluster/harness/launch.sh --all [benchmark...]" >&2
     echo "       cluster/harness/launch.sh --explain <benchmark> <backend> <topology>" >&2
