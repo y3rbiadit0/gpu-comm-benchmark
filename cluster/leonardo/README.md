@@ -88,15 +88,15 @@ cmake --build --preset leonardo-sycl-oneccl
 
 ## How experiments are defined
 
-One job script, `cluster/leonardo/experiments/job.sh`, serves every
+One job script, `cluster/leonardo/launcher/job.sh`, serves every
 (benchmark, backend, topology) cell. It replaced 230 near-identical per-cell
 scripts that differed only in values derivable from those three names.
 
 | file | holds |
 | --- | --- |
-| `experiments/job.sh` | the submitted script: resolve, validate, dispatch |
-| `experiments/backends.sh` | per-backend constants (stack, runtime, launcher, preset, binary) |
-| `experiments/matrix.sh` | which cells are valid, and why each exclusion exists |
+| `launcher/job.sh` | the submitted script: resolve, validate, dispatch |
+| `launcher/backends.sh` | per-backend constants (stack, runtime, launcher, preset, binary) |
+| `launcher/matrix.sh` | which cells are valid, and why each exclusion exists |
 | `experiments/<bench>/common.sh` | per-benchmark defaults and arguments |
 
 The allocation shape is not baked into a file: `--nodes`, `--ntasks-per-node`,
@@ -107,6 +107,131 @@ nothing to regenerate or keep in sync.
 Adding a topology is a one-line edit in `matrix.sh`. Adding a backend is one row
 in `backends.sh` plus its name in the benchmarks that support it.
 
+### Flow of one experiment
+
+```mermaid
+flowchart TD
+    subgraph login["login node"]
+        A["cluster/leonardo/launch.sh halo_1d cuda_mpi 1n2g"]
+        B["backends.sh: stack, runtime, preset, binary<br/>matrix.sh: is this cell valid?"]
+        C["sbatch --nodes=1 --ntasks-per-node=2 --gres=gpu:2 job.sh"]
+        A --> B --> C
+    end
+
+    C -->|"GPU_BENCH_BENCHMARK / BACKEND / TOPOLOGY"| D
+
+    subgraph compute["compute node(s)"]
+        D["job.sh: validate cell, resolve binary path"]
+        E["experiments/halo_1d/common.sh: sizes, iterations, overrides"]
+        F["environment.sh: modules, CUDA or SYCL paths"]
+        G["runtime/mpi-cuda.sh: UCX, UCC, NCCL settings"]
+        H["srun -> cuda_mpi_halo_1d"]
+        D --> E --> F --> G --> H
+    end
+
+    H --> I["results/halo-1d-cuda-mpi-1n2g/halo_1d/"]
+    I --> J["tools/benchscribe --format json"]
+    J --> K["tools/plot -> figures"]
+```
+
+The environment is layered in that order, each layer using `${VAR:-default}`, so
+**an earlier layer wins**. A benchmark that needs UCC off says so once in its
+`common.sh`, and `runtime/*.sh` leaves it alone. `cluster/leonardo/launch.sh --explain`
+prints the resolved value of every variable together with the file that wrote it.
+
+### Layout
+
+```
+cluster/leonardo/
+  bootstrap.sh     BUILD entry point   -- compile dependencies, then benchmarks
+  launch.sh        RUN entry point     -- submit one cell, or --all
+  environment.sh   the environment a job or a build needs
+  slurm.sh         account and partition
+
+  deps/            what gets built (oneCCL fork, benchmark binaries)
+  env/             BUILD environment   -- modules, compilers, CUDA/SYCL paths
+  runtime/         RUN environment     -- UCX, UCC, NCCL, SHMEM, per library
+  launcher/        how a run is assembled -- backends, matrix, the job script
+  experiments/     what is measured    -- per-benchmark sizes and overrides
+  utils/           helpers -- layout, print-env, where-set, gpu-rank-wrapper
+```
+
+Two entry points, and everything else is reached from one of them.
+
+### Which script sources which
+
+```mermaid
+flowchart TD
+    L["launch.sh<br/><b>run entry</b>"]
+    BS["bootstrap.sh<br/><b>build entry</b>"]
+    S["slurm.sh"]
+    M["launcher/matrix.sh<br/>which cells exist"]
+    BK["launcher/backends.sh<br/>stack, runtime, preset, binary"]
+    J["launcher/job.sh<br/><b>the submitted script</b>"]
+    WS["utils/where-set.sh<br/>--explain only"]
+    BC["experiments/&lt;bench&gt;/common.sh<br/>sizes, iterations, overrides"]
+    EC["experiments/common.sh<br/>run loop, results, reporting"]
+    EN["environment.sh"]
+    LY["utils/layout.sh<br/>install prefixes"]
+    PE["utils/print-env.sh<br/>the ENV block"]
+    GW["utils/gpu-rank-wrapper.sh<br/>per-rank GPU binding"]
+    ES["env/cuda.sh or env/sycl.sh<br/>modules, compilers"]
+    RT["runtime/&lt;runtime&gt;.sh"]
+    RC["runtime/_openmpi.sh<br/>shared MPI baseline"]
+    DL["deps/_lib.sh"]
+    DT["deps/&lt;target&gt;.sh"]
+
+    L --> S
+    L --> M
+    L --> BK
+    L --> WS
+    L -. "sbatch" .-> J
+
+    J --> BK
+    J --> BC
+    BC --> EC
+    EC --> EN
+    EC --> RT
+    EC --> GW
+    RT --> RC
+
+    EN --> S
+    EN --> LY
+    EN --> PE
+    EN --> ES
+
+    BS --> EN
+    BS --> DT
+    DT --> DL
+    DL --> LY
+```
+
+Reading it:
+
+- **Two entry points, no third.** `launch.sh` runs, `bootstrap.sh` builds. They
+  meet only at `environment.sh`.
+- **`matrix.sh` is submit-time only.** `job.sh` never reads it: which cells exist
+  is the submitter's question, not a question for a job already given one.
+- **`backends.sh` is read on both sides** -- once for the sbatch flags, once on
+  the compute node for the binary path. One table, so they cannot disagree.
+- **`runtime/_openmpi.sh` is shared by the four MPI-backed runtimes** and by
+  neither oneCCL runtime, which have their own transport.
+- **`utils/` is leaf-only.** Nothing in it sources anything but `layout.sh`.
+
+### Why `runtime/` is not inside `experiments/`
+
+`env/` and `runtime/` are a pair, and both describe **this machine**:
+
+| directory | answers | example |
+| --- | --- | --- |
+| `env/` | how do I *build* for this stack here? | `module load nvhpc/24.5`, `CXX=nvc++` |
+| `runtime/` | how is this library *configured* here? | `OMPI_MCA_coll_ucc_enable`, `UCX_TLS` |
+| `experiments/` | what are we measuring? | matrix, message sizes, iteration counts |
+
+One `runtime/oshmpi.sh` serves all six benchmarks, so it belongs to no single one.
+Moving it under `experiments/` would separate it from `env/`, which it is paired
+with, and leave it owned by nothing in particular.
+
 ## Experiments
 
 Experiment scripts are fixed-topology Slurm launchers. They write Slurm logs under `logs/` and benchmark outputs under `results/<result-name>/<problem>/`.
@@ -115,23 +240,23 @@ The active suite is `pingpong`, `halo_1d`, `allreduce`, `alltoall`, `cg_step`, a
 Halo 1D:
 
 ```bash
-tools/launch.sh halo_1d cuda_mpi 1n4g
-tools/launch.sh halo_1d cuda_nccl 1n4g
-tools/launch.sh halo_1d cuda_nvshmem 1n4g
-tools/launch.sh halo_1d oshmpi 1n4g
-tools/launch.sh halo_1d sycl_mpi 1n4g
-tools/launch.sh halo_1d sycl_oneccl 1n4g
+cluster/leonardo/launch.sh halo_1d cuda_mpi 1n4g
+cluster/leonardo/launch.sh halo_1d cuda_nccl 1n4g
+cluster/leonardo/launch.sh halo_1d cuda_nvshmem 1n4g
+cluster/leonardo/launch.sh halo_1d oshmpi 1n4g
+cluster/leonardo/launch.sh halo_1d sycl_mpi 1n4g
+cluster/leonardo/launch.sh halo_1d sycl_oneccl 1n4g
 ```
 
 Allreduce (collective sum latency/bandwidth, internal size sweep):
 
 ```bash
-tools/launch.sh allreduce cuda_mpi 1n4g
-tools/launch.sh allreduce cuda_nccl 1n4g
-tools/launch.sh allreduce cuda_nvshmem 1n4g
-tools/launch.sh allreduce oshmpi 1n4g
-tools/launch.sh allreduce sycl_mpi 1n4g
-tools/launch.sh allreduce sycl_oneccl 1n4g
+cluster/leonardo/launch.sh allreduce cuda_mpi 1n4g
+cluster/leonardo/launch.sh allreduce cuda_nccl 1n4g
+cluster/leonardo/launch.sh allreduce cuda_nvshmem 1n4g
+cluster/leonardo/launch.sh allreduce oshmpi 1n4g
+cluster/leonardo/launch.sh allreduce sycl_mpi 1n4g
+cluster/leonardo/launch.sh allreduce sycl_oneccl 1n4g
 ```
 
 Each `allreduce` backend also has `1n1g`, `1n2g` (NVLink), `2n1g` (InfiniBand), and `2n4g`
@@ -140,13 +265,13 @@ launchers; see [`experiments/allreduce/README.md`](experiments/allreduce/README.
 Ping-pong (point-to-point one-way latency/bandwidth, 2 endpoints, internal size sweep):
 
 ```bash
-tools/launch.sh pingpong cuda_mpi 1n2g   # NVLink
-tools/launch.sh pingpong cuda_mpi 2n1g   # InfiniBand
-tools/launch.sh pingpong cuda_nccl 2n1g
-tools/launch.sh pingpong cuda_nvshmem 2n1g
-tools/launch.sh pingpong oshmpi 2n1g
-tools/launch.sh pingpong sycl_mpi 2n1g
-tools/launch.sh pingpong sycl_oneccl 2n1g
+cluster/leonardo/launch.sh pingpong cuda_mpi 1n2g   # NVLink
+cluster/leonardo/launch.sh pingpong cuda_mpi 2n1g   # InfiniBand
+cluster/leonardo/launch.sh pingpong cuda_nccl 2n1g
+cluster/leonardo/launch.sh pingpong cuda_nvshmem 2n1g
+cluster/leonardo/launch.sh pingpong oshmpi 2n1g
+cluster/leonardo/launch.sh pingpong sycl_mpi 2n1g
+cluster/leonardo/launch.sh pingpong sycl_oneccl 2n1g
 ```
 
 Only the `1n2g` (intra-node NVLink) and `2n1g` (inter-node InfiniBand) topologies exist for
@@ -155,12 +280,12 @@ Only the `1n2g` (intra-node NVLink) and `2n1g` (inter-node InfiniBand) topologie
 All-to-all (personalized exchange / bisection bandwidth):
 
 ```bash
-tools/launch.sh alltoall cuda_mpi 1n4g
-tools/launch.sh alltoall cuda_nccl 1n4g
-tools/launch.sh alltoall cuda_nvshmem 1n4g
-tools/launch.sh alltoall oshmpi 1n4g
-tools/launch.sh alltoall sycl_mpi 1n4g
-tools/launch.sh alltoall sycl_oneccl 1n4g
+cluster/leonardo/launch.sh alltoall cuda_mpi 1n4g
+cluster/leonardo/launch.sh alltoall cuda_nccl 1n4g
+cluster/leonardo/launch.sh alltoall cuda_nvshmem 1n4g
+cluster/leonardo/launch.sh alltoall oshmpi 1n4g
+cluster/leonardo/launch.sh alltoall sycl_mpi 1n4g
+cluster/leonardo/launch.sh alltoall sycl_oneccl 1n4g
 ```
 
 Each `alltoall` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers; see
@@ -169,12 +294,12 @@ Each `alltoall` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers
 MoE (top-1 variable-count dispatch + combine under uniform, local, and hotspot routing):
 
 ```bash
-tools/launch.sh moe cuda_mpi 1n4g
-tools/launch.sh moe cuda_nccl 1n4g
-tools/launch.sh moe cuda_nvshmem 1n4g
-tools/launch.sh moe oshmpi 1n4g
-tools/launch.sh moe sycl_mpi 1n4g
-tools/launch.sh moe sycl_oneccl 1n4g
+cluster/leonardo/launch.sh moe cuda_mpi 1n4g
+cluster/leonardo/launch.sh moe cuda_nccl 1n4g
+cluster/leonardo/launch.sh moe cuda_nvshmem 1n4g
+cluster/leonardo/launch.sh moe oshmpi 1n4g
+cluster/leonardo/launch.sh moe sycl_mpi 1n4g
+cluster/leonardo/launch.sh moe sycl_oneccl 1n4g
 ```
 
 MoE is a skew-sensitive global personalized application pattern: unlike dense `alltoall`,
@@ -185,12 +310,12 @@ its per-peer operation sizes and expert receive loads vary with routing. Each ba
 CG step (conjugate-gradient iteration skeleton: SpMV halo + two reductions):
 
 ```bash
-tools/launch.sh cg_step cuda_mpi 1n4g
-tools/launch.sh cg_step cuda_nccl 1n4g
-tools/launch.sh cg_step cuda_nvshmem 1n4g
-tools/launch.sh cg_step oshmpi 1n4g
-tools/launch.sh cg_step sycl_mpi 1n4g
-tools/launch.sh cg_step sycl_oneccl 1n4g
+cluster/leonardo/launch.sh cg_step cuda_mpi 1n4g
+cluster/leonardo/launch.sh cg_step cuda_nccl 1n4g
+cluster/leonardo/launch.sh cg_step cuda_nvshmem 1n4g
+cluster/leonardo/launch.sh cg_step oshmpi 1n4g
+cluster/leonardo/launch.sh cg_step sycl_mpi 1n4g
+cluster/leonardo/launch.sh cg_step sycl_oneccl 1n4g
 ```
 
 Each `cg_step` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers; see
@@ -199,10 +324,10 @@ Each `cg_step` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers;
 Useful overrides:
 
 ```bash
-GPU_BENCH_N=16777216 GPU_BENCH_NTRIALS=5 tools/launch.sh halo_1d cuda_mpi 1n4g
-GPU_BENCH_RESULT_NAME=halo-sycl-test tools/launch.sh halo_1d sycl_mpi 1n4g
-GPU_BENCH_ITERS=500 GPU_BENCH_WARMUP=100 tools/launch.sh allreduce cuda_nccl 2n1g
-GPU_BENCH_HIDDEN=512 GPU_BENCH_ROUTINGS=uniform,hotspot80 tools/launch.sh moe cuda_nccl 2n4g
+GPU_BENCH_N=16777216 GPU_BENCH_NTRIALS=5 cluster/leonardo/launch.sh halo_1d cuda_mpi 1n4g
+GPU_BENCH_RESULT_NAME=halo-sycl-test cluster/leonardo/launch.sh halo_1d sycl_mpi 1n4g
+GPU_BENCH_ITERS=500 GPU_BENCH_WARMUP=100 cluster/leonardo/launch.sh allreduce cuda_nccl 2n1g
+GPU_BENCH_HIDDEN=512 GPU_BENCH_ROUTINGS=uniform,hotspot80 cluster/leonardo/launch.sh moe cuda_nccl 2n4g
 ```
 
 Per-problem notes and validated results live in `cluster/leonardo/experiments/<problem>/README.md`.

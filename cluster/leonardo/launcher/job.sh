@@ -7,7 +7,7 @@
 # near-identical job scripts now arrives as environment:
 #
 #   GPU_BENCH_BENCHMARK   pingpong | halo_1d | allreduce | alltoall | moe | cg_step
-#   GPU_BENCH_BACKEND     see cluster/leonardo/experiments/backends.sh
+#   GPU_BENCH_BACKEND     see cluster/leonardo/launcher/backends.sh
 #   GPU_BENCH_TOPOLOGY    <nodes>n<gpus_per_node>g, e.g. 2n4g
 #
 # Only the invariant #SBATCH directives stay above. --nodes, --ntasks-per-node,
@@ -15,31 +15,25 @@
 # takes precedence over #SBATCH directives -- so one file on disk covers every
 # shape of job, with nothing generated and nothing to keep in sync.
 #
-# Submit through tools/launch.sh --all (the whole matrix) or tools/launch.sh (one
-# cell). Running `sbatch job.sh` directly without the three variables set is an
+# Submit through cluster/leonardo/launch.sh -- one cell, or --all for the matrix. Running `sbatch job.sh` directly without the three variables set is an
 # error, not a default, because a silent default would produce results filed
 # under the wrong name.
 
 set -euo pipefail
 
 GPU_BENCH_PROJECT_ROOT=${GPU_BENCH_PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-$(pwd)}}
-EXP="$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments"
+LEO="$GPU_BENCH_PROJECT_ROOT/cluster/leonardo"
+EXP="$LEO/experiments"
 
 for required in GPU_BENCH_BENCHMARK GPU_BENCH_BACKEND GPU_BENCH_TOPOLOGY; do
   if [[ -z "${!required:-}" ]]; then
     echo "error: $required is not set." >&2
-    echo "  submit with: tools/launch.sh <benchmark> <backend> <topology>" >&2
+    echo "  submit with: cluster/leonardo/launch.sh <benchmark> <backend> <topology>" >&2
     exit 2
   fi
 done
 
-# Everything exported at this point came from the submitting shell (or sbatch
-# --export). Establishing the baseline here is what lets the job log attribute
-# every later value to the file that wrote it.
-source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/provenance.sh"
-gpu_bench_origin_baseline
-
-source "$EXP/backends.sh"
+source "$LEO/launcher/backends.sh"
 gpu_bench_backend_fields "$GPU_BENCH_BACKEND"
 gpu_bench_topology_fields "$GPU_BENCH_TOPOLOGY"
 
@@ -63,6 +57,4 @@ export GPU_BENCH_PROJECT_ROOT GPU_BENCH_STACK GPU_BENCH_RUNTIME GPU_BENCH_LAUNCH
 export GPU_BENCH_NODES GPU_BENCH_TASKS_PER_NODE GPU_BENCH_BINARY GPU_BENCH_RESULT_NAME
 
 source "$EXP/$GPU_BENCH_BENCHMARK/common.sh"
-gpu_bench_record_origin "cluster/leonardo/experiments/$GPU_BENCH_BENCHMARK/common.sh"
-
 gpu_bench_experiment_main

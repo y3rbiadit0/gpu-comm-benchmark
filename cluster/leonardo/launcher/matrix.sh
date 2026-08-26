@@ -37,7 +37,7 @@ moe_BACKENDS="$GPU_BENCH_ALL_BACKENDS"
 cg_step_TOPOLOGIES="1n1g 1n2g 1n4g 2n1g 2n4g 4n4g 8n4g"
 cg_step_BACKENDS="$GPU_BENCH_ALL_BACKENDS sycl_oneccl_oshmpi"
 
-# Order matters only for readability of `tools/launch.sh --all` output.
+# Order matters only for readability of `cluster/leonardo/launch.sh --all` output.
 GPU_BENCH_ALL_BENCHMARKS="pingpong halo_1d allreduce alltoall moe cg_step"
 
 gpu_bench_matrix_topologies() {

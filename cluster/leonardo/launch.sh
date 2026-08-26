@@ -2,16 +2,16 @@
 # Launch benchmark jobs on Leonardo.
 #
 # One cell:
-#   tools/launch.sh halo_1d cuda_mpi 1n2g
-#   tools/launch.sh cg_step cuda_mpi 2n4g --qos=boost_qos_dbg   # extra sbatch args
+#   cluster/leonardo/launch.sh halo_1d cuda_mpi 1n2g
+#   cluster/leonardo/launch.sh cg_step cuda_mpi 2n4g --qos=boost_qos_dbg   # extra sbatch args
 #
 # Many cells:
-#   tools/launch.sh --all                        every benchmark, backend, topology
-#   tools/launch.sh --all halo_1d moe            only these benchmarks
+#   cluster/leonardo/launch.sh --all                        every benchmark, backend, topology
+#   cluster/leonardo/launch.sh --all halo_1d moe            only these benchmarks
 #
 # Inspect without submitting:
-#   tools/launch.sh --dry-run --all              what would be submitted
-#   tools/launch.sh --explain halo_1d cuda_mpi 1n2g
+#   cluster/leonardo/launch.sh --dry-run --all              what would be submitted
+#   cluster/leonardo/launch.sh --explain halo_1d cuda_mpi 1n2g
 #                                                how every value is resolved, and
 #                                                which file writes each env var
 #
@@ -30,13 +30,16 @@
 # every job.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-EXP="$ROOT/cluster/leonardo/experiments"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LEO="$ROOT/cluster/leonardo"
+EXP="$LEO/experiments"
+LAUNCHER="$LEO/launcher"
 export GPU_BENCH_PROJECT_ROOT="$ROOT"
 
-source "$ROOT/cluster/leonardo/slurm.sh"
-source "$EXP/backends.sh"
-source "$EXP/matrix.sh"
+source "$LEO/slurm.sh"
+source "$LAUNCHER/backends.sh"
+source "$LAUNCHER/matrix.sh"
+source "$LEO/utils/where-set.sh"
 
 mode=single
 dry_run=${GPU_BENCH_DRYRUN:-0}
@@ -88,66 +91,46 @@ submit() {
     --gres=gpu:"$GPU_BENCH_TASKS_PER_NODE" \
     --time="$(gpu_bench_walltime_for "$GPU_BENCH_NODES")" \
     "$@" \
-    "$EXP/job.sh"
+    "$LAUNCHER/job.sh"
 }
 
-# Print how one cell resolves, and which file writes each environment variable.
-# This runs the real sourcing chain, so it reports what a job would actually see
-# rather than a description of what it should see.
+# Print how one cell resolves: which files decide it, and for every environment
+# variable, which file sets it and which definition wins.
+#
+# Read statically from the files rather than by running the chain. The layering
+# is fixed -- benchmark shim, then environment, then runtime, every layer using
+# ${VAR:-default} -- so the first definition in that order wins, and that can be
+# determined without a cluster, without modules, and without $SCRATCH.
 explain_cell() {
   local bench="$1" backend="$2" topo="$3"
+  local ucc_note=""
   cat <<EOF
 cell        : $bench / $backend / $topo
-job script  : cluster/leonardo/experiments/job.sh
-benchmark   : cluster/leonardo/experiments/$bench/common.sh
-backend row : cluster/leonardo/experiments/backends.sh
-  stack     : $GPU_BENCH_STACK
+run entry   : cluster/leonardo/launch.sh
+job script  : cluster/leonardo/launcher/job.sh
+matrix      : cluster/leonardo/launcher/matrix.sh
+backend row : cluster/leonardo/launcher/backends.sh
+  stack     : $GPU_BENCH_STACK        (cluster/leonardo/env/$GPU_BENCH_STACK.sh)
   runtime   : cluster/leonardo/runtime/$GPU_BENCH_RUNTIME.sh
   launcher  : $GPU_BENCH_LAUNCHER
   preset    : $GPU_BENCH_PRESET
   binary    : build/$GPU_BENCH_PRESET/$GPU_BENCH_BINDIR/${GPU_BENCH_BINARY_PREFIX}_${bench}
+benchmark   : cluster/leonardo/experiments/$bench/common.sh
 topology    : $GPU_BENCH_NODES node(s) x $GPU_BENCH_TASKS_PER_NODE GPU(s) = $((GPU_BENCH_NODES * GPU_BENCH_TASKS_PER_NODE)) ranks
-sbatch      : --nodes=$GPU_BENCH_NODES --ntasks-per-node=$GPU_BENCH_TASKS_PER_NODE \
---gres=gpu:$GPU_BENCH_TASKS_PER_NODE --time=$(gpu_bench_walltime_for "$GPU_BENCH_NODES")
+sbatch      : --nodes=$GPU_BENCH_NODES --ntasks-per-node=$GPU_BENCH_TASKS_PER_NODE --gres=gpu:$GPU_BENCH_TASKS_PER_NODE --time=$(gpu_bench_walltime_for "$GPU_BENCH_NODES")
 results     : results/${bench//_/-}-${backend//_/-}-$topo/$bench
 account     : $SBATCH_ACCOUNT   partition: $SBATCH_PARTITION
 
-environment (each value, and the file that wrote it):
+environment (definitions in execution order; the first one wins):
 EOF
-  # Resolve in a subshell so the caller's environment is untouched. This runs the
-  # real sourcing chain, which needs the cluster's module system and $SCRATCH --
-  # off Leonardo it fails, and saying so beats printing a plausible-looking
-  # environment that no job would ever see.
-  local out status=0
-  # `out=$(...)` alone would trip `set -e` before the status could be read, and
-  # 2>&1 must sit *inside* the substitution to be captured rather than printed.
-  out=$({
-    export GPU_BENCH_BENCHMARK="$bench" GPU_BENCH_BACKEND="$backend" GPU_BENCH_TOPOLOGY="$topo"
-    export GPU_BENCH_STACK GPU_BENCH_RUNTIME GPU_BENCH_LAUNCHER
-    export GPU_BENCH_NODES GPU_BENCH_TASKS_PER_NODE
-    export GPU_BENCH_VERBOSE_ENV=1
-    source "$ROOT/cluster/leonardo/provenance.sh"
-    gpu_bench_origin_baseline
-    source "$EXP/$bench/common.sh"
-    gpu_bench_record_origin "cluster/leonardo/experiments/$bench/common.sh"
-    source "$ROOT/cluster/leonardo/environment.sh" "$GPU_BENCH_STACK"
-    gpu_bench_source_tracked "$ROOT/cluster/leonardo/runtime/$GPU_BENCH_RUNTIME.sh"
-    gpu_bench_leonardo_print_env
-  } 2>&1) || status=$?
-  if [[ $status -ne 0 ]]; then
-    echo "  unavailable here -- resolving the environment needs a Leonardo login node."
-    echo "  everything above is resolved from the repository and is correct anywhere."
-    echo "  reason: $(printf '%s' "$out" | tail -1)"
-    return 0
-  fi
-  printf '%s\n' "$out" | sed 's/^/  /'
+  gpu_bench_where_set "$bench" "$GPU_BENCH_STACK" "$GPU_BENCH_RUNTIME"
 }
 
 if [[ "$mode" == "single" ]]; then
   if [[ ${#args[@]} -lt 3 ]]; then
-    echo "usage: tools/launch.sh <benchmark> <backend> <topology> [sbatch args...]" >&2
-    echo "       tools/launch.sh --all [benchmark...]" >&2
-    echo "       tools/launch.sh --explain <benchmark> <backend> <topology>" >&2
+    echo "usage: cluster/leonardo/launch.sh <benchmark> <backend> <topology> [sbatch args...]" >&2
+    echo "       cluster/leonardo/launch.sh --all [benchmark...]" >&2
+    echo "       cluster/leonardo/launch.sh --explain <benchmark> <backend> <topology>" >&2
     exit 2
   fi
   [[ -f "$EXP/${args[0]}/common.sh" ]] \

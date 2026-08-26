@@ -32,12 +32,12 @@ selects explicit comma-separated sizes. Build setup is in
 ## Submit
 
 ```bash
-tools/launch.sh allreduce cuda_mpi 1n4g
-tools/launch.sh allreduce cuda_nccl 1n4g
-tools/launch.sh allreduce cuda_nvshmem 1n4g
-tools/launch.sh allreduce oshmpi 1n4g
-tools/launch.sh allreduce sycl_mpi 1n4g
-tools/launch.sh allreduce sycl_oneccl 1n4g
+cluster/leonardo/launch.sh allreduce cuda_mpi 1n4g
+cluster/leonardo/launch.sh allreduce cuda_nccl 1n4g
+cluster/leonardo/launch.sh allreduce cuda_nvshmem 1n4g
+cluster/leonardo/launch.sh allreduce oshmpi 1n4g
+cluster/leonardo/launch.sh allreduce sycl_mpi 1n4g
+cluster/leonardo/launch.sh allreduce sycl_oneccl 1n4g
 ```
 
 ## Overrides

@@ -82,7 +82,7 @@ gpu_bench_experiment_setup() {
   export GPU_BENCH_JOB_NODES="$GPU_BENCH_NODES"
 
   source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/environment.sh" "$GPU_BENCH_STACK"
-  gpu_bench_source_tracked "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/runtime/$GPU_BENCH_RUNTIME.sh"
+  source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/runtime/$GPU_BENCH_RUNTIME.sh"
 
   GPU_BENCH_NTRIALS=${GPU_BENCH_NTRIALS:-3}
   GPU_BENCH_LAUNCHER=${GPU_BENCH_LAUNCHER:-srun}
@@ -144,7 +144,7 @@ gpu_bench_experiment_run_trials() {
       /usr/bin/time -p --verbose \
         timeout --signal=TERM --kill-after=30s "$GPU_BENCH_TRIAL_TIMEOUT" \
         mpirun -np "$((GPU_BENCH_NODES * GPU_BENCH_TASKS_PER_NODE))" \
-        "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/gpu-rank-wrapper.sh" \
+        "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/utils/gpu-rank-wrapper.sh" \
         $(gpu_bench_experiment_launch_prefix) \
         "$GPU_BENCH_BINARY" \
         "$GPU_BENCH_N" \
@@ -157,7 +157,7 @@ gpu_bench_experiment_run_trials() {
         srun --cpu-freq=high \
         -N "$GPU_BENCH_NODES" \
         --ntasks-per-node="$GPU_BENCH_TASKS_PER_NODE" \
-        "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/gpu-rank-wrapper.sh" \
+        "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/utils/gpu-rank-wrapper.sh" \
         $(gpu_bench_experiment_launch_prefix) \
         "$GPU_BENCH_BINARY" \
         "$GPU_BENCH_N" \

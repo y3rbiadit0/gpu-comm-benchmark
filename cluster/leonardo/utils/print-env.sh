@@ -47,20 +47,8 @@ gpu_bench_leonardo_print_env() {
   )
 
   echo "Leonardo ENV : {"
-  local var origin
+  local var
   for var in "${vars[@]}"; do
-    # With GPU_BENCH_VERBOSE_ENV=1 each set value carries the file that wrote it.
-    # Four of this project's measurement errors were inherited-flag bugs that a
-    # value alone could not have caught -- 0 and 1 look equally plausible until
-    # you can see which layer chose.
-    if [[ "${GPU_BENCH_VERBOSE_ENV:-0}" == "1" && -n "${!var:-}" ]] \
-       && declare -F gpu_bench_origin_of >/dev/null; then
-      origin=$(gpu_bench_origin_of "$var")
-      if [[ -n "$origin" ]]; then
-        printf '  %s: %s    <- %s\n' "$var" "${!var}" "$origin"
-        continue
-      fi
-    fi
     echo "  ${var}: ${!var:-unset}"
   done
   echo "}"
