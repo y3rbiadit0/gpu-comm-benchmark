@@ -54,6 +54,11 @@ export ONECCL_CXX_COMPILER="${DPCPP_CLANGXX:?env/sycl.sh must define DPCPP_CLANG
 export ONECCL_SYCL_FLAGS="${SYCL_FLAGS:?env/sycl.sh must define SYCL_FLAGS}"
 export ONECCL_BUILD_DIR=$GPU_BENCH_BUILD_DIR/oneCCL-oshmpi
 export ONECCL_INSTALL_PREFIX=$ONECCL_OSHMPI_ROOT
+
+# build_oneccl.sh aborts on a build directory configured with another compiler.
+# Clear it here rather than making the user find and delete it.
+gpu_bench_reset_cmake_dir "$ONECCL_BUILD_DIR" "$ONECCL_CXX_COMPILER"
+
 "$src/contrib/oshmpi/build_oneccl.sh"
 
 printf '\nOSHMPI:  %s\noneCCL:  %s\n' "$OSHMPI_HOME" "$ONECCL_OSHMPI_ROOT"

@@ -56,3 +56,31 @@ gpu_bench_build_done() {
     [[ -n "${GPU_BENCH_FORCE:-}" ]] && return 1
     [[ -e "$1" ]]
 }
+
+# gpu_bench_reset_cmake_dir <dir> <expected-cxx-compiler>
+#
+# A CMake build directory records the compiler it was configured with, and
+# refuses to be reconfigured with another one. That is the right default, but
+# here it strands the build: oneCCL is configured with DPC++ while the same
+# scratch tree may hold a directory configured by an earlier attempt (or a
+# half-written cache, which reports an empty compiler and matches nothing).
+#
+# Removing the directory is safe -- it holds only build output -- so this wipes
+# it whenever the recorded compiler is missing or different, and leaves it alone
+# when it matches so incremental builds still work.
+gpu_bench_reset_cmake_dir() {
+    local dir="$1" want="$2" cache="$1/CMakeCache.txt" have=""
+
+    if [[ -n "${GPU_BENCH_FORCE:-}" && -d "$dir" ]]; then
+        gpu_bench_build_log "rebuilding from scratch: $dir"
+        rm -rf "$dir"
+        return 0
+    fi
+
+    [[ -f "$cache" ]] || return 0
+    have=$(sed -n 's/^CMAKE_CXX_COMPILER:[^=]*=//p' "$cache" | head -1)
+    if [[ "$have" != "$want" ]]; then
+        gpu_bench_build_log "stale build directory (compiler was '${have:-unset}', want '$want'): $dir"
+        rm -rf "$dir"
+    fi
+}
