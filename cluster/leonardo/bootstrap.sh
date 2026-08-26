@@ -19,7 +19,10 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 build_dir="$script_dir/deps"
 
-default_targets=(oneccl-oshmpi benchmarks)
+# Both oneCCL libraries: the NCCL-backed one for sycl_oneccl and the OSHMPI-backed
+# one for sycl_oneccl_oshmpi. Building only one leaves a backend without a
+# library, which surfaces later as a preset that will not configure.
+default_targets=(oneccl-nccl oneccl-oshmpi benchmarks)
 
 list_targets() {
     local f

@@ -28,7 +28,7 @@ bootstrap:
 	./cluster/leonardo/bootstrap.sh $(TARGETS)
 
 submit:
-	tools/submit_all.sh $(BENCH)
+	cluster/harness/launch.sh --all $(BENCH)
 
 configure:
 	@test -n "$(PRESET)" || { echo 'missing PRESET=<preset>'; exit 2; }
