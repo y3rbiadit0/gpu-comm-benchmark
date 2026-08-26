@@ -7,12 +7,12 @@
 # job scripts carry no -A/-p directives and anyone can point them at their own
 # allocation:
 #
-#   GPU_BENCH_SLURM_ACCOUNT=IscrC_OTHER tools/submit_all.sh allreduce
+#   GPU_BENCH_SLURM_ACCOUNT=IscrC_OTHER tools/launch.sh --all allreduce
 #
 # Precedence is the usual SLURM one - an explicit `sbatch --account=...` still
 # wins over anything set here.
 #
-# Sourced by tools/submit_all.sh and by cluster/leonardo/environment.sh, so both
+# Sourced by tools/launch.sh --all and by cluster/leonardo/environment.sh, so both
 # `make submit` and a hand-run sbatch from a prepared shell pick it up.
 
 export SBATCH_ACCOUNT=${GPU_BENCH_SLURM_ACCOUNT:-${SBATCH_ACCOUNT:-IscrC_HIGRAPH_0}}

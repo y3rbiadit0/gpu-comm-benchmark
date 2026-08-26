@@ -88,4 +88,4 @@ done
 
 printf '\nbootstrap complete\n'
 printf 'submit an experiment with:\n'
-printf '  tools/submit_all.sh allreduce\n'
+printf '  tools/launch.sh --all allreduce\n'

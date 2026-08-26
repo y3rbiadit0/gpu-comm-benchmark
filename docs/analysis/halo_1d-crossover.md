@@ -103,7 +103,7 @@ while NCCL hit 30%."
 | `cuda_nvshmem` | persistent cooperative multi-block puts, in-kernel signal wait | **lowest steady-state** — no host or MPI match per exchange | high intra-node; proxy-limited inter-node without IBGDA | small H and large intra-node halos |
 | `oshmpi` | host one-sided NBI puts, `quiet` + CUDA sync + global barrier once per batch | low–moderate | moderate | small H, when device-kernel issue isn't available |
 | `cuda_mpi` | CUDA-aware `Isend`/`Irecv`/`Waitall` | moderate (host + UCX) | good | the baseline; large H |
-| `sycl_mpi` | SYCL-aware `Isend`/`Irecv` | ≈ `cuda_mpi` | ≈ `cuda_mpi` | sanity check vs `cuda_mpi` |
+| `sycl_mpi` | SYCL-aware `Isend`/`Irecv` | ≈ `cuda_mpi` intra-node | **below `cuda_mpi` inter-node** | not a clean CUDA-vs-SYCL control — see the MPI-implementation caveat below |
 | `cuda_nccl` | grouped `ncclSend`/`ncclRecv` | **high** — kernel launch + proxy thread per exchange | high once amortised | only large H |
 | `sycl_oneccl` | `ccl::send`/`ccl::recv` P2P (fork caveat) | n/a — not a fair P2P comparator | n/a | correctness/coverage only |
 
@@ -137,11 +137,11 @@ report numbers from it):
 
 ```bash
 GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 \
-  tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_nvshmem/2n4g.sh
+  tools/launch.sh halo_1d cuda_nvshmem 2n4g
 GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 \
-  tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_mpi/2n4g.sh
+  tools/launch.sh halo_1d cuda_mpi 2n4g
 GPU_BENCH_PROFILE=nsys GPU_BENCH_NTRIALS=1 \
-  tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_nccl/2n4g.sh
+  tools/launch.sh halo_1d cuda_nccl 2n4g
 ```
 
 This writes one report per rank under
@@ -224,7 +224,7 @@ cases before using the following historical values in a current comparison.
 
 ```bash
 # clean timing sweep (numbers to report)
-GPU_BENCH_NTRIALS=5 tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_nvshmem/2n4g.sh
+GPU_BENCH_NTRIALS=5 tools/launch.sh halo_1d cuda_nvshmem 2n4g
 # ... per backend/topology, then:
 python3 tools/benchscribe results/ --benchmark halo_1d        # normalise vs cuda_mpi
 python3 tools/benchscribe results/ --benchmark halo_1d --fit  # α, B∞, n½ per backend
@@ -237,3 +237,15 @@ Fair-comparison caveats from the experiment README still apply: the MPI variants
 are host-mediated baselines, and `sycl_oneccl` is included for coverage, not as a
 P2P performance competitor. The cleanest apples-to-apples pairs are
 `cuda_nvshmem` vs `oshmpi` (both one-sided) and `cuda_mpi` vs `sycl_mpi`.
+
+> **`cuda_mpi` vs `sycl_mpi` is not a CUDA-vs-SYCL comparison.** The two stacks
+> load different MPI implementations: `cluster/leonardo/env/cuda.sh` loads
+> `hpcx-mpi/2.19` (NVIDIA's tuned Open MPI + UCX) while
+> `cluster/leonardo/env/sycl.sh` loads stock `openmpi/4.1.6`. Intra-node this is
+> invisible — pingpong 1n2g measures 88.62 vs 88.88 GB/s, both at the NVLink
+> pair ceiling. Inter-node it dominates: 2n1g gives `cuda_mpi` 19.80 GB/s
+> against `sycl_mpi`'s 12.07, and every other backend lands in 11.60–12.11,
+> i.e. one HDR100 rail. Only HPC-X's UCX drives more than one rail, and setting
+> the same `UCX_*` variables on both does not change it, because the UCX
+> libraries underneath differ. Read that gap as HPC-X vs stock Open MPI, not as
+> a language-model result, until both stacks are built against the same MPI.

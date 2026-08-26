@@ -10,19 +10,24 @@ if [[ -z "$stack" ]]; then
   return 2 2>/dev/null || exit 2
 fi
 
-source "$script_dir/slurm.sh"
+# Records which file wrote each environment variable, so a job log can answer
+# "where is this set?". Must come first: everything below is sourced through it.
+source "$script_dir/provenance.sh"
+: "${_GPU_BENCH_ENV_BEFORE:=$(_gpu_bench_env_snapshot)}"
+
+gpu_bench_source_tracked "$script_dir/slurm.sh"
 # Install prefixes for everything the bootstrap builds. Sourced here as well as by
 # the bootstrap targets, so a preset resolving $env{OSHMPI_HOME} gets the same
 # answer whether it was reached through bootstrap.sh or `make leonardo`.
-source "$script_dir/layout.sh"
-source "$script_dir/print-env.sh"
+gpu_bench_source_tracked "$script_dir/layout.sh"
+source "$script_dir/print-env.sh"   # defines a function, sets nothing
 
 case "$stack" in
   cuda)
-    source "$script_dir/env/cuda.sh"
+    gpu_bench_source_tracked "$script_dir/env/cuda.sh"
     ;;
   sycl)
-    source "$script_dir/env/sycl.sh"
+    gpu_bench_source_tracked "$script_dir/env/sycl.sh"
     ;;
   *)
     echo "unknown Leonardo stack '$stack' (expected cuda or sycl)" >&2

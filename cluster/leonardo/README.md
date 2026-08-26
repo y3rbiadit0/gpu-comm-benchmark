@@ -85,6 +85,28 @@ cmake --preset leonardo-sycl-oneccl
 cmake --build --preset leonardo-sycl-oneccl
 ```
 
+
+## How experiments are defined
+
+One job script, `cluster/leonardo/experiments/job.sh`, serves every
+(benchmark, backend, topology) cell. It replaced 230 near-identical per-cell
+scripts that differed only in values derivable from those three names.
+
+| file | holds |
+| --- | --- |
+| `experiments/job.sh` | the submitted script: resolve, validate, dispatch |
+| `experiments/backends.sh` | per-backend constants (stack, runtime, launcher, preset, binary) |
+| `experiments/matrix.sh` | which cells are valid, and why each exclusion exists |
+| `experiments/<bench>/common.sh` | per-benchmark defaults and arguments |
+
+The allocation shape is not baked into a file: `--nodes`, `--ntasks-per-node`,
+`--gres`, `--time` and `--job-name` are passed on the sbatch command line, which
+takes precedence over `#SBATCH` directives. Nothing is generated, so there is
+nothing to regenerate or keep in sync.
+
+Adding a topology is a one-line edit in `matrix.sh`. Adding a backend is one row
+in `backends.sh` plus its name in the benchmarks that support it.
+
 ## Experiments
 
 Experiment scripts are fixed-topology Slurm launchers. They write Slurm logs under `logs/` and benchmark outputs under `results/<result-name>/<problem>/`.
@@ -93,23 +115,23 @@ The active suite is `pingpong`, `halo_1d`, `allreduce`, `alltoall`, `cg_step`, a
 Halo 1D:
 
 ```bash
-tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_nccl/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_nvshmem/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/halo_1d/oshmpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/halo_1d/sycl_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/halo_1d/sycl_oneccl/1n4g.sh
+tools/launch.sh halo_1d cuda_mpi 1n4g
+tools/launch.sh halo_1d cuda_nccl 1n4g
+tools/launch.sh halo_1d cuda_nvshmem 1n4g
+tools/launch.sh halo_1d oshmpi 1n4g
+tools/launch.sh halo_1d sycl_mpi 1n4g
+tools/launch.sh halo_1d sycl_oneccl 1n4g
 ```
 
 Allreduce (collective sum latency/bandwidth, internal size sweep):
 
 ```bash
-tools/sbatch.sh cluster/leonardo/experiments/allreduce/cuda_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/allreduce/cuda_nccl/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/allreduce/cuda_nvshmem/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/allreduce/oshmpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/allreduce/sycl_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/allreduce/sycl_oneccl/1n4g.sh
+tools/launch.sh allreduce cuda_mpi 1n4g
+tools/launch.sh allreduce cuda_nccl 1n4g
+tools/launch.sh allreduce cuda_nvshmem 1n4g
+tools/launch.sh allreduce oshmpi 1n4g
+tools/launch.sh allreduce sycl_mpi 1n4g
+tools/launch.sh allreduce sycl_oneccl 1n4g
 ```
 
 Each `allreduce` backend also has `1n1g`, `1n2g` (NVLink), `2n1g` (InfiniBand), and `2n4g`
@@ -118,13 +140,13 @@ launchers; see [`experiments/allreduce/README.md`](experiments/allreduce/README.
 Ping-pong (point-to-point one-way latency/bandwidth, 2 endpoints, internal size sweep):
 
 ```bash
-tools/sbatch.sh cluster/leonardo/experiments/pingpong/cuda_mpi/1n2g.sh   # NVLink
-tools/sbatch.sh cluster/leonardo/experiments/pingpong/cuda_mpi/2n1g.sh   # InfiniBand
-tools/sbatch.sh cluster/leonardo/experiments/pingpong/cuda_nccl/2n1g.sh
-tools/sbatch.sh cluster/leonardo/experiments/pingpong/cuda_nvshmem/2n1g.sh
-tools/sbatch.sh cluster/leonardo/experiments/pingpong/oshmpi/2n1g.sh
-tools/sbatch.sh cluster/leonardo/experiments/pingpong/sycl_mpi/2n1g.sh
-tools/sbatch.sh cluster/leonardo/experiments/pingpong/sycl_oneccl/2n1g.sh
+tools/launch.sh pingpong cuda_mpi 1n2g   # NVLink
+tools/launch.sh pingpong cuda_mpi 2n1g   # InfiniBand
+tools/launch.sh pingpong cuda_nccl 2n1g
+tools/launch.sh pingpong cuda_nvshmem 2n1g
+tools/launch.sh pingpong oshmpi 2n1g
+tools/launch.sh pingpong sycl_mpi 2n1g
+tools/launch.sh pingpong sycl_oneccl 2n1g
 ```
 
 Only the `1n2g` (intra-node NVLink) and `2n1g` (inter-node InfiniBand) topologies exist for
@@ -133,12 +155,12 @@ Only the `1n2g` (intra-node NVLink) and `2n1g` (inter-node InfiniBand) topologie
 All-to-all (personalized exchange / bisection bandwidth):
 
 ```bash
-tools/sbatch.sh cluster/leonardo/experiments/alltoall/cuda_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/alltoall/cuda_nccl/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/alltoall/cuda_nvshmem/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/alltoall/oshmpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/alltoall/sycl_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/alltoall/sycl_oneccl/1n4g.sh
+tools/launch.sh alltoall cuda_mpi 1n4g
+tools/launch.sh alltoall cuda_nccl 1n4g
+tools/launch.sh alltoall cuda_nvshmem 1n4g
+tools/launch.sh alltoall oshmpi 1n4g
+tools/launch.sh alltoall sycl_mpi 1n4g
+tools/launch.sh alltoall sycl_oneccl 1n4g
 ```
 
 Each `alltoall` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers; see
@@ -147,12 +169,12 @@ Each `alltoall` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers
 MoE (top-1 variable-count dispatch + combine under uniform, local, and hotspot routing):
 
 ```bash
-tools/sbatch.sh cluster/leonardo/experiments/moe/cuda_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/moe/cuda_nccl/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/moe/cuda_nvshmem/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/moe/oshmpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/moe/sycl_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/moe/sycl_oneccl/1n4g.sh
+tools/launch.sh moe cuda_mpi 1n4g
+tools/launch.sh moe cuda_nccl 1n4g
+tools/launch.sh moe cuda_nvshmem 1n4g
+tools/launch.sh moe oshmpi 1n4g
+tools/launch.sh moe sycl_mpi 1n4g
+tools/launch.sh moe sycl_oneccl 1n4g
 ```
 
 MoE is a skew-sensitive global personalized application pattern: unlike dense `alltoall`,
@@ -163,12 +185,12 @@ its per-peer operation sizes and expert receive loads vary with routing. Each ba
 CG step (conjugate-gradient iteration skeleton: SpMV halo + two reductions):
 
 ```bash
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/cuda_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/cuda_nccl/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/cuda_nvshmem/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/oshmpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/sycl_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/sycl_oneccl/1n4g.sh
+tools/launch.sh cg_step cuda_mpi 1n4g
+tools/launch.sh cg_step cuda_nccl 1n4g
+tools/launch.sh cg_step cuda_nvshmem 1n4g
+tools/launch.sh cg_step oshmpi 1n4g
+tools/launch.sh cg_step sycl_mpi 1n4g
+tools/launch.sh cg_step sycl_oneccl 1n4g
 ```
 
 Each `cg_step` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers; see
@@ -177,10 +199,10 @@ Each `cg_step` backend has `1n1g`, `1n2g`, `1n4g`, `2n1g`, and `2n4g` launchers;
 Useful overrides:
 
 ```bash
-GPU_BENCH_N=16777216 GPU_BENCH_NTRIALS=5 tools/sbatch.sh cluster/leonardo/experiments/halo_1d/cuda_mpi/1n4g.sh
-GPU_BENCH_RESULT_NAME=halo-sycl-test tools/sbatch.sh cluster/leonardo/experiments/halo_1d/sycl_mpi/1n4g.sh
-GPU_BENCH_ITERS=500 GPU_BENCH_WARMUP=100 tools/sbatch.sh cluster/leonardo/experiments/allreduce/cuda_nccl/2n1g.sh
-GPU_BENCH_HIDDEN=512 GPU_BENCH_ROUTINGS=uniform,hotspot80 tools/sbatch.sh cluster/leonardo/experiments/moe/cuda_nccl/2n4g.sh
+GPU_BENCH_N=16777216 GPU_BENCH_NTRIALS=5 tools/launch.sh halo_1d cuda_mpi 1n4g
+GPU_BENCH_RESULT_NAME=halo-sycl-test tools/launch.sh halo_1d sycl_mpi 1n4g
+GPU_BENCH_ITERS=500 GPU_BENCH_WARMUP=100 tools/launch.sh allreduce cuda_nccl 2n1g
+GPU_BENCH_HIDDEN=512 GPU_BENCH_ROUTINGS=uniform,hotspot80 tools/launch.sh moe cuda_nccl 2n4g
 ```
 
 Per-problem notes and validated results live in `cluster/leonardo/experiments/<problem>/README.md`.

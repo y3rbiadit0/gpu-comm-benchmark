@@ -82,7 +82,7 @@ gpu_bench_experiment_setup() {
   export GPU_BENCH_JOB_NODES="$GPU_BENCH_NODES"
 
   source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/environment.sh" "$GPU_BENCH_STACK"
-  source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/runtime/$GPU_BENCH_RUNTIME.sh"
+  gpu_bench_source_tracked "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/runtime/$GPU_BENCH_RUNTIME.sh"
 
   GPU_BENCH_NTRIALS=${GPU_BENCH_NTRIALS:-3}
   GPU_BENCH_LAUNCHER=${GPU_BENCH_LAUNCHER:-srun}

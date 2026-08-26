@@ -27,12 +27,12 @@ halo. Validation is local (no gather). Build setup is in
 ## Submit
 
 ```bash
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/cuda_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/cuda_nccl/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/cuda_nvshmem/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/oshmpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/sycl_mpi/1n4g.sh
-tools/sbatch.sh cluster/leonardo/experiments/cg_step/sycl_oneccl/1n4g.sh
+tools/launch.sh cg_step cuda_mpi 1n4g
+tools/launch.sh cg_step cuda_nccl 1n4g
+tools/launch.sh cg_step cuda_nvshmem 1n4g
+tools/launch.sh cg_step oshmpi 1n4g
+tools/launch.sh cg_step sycl_mpi 1n4g
+tools/launch.sh cg_step sycl_oneccl 1n4g
 ```
 
 ### `sycl_oneccl_oshmpi`
@@ -61,11 +61,11 @@ post four grouped operations — the same shape as the stalling `halo_1d` run:
 ```bash
 # the discriminating test
 GPU_BENCH_NTRIALS=1 tools/sbatch.sh \
-  cluster/leonardo/experiments/cg_step/sycl_oneccl/1n4g.sh
+  cg_step/sycl_oneccl/1n4g
 
 # retest the OSHMPI backend against a fixed build
 GPU_BENCH_NTRIALS=1 tools/sbatch.sh \
-  cluster/leonardo/experiments/cg_step/sycl_oneccl_oshmpi/1n2g.sh
+  cg_step/sycl_oneccl_oshmpi/1n2g
 ```
 
 ## Overrides
