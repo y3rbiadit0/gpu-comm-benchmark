@@ -46,8 +46,15 @@ else
     # recipe already resolves NCCL_ROOT then NCCL_HOME and fails with a clear
     # message if neither is set. Naming one here would guess at which the module
     # exports.
+    # --no-examples: we link libccl.so and build our own benchmarks against it;
+    # oneCCL's example binaries are never run here. They are also the only part
+    # of the tree that fails to compile with the DPC++ build in use -- an LLVM
+    # assertion ("VPlan cost model and legacy cost model disagreed") firing while
+    # vectorizing a SYCL kernel in examples/benchmark. Skipping them avoids a
+    # compiler bug in code we do not need, rather than working around it.
     "$script_dir/_build-oneccl-nccl.sh" \
         --skip-env \
+        --no-examples \
         --source-dir "$src" \
         --build-dir "$build_dir" \
         --install-prefix "$ONECCL_NCCL_ROOT"
