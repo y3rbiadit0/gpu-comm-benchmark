@@ -5,7 +5,7 @@ classic **bisection-bandwidth** stress test (FFT / transpose / sparse / sort mot
 rank holds a `ranks × GPU_BENCH_N` send buffer and sends a distinct `GPU_BENCH_N`-element block to every
 rank, receiving one block from each. The per-block value encodes `(source, destination)`,
 so the full permutation is validated **locally** (no gather). Build setup is in
-[`cluster/leonardo/README.md`](../../README.md).
+[`cluster/leonardo/README.md`](../../../leonardo/README.md).
 
 ## Topologies
 
@@ -20,12 +20,12 @@ so the full permutation is validated **locally** (no gather). Build setup is in
 ## Submit
 
 ```bash
-cluster/leonardo/launch.sh alltoall cuda_mpi 1n4g
-cluster/leonardo/launch.sh alltoall cuda_nccl 1n4g
-cluster/leonardo/launch.sh alltoall cuda_nvshmem 1n4g
-cluster/leonardo/launch.sh alltoall oshmpi 1n4g
-cluster/leonardo/launch.sh alltoall sycl_mpi 1n4g
-cluster/leonardo/launch.sh alltoall sycl_oneccl 1n4g
+cluster/harness/launch.sh alltoall cuda_mpi 1n4g
+cluster/harness/launch.sh alltoall cuda_nccl 1n4g
+cluster/harness/launch.sh alltoall cuda_nvshmem 1n4g
+cluster/harness/launch.sh alltoall oshmpi 1n4g
+cluster/harness/launch.sh alltoall sycl_mpi 1n4g
+cluster/harness/launch.sh alltoall sycl_oneccl 1n4g
 ```
 
 ## Overrides
@@ -40,7 +40,7 @@ GPU_BENCH_NTRIALS=5        # job-level repeats
 Example:
 
 ```bash
-GPU_BENCH_N=262144 GPU_BENCH_ITERS=200 cluster/leonardo/launch.sh alltoall cuda_nccl 2n4g
+GPU_BENCH_N=262144 GPU_BENCH_ITERS=200 cluster/harness/launch.sh alltoall cuda_nccl 2n4g
 ```
 
 The binaries accept `<count_per_peer> [iterations] [warmup]`.

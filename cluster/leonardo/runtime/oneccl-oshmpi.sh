@@ -10,7 +10,7 @@ set -euo pipefail
 # process.
 
 # Same definition the bootstrap installs into, so the two cannot drift.
-source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/utils/layout.sh"
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/layout.sh"
 export ONECCL_ROOT="$ONECCL_OSHMPI_ROOT"
 export CCL_ROOT="$ONECCL_OSHMPI_ROOT"
 

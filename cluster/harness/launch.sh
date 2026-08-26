@@ -2,16 +2,16 @@
 # Launch benchmark jobs on Leonardo.
 #
 # One cell:
-#   cluster/leonardo/launch.sh halo_1d cuda_mpi 1n2g
-#   cluster/leonardo/launch.sh cg_step cuda_mpi 2n4g --qos=boost_qos_dbg   # extra sbatch args
+#   cluster/harness/launch.sh halo_1d cuda_mpi 1n2g
+#   cluster/harness/launch.sh cg_step cuda_mpi 2n4g --qos=boost_qos_dbg   # extra sbatch args
 #
 # Many cells:
-#   cluster/leonardo/launch.sh --all                        every benchmark, backend, topology
-#   cluster/leonardo/launch.sh --all halo_1d moe            only these benchmarks
+#   cluster/harness/launch.sh --all                        every benchmark, backend, topology
+#   cluster/harness/launch.sh --all halo_1d moe            only these benchmarks
 #
 # Inspect without submitting:
-#   cluster/leonardo/launch.sh --dry-run --all              what would be submitted
-#   cluster/leonardo/launch.sh --explain halo_1d cuda_mpi 1n2g
+#   cluster/harness/launch.sh --dry-run --all              what would be submitted
+#   cluster/harness/launch.sh --explain halo_1d cuda_mpi 1n2g
 #                                                how every value is resolved, and
 #                                                which file writes each env var
 #
@@ -31,15 +31,24 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LEO="$ROOT/cluster/leonardo"
-EXP="$LEO/experiments"
-LAUNCHER="$LEO/launcher"
+HARNESS="$ROOT/cluster/harness"
+EXP="$HARNESS/experiments"
+
+# Which machine we are on. The harness is machine-independent; everything
+# specific arrives through cluster/<name>/cluster.sh.
+GPU_BENCH_CLUSTER=${GPU_BENCH_CLUSTER:-leonardo}
+CLUSTER_DIR="$ROOT/cluster/$GPU_BENCH_CLUSTER"
+[[ -f "$CLUSTER_DIR/cluster.sh" ]] || {
+  echo "error: no such cluster: $GPU_BENCH_CLUSTER" >&2
+  echo "known: $(cd "$ROOT/cluster" && ls -d */cluster.sh 2>/dev/null | cut -d/ -f1 | tr '\n' ' ')" >&2
+  exit 2
+}
+export GPU_BENCH_CLUSTER
 export GPU_BENCH_PROJECT_ROOT="$ROOT"
 
-source "$LEO/slurm.sh"
-source "$LAUNCHER/backends.sh"
-source "$LAUNCHER/matrix.sh"
-source "$LEO/utils/where-set.sh"
+source "$CLUSTER_DIR/cluster.sh"
+source "$HARNESS/matrix.sh"
+source "$HARNESS/utils/where-set.sh"
 
 mode=single
 dry_run=${GPU_BENCH_DRYRUN:-0}
@@ -84,6 +93,7 @@ submit() {
   GPU_BENCH_BENCHMARK="$bench" \
   GPU_BENCH_BACKEND="$backend" \
   GPU_BENCH_TOPOLOGY="$topo" \
+  GPU_BENCH_CLUSTER="$GPU_BENCH_CLUSTER" \
   sbatch \
     --job-name="${bench}_${backend}_${topo}" \
     --nodes="$GPU_BENCH_NODES" \
@@ -91,7 +101,7 @@ submit() {
     --gres=gpu:"$GPU_BENCH_TASKS_PER_NODE" \
     --time="$(gpu_bench_walltime_for "$GPU_BENCH_NODES")" \
     "$@" \
-    "$LAUNCHER/job.sh"
+    "$HARNESS/job.sh"
 }
 
 # Print how one cell resolves: which files decide it, and for every environment
@@ -106,16 +116,16 @@ explain_cell() {
   local ucc_note=""
   cat <<EOF
 cell        : $bench / $backend / $topo
-run entry   : cluster/leonardo/launch.sh
-job script  : cluster/leonardo/launcher/job.sh
-matrix      : cluster/leonardo/launcher/matrix.sh
-backend row : cluster/leonardo/launcher/backends.sh
-  stack     : $GPU_BENCH_STACK        (cluster/leonardo/env/$GPU_BENCH_STACK.sh)
-  runtime   : cluster/leonardo/runtime/$GPU_BENCH_RUNTIME.sh
+run entry   : cluster/harness/launch.sh
+job script  : cluster/harness/job.sh
+matrix      : cluster/harness/matrix.sh
+backend row : cluster/$GPU_BENCH_CLUSTER/backends.sh
+  stack     : $GPU_BENCH_STACK        (cluster/$GPU_BENCH_CLUSTER/env/$GPU_BENCH_STACK.sh)
+  runtime   : cluster/$GPU_BENCH_CLUSTER/runtime/$GPU_BENCH_RUNTIME.sh
   launcher  : $GPU_BENCH_LAUNCHER
   preset    : $GPU_BENCH_PRESET
   binary    : build/$GPU_BENCH_PRESET/$GPU_BENCH_BINDIR/${GPU_BENCH_BINARY_PREFIX}_${bench}
-benchmark   : cluster/leonardo/experiments/$bench/common.sh
+benchmark   : cluster/harness/experiments/$bench/common.sh
 topology    : $GPU_BENCH_NODES node(s) x $GPU_BENCH_TASKS_PER_NODE GPU(s) = $((GPU_BENCH_NODES * GPU_BENCH_TASKS_PER_NODE)) ranks
 sbatch      : --nodes=$GPU_BENCH_NODES --ntasks-per-node=$GPU_BENCH_TASKS_PER_NODE --gres=gpu:$GPU_BENCH_TASKS_PER_NODE --time=$(gpu_bench_walltime_for "$GPU_BENCH_NODES")
 results     : results/${bench//_/-}-${backend//_/-}-$topo/$bench
@@ -128,9 +138,9 @@ EOF
 
 if [[ "$mode" == "single" ]]; then
   if [[ ${#args[@]} -lt 3 ]]; then
-    echo "usage: cluster/leonardo/launch.sh <benchmark> <backend> <topology> [sbatch args...]" >&2
-    echo "       cluster/leonardo/launch.sh --all [benchmark...]" >&2
-    echo "       cluster/leonardo/launch.sh --explain <benchmark> <backend> <topology>" >&2
+    echo "usage: cluster/harness/launch.sh <benchmark> <backend> <topology> [sbatch args...]" >&2
+    echo "       cluster/harness/launch.sh --all [benchmark...]" >&2
+    echo "       cluster/harness/launch.sh --explain <benchmark> <backend> <topology>" >&2
     exit 2
   fi
   [[ -f "$EXP/${args[0]}/common.sh" ]] \

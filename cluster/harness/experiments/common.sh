@@ -53,7 +53,7 @@ gpu_bench_experiment_launch_prefix() {
     ncu)
       # MPI_Init fails when ncu sits between srun and the binary (the rank
       # loses its PMI bootstrap); profiled ncu runs need GPU_BENCH_LAUNCHER=mpirun.
-      printf '%s ' "${GPU_BENCH_NCU_BIN:-/leonardo/prod/opt/compilers/nvhpc/25.3/binary/Linux_x86_64/25.3/compilers/bin/ncu}" \
+      printf '%s ' "${GPU_BENCH_NCU_BIN:?cluster.sh must define GPU_BENCH_NCU_BIN}" \
         --set "${GPU_BENCH_NCU_SET:-roofline}" \
         --launch-count "${GPU_BENCH_NCU_LAUNCH_COUNT:-3}" \
         ${GPU_BENCH_NCU_KERNELS:+--kernel-name regex:${GPU_BENCH_NCU_KERNELS}} \
@@ -81,8 +81,9 @@ gpu_bench_experiment_setup() {
   export LC_ALL=C
   export GPU_BENCH_JOB_NODES="$GPU_BENCH_NODES"
 
-  source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/environment.sh" "$GPU_BENCH_STACK"
-  source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/runtime/$GPU_BENCH_RUNTIME.sh"
+  # The machine, reached only through its cluster.sh -- see cluster/harness/job.sh.
+  gpu_bench_cluster_environment "$GPU_BENCH_STACK"
+  gpu_bench_cluster_runtime "$GPU_BENCH_RUNTIME"
 
   GPU_BENCH_NTRIALS=${GPU_BENCH_NTRIALS:-3}
   GPU_BENCH_LAUNCHER=${GPU_BENCH_LAUNCHER:-srun}
@@ -123,7 +124,7 @@ gpu_bench_experiment_print_summary() {
   if declare -F gpu_bench_experiment_extra_summary >/dev/null; then
     gpu_bench_experiment_extra_summary
   fi
-  gpu_bench_leonardo_print_env
+  gpu_bench_print_env
   nvidia-smi || true
 }
 
@@ -144,7 +145,7 @@ gpu_bench_experiment_run_trials() {
       /usr/bin/time -p --verbose \
         timeout --signal=TERM --kill-after=30s "$GPU_BENCH_TRIAL_TIMEOUT" \
         mpirun -np "$((GPU_BENCH_NODES * GPU_BENCH_TASKS_PER_NODE))" \
-        "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/utils/gpu-rank-wrapper.sh" \
+        "$GPU_BENCH_PROJECT_ROOT/cluster/harness/utils/gpu-rank-wrapper.sh" \
         $(gpu_bench_experiment_launch_prefix) \
         "$GPU_BENCH_BINARY" \
         "$GPU_BENCH_N" \
@@ -157,7 +158,7 @@ gpu_bench_experiment_run_trials() {
         srun --cpu-freq=high \
         -N "$GPU_BENCH_NODES" \
         --ntasks-per-node="$GPU_BENCH_TASKS_PER_NODE" \
-        "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/utils/gpu-rank-wrapper.sh" \
+        "$GPU_BENCH_PROJECT_ROOT/cluster/harness/utils/gpu-rank-wrapper.sh" \
         $(gpu_bench_experiment_launch_prefix) \
         "$GPU_BENCH_BINARY" \
         "$GPU_BENCH_N" \

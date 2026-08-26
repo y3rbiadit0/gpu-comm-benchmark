@@ -14,8 +14,9 @@ source "$script_dir/slurm.sh"
 # Install prefixes for everything the bootstrap builds. Sourced here as well as by
 # the bootstrap targets, so a preset resolving $env{OSHMPI_HOME} gets the same
 # answer whether it was reached through bootstrap.sh or `make leonardo`.
-source "$script_dir/utils/layout.sh"
-source "$script_dir/utils/print-env.sh"
+source "$script_dir/layout.sh"
+# The ENV block printer is machine-independent and lives in the harness.
+source "$script_dir/../harness/utils/print-env.sh"
 
 case "$stack" in
   cuda)

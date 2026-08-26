@@ -12,19 +12,14 @@
 
 gpu_bench_where_set() {
   local bench="$1" stack="$2" runtime="$3"
-  local root="${GPU_BENCH_PROJECT_ROOT:?}" L files=() f
+  local root="${GPU_BENCH_PROJECT_ROOT:?}" files=() f
 
-  L="$root/cluster/leonardo"
-  # Execution order, earliest first. job.sh sources the benchmark shim, then
-  # environment.sh (slurm, layout, env/<stack>), then runtime/<runtime>.sh.
-  files+=("$L/experiments/$bench/common.sh")
-  files+=("$L/experiments/common.sh")
-  files+=("$L/slurm.sh")
-  files+=("$L/utils/layout.sh")
-  files+=("$L/env/$stack.sh")
-  # The MPI-backed runtimes source the shared baseline before their own settings.
-  grep -q '_openmpi.sh' "$L/runtime/$runtime.sh" 2>/dev/null && files+=("$L/runtime/_openmpi.sh")
-  files+=("$L/runtime/$runtime.sh")
+  # Execution order, earliest first. The harness contributes the benchmark shim
+  # and the shared run loop; everything after comes from the cluster, which is
+  # the only thing that knows its own module and runtime files.
+  files+=("$root/cluster/harness/experiments/$bench/common.sh")
+  files+=("$root/cluster/harness/experiments/common.sh")
+  while IFS= read -r f; do files+=("$f"); done < <(gpu_bench_cluster_env_files "$stack" "$runtime")
 
   for f in "${files[@]}"; do
     [[ -f "$f" ]] || continue

@@ -48,26 +48,3 @@ gpu_bench_backend_names() {
   local entry
   for entry in "${GPU_BENCH_BACKENDS[@]}"; do printf '%s ' "${entry%%:*}"; done
 }
-
-# gpu_bench_topology_fields <topology> -> sets GPU_BENCH_NODES and
-# GPU_BENCH_TASKS_PER_NODE. "2n4g" is 2 nodes of 4 GPUs; one rank drives one GPU.
-gpu_bench_topology_fields() {
-  local topo="$1"
-  if [[ ! "$topo" =~ ^([1-9][0-9]*)n([1-9][0-9]*)g$ ]]; then
-    echo "error: malformed topology '$topo' (expected <nodes>n<gpus_per_node>g)" >&2
-    return 1
-  fi
-  GPU_BENCH_NODES="${BASH_REMATCH[1]}"
-  GPU_BENCH_TASKS_PER_NODE="${BASH_REMATCH[2]}"
-}
-
-# Walltime scales with node count: more ranks means more collective work per
-# sample, and a job that times out wastes the whole allocation. Short limits are
-# also better backfill candidates, so this stays as tight as it safely can.
-gpu_bench_walltime_for() {
-  local nodes="$1"
-  if   (( nodes >= 8 )); then echo "00:20:00"
-  elif (( nodes >= 4 )); then echo "00:15:00"
-  else                        echo "00:10:00"
-  fi
-}

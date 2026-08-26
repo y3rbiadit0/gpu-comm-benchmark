@@ -4,7 +4,7 @@ set -euo pipefail
 GPU_BENCH_EXPERIMENT=allreduce
 GPU_BENCH_N_LABEL="max message elements"
 
-source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
+source "$GPU_BENCH_PROJECT_ROOT/cluster/harness/experiments/common.sh"
 
 # allreduce sweeps powers of two from 1 element up to GPU_BENCH_N by default;
 # GPU_BENCH_MSG_SIZES can override that with a comma-separated list.

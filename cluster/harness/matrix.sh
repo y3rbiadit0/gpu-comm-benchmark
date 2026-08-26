@@ -37,8 +37,20 @@ moe_BACKENDS="$GPU_BENCH_ALL_BACKENDS"
 cg_step_TOPOLOGIES="1n1g 1n2g 1n4g 2n1g 2n4g 4n4g 8n4g"
 cg_step_BACKENDS="$GPU_BENCH_ALL_BACKENDS sycl_oneccl_oshmpi"
 
-# Order matters only for readability of `cluster/leonardo/launch.sh --all` output.
+# Order matters only for readability of `cluster/harness/launch.sh --all` output.
 GPU_BENCH_ALL_BENCHMARKS="pingpong halo_1d allreduce alltoall moe cg_step"
+
+# gpu_bench_topology_fields <topology> -> sets GPU_BENCH_NODES and
+# GPU_BENCH_TASKS_PER_NODE. "2n4g" is 2 nodes of 4 GPUs; one rank drives one GPU.
+gpu_bench_topology_fields() {
+  local topo="$1"
+  if [[ ! "$topo" =~ ^([1-9][0-9]*)n([1-9][0-9]*)g$ ]]; then
+    echo "error: malformed topology '$topo' (expected <nodes>n<gpus_per_node>g)" >&2
+    return 1
+  fi
+  GPU_BENCH_NODES="${BASH_REMATCH[1]}"
+  GPU_BENCH_TASKS_PER_NODE="${BASH_REMATCH[2]}"
+}
 
 gpu_bench_matrix_topologies() {
   local bench="$1" var="${1}_TOPOLOGIES"

@@ -5,7 +5,7 @@ These jobs benchmark point-to-point **one-way latency and bandwidth** between tw
 trip is timed on the initiator and halved to report one-way figures. Each binary sweeps
 message sizes internally, printing one standardized line per size. By default the sweep
 uses powers of two from 1 element up to `GPU_BENCH_N`; set `GPU_BENCH_MSG_SIZES` to a comma-separated
-list to run specific element counts. Build setup is in [`cluster/leonardo/README.md`](../../README.md).
+list to run specific element counts. Build setup is in [`cluster/leonardo/README.md`](../../../leonardo/README.md).
 
 ## Topologies
 
@@ -20,13 +20,13 @@ isolate the transport:
 ## Submit
 
 ```bash
-cluster/leonardo/launch.sh pingpong cuda_mpi 1n2g
-cluster/leonardo/launch.sh pingpong cuda_mpi 2n1g
-cluster/leonardo/launch.sh pingpong cuda_nccl 2n1g
-cluster/leonardo/launch.sh pingpong cuda_nvshmem 2n1g
-cluster/leonardo/launch.sh pingpong oshmpi 2n1g
-cluster/leonardo/launch.sh pingpong sycl_mpi 2n1g
-cluster/leonardo/launch.sh pingpong sycl_oneccl 2n1g
+cluster/harness/launch.sh pingpong cuda_mpi 1n2g
+cluster/harness/launch.sh pingpong cuda_mpi 2n1g
+cluster/harness/launch.sh pingpong cuda_nccl 2n1g
+cluster/harness/launch.sh pingpong cuda_nvshmem 2n1g
+cluster/harness/launch.sh pingpong oshmpi 2n1g
+cluster/harness/launch.sh pingpong sycl_mpi 2n1g
+cluster/harness/launch.sh pingpong sycl_oneccl 2n1g
 ```
 
 ## Overrides
@@ -42,8 +42,8 @@ GPU_BENCH_NTRIALS=5        # job-level repeats
 Example:
 
 ```bash
-GPU_BENCH_N=16777216 GPU_BENCH_ITERS=500 cluster/leonardo/launch.sh pingpong cuda_nvshmem 1n2g
-GPU_BENCH_MSG_SIZES=1,8,64,1024,1048576 cluster/leonardo/launch.sh pingpong cuda_mpi 2n1g
+GPU_BENCH_N=16777216 GPU_BENCH_ITERS=500 cluster/harness/launch.sh pingpong cuda_nvshmem 1n2g
+GPU_BENCH_MSG_SIZES=1,8,64,1024,1048576 cluster/harness/launch.sh pingpong cuda_mpi 2n1g
 ```
 
 ## Output

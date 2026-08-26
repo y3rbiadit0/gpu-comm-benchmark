@@ -4,7 +4,7 @@ set -euo pipefail
 GPU_BENCH_EXPERIMENT=alltoall
 GPU_BENCH_N_LABEL="count per peer"
 
-source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
+source "$GPU_BENCH_PROJECT_ROOT/cluster/harness/experiments/common.sh"
 
 # UCC is enabled globally in runtime/mpi-cuda.sh because it is transformative
 # for allreduce (139x at 16 MiB). It is the opposite for the all-to-all family:

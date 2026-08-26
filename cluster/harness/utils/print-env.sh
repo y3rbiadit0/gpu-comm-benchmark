@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Pretty-print the communication-relevant environment as a "Leonardo ENV" block.
-# Sourced by cluster/leonardo/environment.sh; call gpu_bench_leonardo_print_env from
+# Pretty-print the communication-relevant environment as an ENV block.
+# Sourced by the cluster's environment.sh; call gpu_bench_print_env from
 # experiment summary functions so every stdout log is self-describing.
 
-gpu_bench_leonardo_print_env() {
+gpu_bench_print_env() {
   local vars=(
     # UCX (Open MPI / OSHMPI data plane)
     UCX_IB_SL
@@ -46,7 +46,7 @@ gpu_bench_leonardo_print_env() {
     SLURM_CPU_BIND
   )
 
-  echo "Leonardo ENV : {"
+  echo "${GPU_BENCH_CLUSTER:-cluster} ENV : {"
   local var
   for var in "${vars[@]}"; do
     echo "  ${var}: ${!var:-unset}"

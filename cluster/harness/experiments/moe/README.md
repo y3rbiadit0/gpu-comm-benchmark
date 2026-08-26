@@ -27,12 +27,12 @@ The default run reports all three deterministic routing cases:
 ## Submit
 
 ```bash
-cluster/leonardo/launch.sh moe cuda_mpi 1n4g
-cluster/leonardo/launch.sh moe cuda_nccl 1n4g
-cluster/leonardo/launch.sh moe cuda_nvshmem 1n4g
-cluster/leonardo/launch.sh moe oshmpi 1n4g
-cluster/leonardo/launch.sh moe sycl_mpi 1n4g
-cluster/leonardo/launch.sh moe sycl_oneccl 1n4g
+cluster/harness/launch.sh moe cuda_mpi 1n4g
+cluster/harness/launch.sh moe cuda_nccl 1n4g
+cluster/harness/launch.sh moe cuda_nvshmem 1n4g
+cluster/harness/launch.sh moe oshmpi 1n4g
+cluster/harness/launch.sh moe sycl_mpi 1n4g
+cluster/harness/launch.sh moe sycl_oneccl 1n4g
 ```
 
 ## Overrides

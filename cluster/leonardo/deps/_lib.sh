@@ -17,7 +17,7 @@
 
 # The layout owns every path a target produces; targets never invent their own.
 # shellcheck disable=SC1090
-source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/utils/layout.sh"
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/layout.sh"
 
 gpu_bench_build_log() { printf '\n== %s\n' "$*"; }
 

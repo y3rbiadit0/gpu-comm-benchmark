@@ -4,7 +4,7 @@ set -euo pipefail
 GPU_BENCH_EXPERIMENT=cg_step
 GPU_BENCH_N_LABEL="grid side"
 
-source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
+source "$GPU_BENCH_PROJECT_ROOT/cluster/harness/experiments/common.sh"
 
 # cg_step's two reductions are on a single double -- 8 bytes -- which is deep in
 # the regime where UCC loses. The global default in runtime/mpi-cuda.sh is on,

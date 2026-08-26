@@ -83,7 +83,7 @@ bootstrap itself.
 This clones and builds, in order, patched OSHMPI and oneCCL with the OSHMPI backend,
 then the `leonardo-sycl-oneccl-oshmpi` benchmarks. Sources and build trees go to
 `$SCRATCH`; install prefixes to `$HOME/opt/gpu-comm-bench`, both defined once in
-[`cluster/leonardo/utils/layout.sh`](cluster/leonardo/utils/layout.sh). Re-running skips what is
+[`cluster/leonardo/layout.sh`](cluster/leonardo/layout.sh). Re-running skips what is
 already installed; `GPU_BENCH_FORCE=1` rebuilds anyway.
 
 ```bash
@@ -214,9 +214,9 @@ See [`tools/README.md`](tools/README.md) for details.
 Use the Slurm scripts for validation runs; they request the GPU partition and resources correctly.
 
 ```bash
-GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 cluster/leonardo/launch.sh halo_1d cuda_mpi 1n2g
-GPU_BENCH_MSG_SIZES=1,1024 GPU_BENCH_NTRIALS=1 cluster/leonardo/launch.sh allreduce cuda_mpi 1n4g
-GPU_BENCH_ROUTINGS=uniform,hotspot80 GPU_BENCH_NTRIALS=1 cluster/leonardo/launch.sh moe cuda_mpi 1n4g
+GPU_BENCH_N=17 GPU_BENCH_NTRIALS=1 cluster/harness/launch.sh halo_1d cuda_mpi 1n2g
+GPU_BENCH_MSG_SIZES=1,1024 GPU_BENCH_NTRIALS=1 cluster/harness/launch.sh allreduce cuda_mpi 1n4g
+GPU_BENCH_ROUTINGS=uniform,hotspot80 GPU_BENCH_NTRIALS=1 cluster/harness/launch.sh moe cuda_mpi 1n4g
 ```
 
 Leonardo setup, presets, and experiment notes live under [`cluster/leonardo`](cluster/leonardo/README.md).

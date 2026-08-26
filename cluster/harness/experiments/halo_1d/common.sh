@@ -4,7 +4,7 @@ set -euo pipefail
 GPU_BENCH_EXPERIMENT=halo_1d
 GPU_BENCH_N_LABEL="problem size"
 
-source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
+source "$GPU_BENCH_PROJECT_ROOT/cluster/harness/experiments/common.sh"
 
 gpu_bench_experiment_defaults() {
   GPU_BENCH_N=${GPU_BENCH_N:-1048576}

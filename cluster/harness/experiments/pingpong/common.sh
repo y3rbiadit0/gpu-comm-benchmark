@@ -4,7 +4,7 @@ set -euo pipefail
 GPU_BENCH_EXPERIMENT=pingpong
 GPU_BENCH_N_LABEL="max message elements"
 
-source "$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/experiments/common.sh"
+source "$GPU_BENCH_PROJECT_ROOT/cluster/harness/experiments/common.sh"
 
 # pingpong is a 2-endpoint benchmark. By default it sweeps powers of two from
 # 1 element up to GPU_BENCH_N; GPU_BENCH_MSG_SIZES can override that with a comma-separated list.

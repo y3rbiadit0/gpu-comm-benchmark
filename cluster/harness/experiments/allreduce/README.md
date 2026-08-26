@@ -17,7 +17,7 @@ back. It is 34× slower at 16 MiB (12160 µs vs 354 µs on 1n4g), most of that p
 PCIe traffic at roughly 7 GB/s, and it is what to use to measure the staging cost itself.
 By default each binary sweeps powers of two from 1 element through `GPU_BENCH_N`; `GPU_BENCH_MSG_SIZES`
 selects explicit comma-separated sizes. Build setup is in
-[`cluster/leonardo/README.md`](../../README.md).
+[`cluster/leonardo/README.md`](../../../leonardo/README.md).
 
 ## Topologies
 
@@ -32,12 +32,12 @@ selects explicit comma-separated sizes. Build setup is in
 ## Submit
 
 ```bash
-cluster/leonardo/launch.sh allreduce cuda_mpi 1n4g
-cluster/leonardo/launch.sh allreduce cuda_nccl 1n4g
-cluster/leonardo/launch.sh allreduce cuda_nvshmem 1n4g
-cluster/leonardo/launch.sh allreduce oshmpi 1n4g
-cluster/leonardo/launch.sh allreduce sycl_mpi 1n4g
-cluster/leonardo/launch.sh allreduce sycl_oneccl 1n4g
+cluster/harness/launch.sh allreduce cuda_mpi 1n4g
+cluster/harness/launch.sh allreduce cuda_nccl 1n4g
+cluster/harness/launch.sh allreduce cuda_nvshmem 1n4g
+cluster/harness/launch.sh allreduce oshmpi 1n4g
+cluster/harness/launch.sh allreduce sycl_mpi 1n4g
+cluster/harness/launch.sh allreduce sycl_oneccl 1n4g
 ```
 
 ## Overrides
