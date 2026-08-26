@@ -250,6 +250,49 @@ Reading it:
   neither oneCCL runtime, which have their own transport.
 - **Two entry points:** `harness/launch.sh` runs, `leonardo/bootstrap.sh` builds.
 
+### Running the SYCL stack on HPC-X
+
+`sycl_mpi` normally links the `openmpi/4.1.6` module. That build has no UCC, and
+Open MPI's built-in `tuned` collectives reduce with host `ompi_op` functions, so
+an allreduce on device buffers stages through host memory at a flat 0.42 GB/s
+whatever the size. Collectives that only move bytes -- `alltoall` -- are
+unaffected and match `cuda_mpi` to within a few percent.
+
+`GPU_BENCH_SYCL_MPI=hpcx` links the same HPC-X 2.19 the CUDA stack uses:
+
+```bash
+source cluster/leonardo/environment.sh cuda && echo $HPCX_MPI_HOME
+export GPU_BENCH_SYCL_MPI=hpcx GPU_BENCH_HPCX_OMPI_HOME=<that path>
+rm -rf build/leonardo-sycl-mpi && make configure PRESET=leonardo-sycl-mpi
+```
+
+HPC-X is packaged *inside* nvhpc, and that module cannot be loaded here -- it
+would replace DPC++ and CUDA 12.2. So five things the module would have set have
+to be supplied by hand; `env/sycl.sh` does all of them, but they are listed here
+because four of the five fail in ways that do not name the cause:
+
+| what | symptom if missing |
+| --- | --- |
+| the `ompi` prefix on `PATH` | CMake finds the stock `mpicxx` and nothing changes |
+| `OPAL_PREFIX` | no MCA components at all; failure inside `MPI_Init` |
+| `OMPI_CC` / `OMPI_CXX` | wrappers call `nvc`, which is absent: *"C compiler cannot create executables"* |
+| `$HPCX_ROOT/ucx/lib` | loads the system UCX 1.15, warns about API version, PML never initialises |
+| `$HPCX_ROOT/ucc/lib` | `libucc.so.1 => not found`; **silent** -- results look plausible and are wrong |
+
+The last one is the dangerous one: it produces numbers rather than an error.
+Verify before trusting a measurement from this mode:
+
+```bash
+ldd $GPU_BENCH_HPCX_OMPI_HOME/lib/openmpi/mca_coll_ucc.so | grep -i ucc
+ompi_info --param coll ucc --level 9 | head -1
+```
+
+The first must resolve under `hpcx-2.19/`, not `/lib64` and not `not found`.
+
+This mode applies to `sycl_mpi` only. The oneCCL presets link libraries built
+against whichever MPI `bootstrap.sh` used, so build them in the same mode or not
+at all -- mixing them is the failure this whole exercise is about.
+
 ### Why `runtime/` is not inside `experiments/`
 
 `env/` and `runtime/` are a pair, and both describe **this machine**:

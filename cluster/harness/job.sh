@@ -55,9 +55,18 @@ fi
 # allreduce-sycl-oneccl-oshmpi-2n4g and existing results/ directories still match.
 _backend_slug="${GPU_BENCH_BACKEND//_/-}"
 GPU_BENCH_BINARY=${GPU_BENCH_BINARY:-$GPU_BENCH_PROJECT_ROOT/build/$GPU_BENCH_PRESET/$GPU_BENCH_BINDIR/${GPU_BENCH_BINARY_PREFIX}_${GPU_BENCH_BENCHMARK}}
+# An A/B sweep must land in its own results *tree*, not a renamed directory
+# inside the shared one. benchscribe derives the topology by regex-searching the
+# whole path for <n>n<n>g and the backend from the report line, so a directory
+# suffix is invisible to it: allreduce-sycl-mpi-1n2g-hpcx and
+# allreduce-sycl-mpi-1n2g both resolve to the same cell and get averaged
+# together. Use GPU_BENCH_RESULTS_ROOT and point benchscribe at that tree:
+#
+#   GPU_BENCH_RESULTS_ROOT=results-hpcx cluster/harness/launch.sh --all allreduce
+#   python3 tools/benchscribe results-hpcx --benchmark allreduce
 GPU_BENCH_RESULT_NAME=${GPU_BENCH_RESULT_NAME:-${GPU_BENCH_BENCHMARK//_/-}-$_backend_slug-$GPU_BENCH_TOPOLOGY}
 
-export GPU_BENCH_CLUSTER
+export GPU_BENCH_CLUSTER GPU_BENCH_RESULTS_ROOT
 export GPU_BENCH_PROJECT_ROOT GPU_BENCH_STACK GPU_BENCH_RUNTIME GPU_BENCH_LAUNCHER
 export GPU_BENCH_NODES GPU_BENCH_TASKS_PER_NODE GPU_BENCH_BINARY GPU_BENCH_RESULT_NAME
 

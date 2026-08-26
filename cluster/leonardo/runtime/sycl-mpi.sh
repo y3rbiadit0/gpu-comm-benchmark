@@ -4,6 +4,9 @@ set -euo pipefail
 # The Open MPI + UCX baseline every MPI-backed runtime shares.
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/_openmpi.sh"
 
+# UCX transport tuning shared with the other GPU-buffer MPI runtimes.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/_ucx-gpu.sh"
+
 export ONEAPI_DEVICE_SELECTOR=${ONEAPI_DEVICE_SELECTOR:-cuda:*}
 export SYCL_DEVICE_FILTER=${SYCL_DEVICE_FILTER:-cuda}
 
@@ -42,20 +45,4 @@ export SYCL_DEVICE_FILTER=${SYCL_DEVICE_FILTER:-cuda}
 # the same transport. Set it to 0 to reproduce the old behaviour.
 # Open MPI 4.x renamed this; the old name still works but prints a
 # deprecation banner into every rank's stderr on every run.
-export OMPI_MCA_pml=${OMPI_MCA_pml:-ucx}
 
-if [[ ${GPU_BENCH_JOB_NODES:-1} -gt 1 ]]; then
-  export UCX_TLS=${GPU_BENCH_SYCL_UCX_TLS:-sm,cuda_copy,cuda_ipc,rc,self}
-  # Match mpi-cuda.sh. These were set there and not here, which is not a stack
-  # difference but a tuning difference: pingpong 2n1g measured cuda_mpi at
-  # 21.02 GB/s against sycl_mpi's 12.18 on the same fabric, and the point of
-  # running both is to compare the stacks, not their UCX settings.
-  export UCX_RNDV_SCHEME=${GPU_BENCH_SYCL_UCX_RNDV_SCHEME:-get_zcopy}
-  export UCX_RNDV_THRESH=${GPU_BENCH_SYCL_UCX_RNDV_THRESH:-16384}
-  # Service level 1 enables adaptive routing on Leonardo's Dragonfly+ fabric.
-  export UCX_IB_SL=${UCX_IB_SL:-1}
-  # Pin the rail count (UCX default is 2) so multi-rail behavior is explicit.
-  export UCX_MAX_RNDV_RAILS=${UCX_MAX_RNDV_RAILS:-2}
-else
-  export UCX_TLS=${GPU_BENCH_SYCL_UCX_TLS:-sm,cuda_copy,cuda_ipc,self}
-fi

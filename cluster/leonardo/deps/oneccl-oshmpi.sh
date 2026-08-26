@@ -34,6 +34,16 @@ export MPI_C_COMPILER=$(command -v mpicc)
 export MPI_CXX_COMPILER=$(command -v mpicxx)
 : "${MPI_C_COMPILER:?mpicc not on PATH; load an MPI module}"
 
+# contrib/oshmpi/build_oshmpi.sh passes CC/CXX on the configure command line but
+# never CFLAGS, so autoconf's AC_PROG_CC default applies and OSHMPI is built with
+# `-g -O2`. Nobody asked for the debug info, and gcc 12 emits DWARF 5 in sections
+# that RHEL8's /usr/bin/ld -- which nvc++ uses to link the CUDA benchmarks --
+# cannot read. Supplying CFLAGS through the environment (configure prefers a
+# command-line assignment, and there is none) stops ~30 MB of DWARF being written
+# only to be stripped again below.
+export CFLAGS=${CFLAGS:--O2}
+export CXXFLAGS=${CXXFLAGS:--O2}
+
 export OSHMPI_INSTALL_PREFIX=$OSHMPI_HOME
 export OSHMPI_BASE_SOURCE_DIR=$GPU_BENCH_SRC_DIR/oshmpi-upstream
 export OSHMPI_SOURCE_DIR=$GPU_BENCH_SRC_DIR/oshmpi

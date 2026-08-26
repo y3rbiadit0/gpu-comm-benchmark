@@ -4,6 +4,9 @@ set -euo pipefail
 # The Open MPI + UCX baseline every MPI-backed runtime shares.
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/_openmpi.sh"
 
+# UCX transport tuning shared with the other GPU-buffer MPI runtimes.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/_ucx-gpu.sh"
+
 # Open MPI's accelerated collective components.
 #
 # hcoll stays off. UCC is ON by default because leaving it off silently
@@ -39,17 +42,10 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/_openmpi.sh"
 # the same transport. Set it to 0 to reproduce the old behaviour.
 # Open MPI 4.x renamed this; the old name still works but prints a
 # deprecation banner into every rank's stderr on every run.
-export OMPI_MCA_pml=${OMPI_MCA_pml:-ucx}
 
+# NCCL's own service level, for the NCCL-backed benchmarks built on this stack.
+# Scoped to multi-node like the UCX equivalent: it selects an InfiniBand service
+# level, and there is no InfiniBand inside a node.
 if [[ ${GPU_BENCH_JOB_NODES:-1} -gt 1 ]]; then
-  export UCX_TLS=${GPU_BENCH_CUDA_UCX_TLS:-sm,cuda_copy,cuda_ipc,rc,self}
-  export UCX_RNDV_SCHEME=${GPU_BENCH_CUDA_UCX_RNDV_SCHEME:-get_zcopy}
-  export UCX_RNDV_THRESH=${GPU_BENCH_CUDA_UCX_RNDV_THRESH:-16384}
-  # Service level 1 enables adaptive routing on Leonardo's Dragonfly+ fabric.
-  export UCX_IB_SL=${UCX_IB_SL:-1}
   export NCCL_IB_SL=${NCCL_IB_SL:-1}
-  # Pin the rail count (UCX default is 2) so multi-rail behavior is explicit.
-  export UCX_MAX_RNDV_RAILS=${UCX_MAX_RNDV_RAILS:-2}
-else
-  export UCX_TLS=${GPU_BENCH_CUDA_UCX_TLS:-sm,cuda_copy,cuda_ipc,self}
 fi

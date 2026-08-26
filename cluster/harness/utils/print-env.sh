@@ -44,6 +44,11 @@ gpu_bench_print_env() {
     # Host-side execution
     OMP_NUM_THREADS
     SLURM_CPU_BIND
+    # Which MPI the SYCL stack linked. Without this a job that silently ran with
+    # the wrong one -- the environment not exported at submit time -- is
+    # indistinguishable afterwards from one that ran correctly.
+    GPU_BENCH_SYCL_MPI
+    OPAL_PREFIX
   )
 
   echo "${GPU_BENCH_CLUSTER:-cluster} ENV : {"

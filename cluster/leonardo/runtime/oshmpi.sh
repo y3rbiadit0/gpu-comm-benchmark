@@ -4,6 +4,9 @@ set -euo pipefail
 # The Open MPI + UCX baseline every MPI-backed runtime shares.
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/_openmpi.sh"
 
+# UCX transport tuning shared with the other GPU-buffer MPI runtimes.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/_ucx-gpu.sh"
+
 export SHMEM_INFO=${SHMEM_INFO:-0}
 export SHMEM_VERSION=${SHMEM_VERSION:-0}
 
@@ -20,19 +23,6 @@ export OSHMPI_VERBOSE=${OSHMPI_VERBOSE:-0}
 # to the build default.
 # Open MPI 4.x renamed this; the old name still works but prints a
 # deprecation banner into every rank's stderr on every run.
-export OMPI_MCA_opal_cuda_support=${OMPI_MCA_opal_cuda_support:-1}
 export OMPI_MCA_osc=${OMPI_MCA_osc:-ucx}
 export OMPI_MCA_osc_base_verbose=${OMPI_MCA_osc_base_verbose:-0}
-export OMPI_MCA_pml=${OMPI_MCA_pml:-ucx}
 
-if [[ ${GPU_BENCH_JOB_NODES:-1} -gt 1 ]]; then
-  export UCX_TLS=${GPU_BENCH_OSHMPI_UCX_TLS:-sm,cuda_copy,cuda_ipc,rc,self}
-  export UCX_RNDV_SCHEME=${GPU_BENCH_OSHMPI_UCX_RNDV_SCHEME:-get_zcopy}
-  export UCX_RNDV_THRESH=${GPU_BENCH_OSHMPI_UCX_RNDV_THRESH:-16384}
-  # Service level 1 enables adaptive routing on Leonardo's Dragonfly+ fabric.
-  export UCX_IB_SL=${UCX_IB_SL:-1}
-  # Pin the rail count (UCX default is 2) so multi-rail behavior is explicit.
-  export UCX_MAX_RNDV_RAILS=${UCX_MAX_RNDV_RAILS:-2}
-else
-  export UCX_TLS=${GPU_BENCH_OSHMPI_UCX_TLS:-sm,cuda_copy,cuda_ipc,self}
-fi
