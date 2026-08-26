@@ -10,7 +10,11 @@ option(GPU_BENCH_ONECCL_USE_BUNDLED_MPI "Link against oneCCL's bundled Intel MPI
 option(GPU_BENCH_ONECCL_USE_OSHMPI "The oneCCL install uses the OSHMPI backend" OFF)
 set(ONECCL_BUNDLED_MPI_ROOT "" CACHE PATH "oneCCL bundled MPI installation root")
 
-set(GPU_BENCH_ONECCL_BENCHMARKS halo_1d pingpong alltoall allreduce cg_step moe)
+# Two tiers, see README "Benchmarks".
+set(GPU_BENCH_ONECCL_MICROBENCH halo_1d pingpong alltoall allreduce)
+set(GPU_BENCH_ONECCL_APPLICATION cg_step moe)
+set(GPU_BENCH_ONECCL_BENCHMARKS
+  ${GPU_BENCH_ONECCL_MICROBENCH} ${GPU_BENCH_ONECCL_APPLICATION})
 
 # find_path/find_library cache their results, so pointing oneCCL_ROOT at a different
 # install would otherwise keep the previous one's libraries and link them against the
@@ -102,16 +106,11 @@ if(GPU_BENCH_ONECCL_USE_OSHMPI)
   list(APPEND _oneccl_link_libraries ${OSHMPI_LIBRARIES})
 endif()
 
-foreach(benchmark IN LISTS GPU_BENCH_ONECCL_BENCHMARKS)
-  set(target sycl_oneccl_${benchmark})
-  add_executable(${target} ${benchmark}.cpp)
-  target_include_directories(${target} PRIVATE ${ONECCL_INCLUDE_DIR})
-  if(GPU_BENCH_ONECCL_USE_BUNDLED_MPI)
-    target_include_directories(${target} PRIVATE ${ONECCL_BUNDLED_MPI_INCLUDE_DIR})
-  endif()
-  target_link_libraries(${target} PRIVATE ${_oneccl_link_libraries})
-  set_target_properties(${target} PROPERTIES
-    BUILD_RPATH "${ONECCL_RUNTIME_RPATH}"
-    INSTALL_RPATH "${ONECCL_RUNTIME_RPATH}")
-  gpu_bench_enable_sycl(${target})
-endforeach()
+# Binaries stay in this directory rather than in the tier subdirectories: the
+# experiment job scripts under cluster/leonardo/experiments hardcode
+# build/<preset>/src/xccl/sycl/<target>, and the source layout is a reading aid,
+# not a deployment contract.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+add_subdirectory(microbench)    # one operation, swept over message size
+add_subdirectory(application)   # one problem size, several operations combined

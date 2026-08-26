@@ -4,62 +4,21 @@ enable_language(C)
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(OSHMPI REQUIRED)
 
-add_executable(oshmpi_halo_1d halo_1d.cu oshmpi_space.c)
-target_include_directories(oshmpi_halo_1d PRIVATE ${OSHMPI_INCLUDE_DIRS})
-target_link_libraries(oshmpi_halo_1d PRIVATE gpu_bench_common ${OSHMPI_LIBRARIES})
-target_compile_definitions(oshmpi_halo_1d PRIVATE USE_CUDA=1)
+# The CUDA symmetric-space helper is shared by every OSHMPI target, both tiers,
+# so it stays in this directory. PUBLIC carries its header path to whatever links
+# it -- the benchmark sources include it by quoted name from one level down.
+add_library(oshmpi_space STATIC oshmpi_space.c)
+target_include_directories(oshmpi_space PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(oshmpi_space PRIVATE ${OSHMPI_INCLUDE_DIRS})
+target_link_libraries(oshmpi_space PUBLIC ${OSHMPI_LIBRARIES})
+target_compile_definitions(oshmpi_space PRIVATE USE_CUDA=1)
 
-add_executable(oshmpi_pingpong pingpong.cu oshmpi_space.c)
-target_include_directories(oshmpi_pingpong PRIVATE ${OSHMPI_INCLUDE_DIRS})
-target_link_libraries(oshmpi_pingpong PRIVATE gpu_bench_common ${OSHMPI_LIBRARIES})
-target_compile_definitions(oshmpi_pingpong PRIVATE USE_CUDA=1)
+# Binaries stay in this directory rather than in the tier subdirectories: the
+# experiment job scripts under cluster/leonardo/experiments hardcode
+# build/<preset>/src/shmem/oshmpi/<target>, and the source layout is a reading aid, not
+# a deployment contract.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable(oshmpi_alltoall alltoall.cu oshmpi_space.c)
-target_include_directories(oshmpi_alltoall PRIVATE ${OSHMPI_INCLUDE_DIRS})
-target_link_libraries(oshmpi_alltoall PRIVATE gpu_bench_common ${OSHMPI_LIBRARIES})
-target_compile_definitions(oshmpi_alltoall PRIVATE USE_CUDA=1)
-
-add_executable(oshmpi_allreduce allreduce.cu oshmpi_space.c)
-target_include_directories(oshmpi_allreduce PRIVATE ${OSHMPI_INCLUDE_DIRS})
-target_link_libraries(oshmpi_allreduce PRIVATE gpu_bench_common ${OSHMPI_LIBRARIES})
-target_compile_definitions(oshmpi_allreduce PRIVATE USE_CUDA=1)
-
-add_executable(oshmpi_cg_step cg_step.cu oshmpi_space.c)
-target_include_directories(oshmpi_cg_step PRIVATE ${OSHMPI_INCLUDE_DIRS})
-target_link_libraries(oshmpi_cg_step PRIVATE gpu_bench_common ${OSHMPI_LIBRARIES})
-target_compile_definitions(oshmpi_cg_step PRIVATE USE_CUDA=1)
-
-add_executable(oshmpi_moe moe.cu oshmpi_space.c)
-target_include_directories(oshmpi_moe PRIVATE ${OSHMPI_INCLUDE_DIRS})
-target_link_libraries(oshmpi_moe PRIVATE gpu_bench_common ${OSHMPI_LIBRARIES})
-target_compile_definitions(oshmpi_moe PRIVATE USE_CUDA=1)
-
-set_target_properties(oshmpi_moe PROPERTIES
-  CUDA_SEPARABLE_COMPILATION OFF
-  CUDA_RUNTIME_LIBRARY Shared
-)
-
-set_target_properties(oshmpi_cg_step PROPERTIES
-  CUDA_SEPARABLE_COMPILATION OFF
-  CUDA_RUNTIME_LIBRARY Shared
-)
-
-set_target_properties(oshmpi_alltoall PROPERTIES
-  CUDA_SEPARABLE_COMPILATION OFF
-  CUDA_RUNTIME_LIBRARY Shared
-)
-
-set_target_properties(oshmpi_allreduce PROPERTIES
-  CUDA_SEPARABLE_COMPILATION OFF
-  CUDA_RUNTIME_LIBRARY Shared
-)
-
-set_target_properties(oshmpi_pingpong PROPERTIES
-  CUDA_SEPARABLE_COMPILATION OFF
-  CUDA_RUNTIME_LIBRARY Shared
-)
-
-set_target_properties(oshmpi_halo_1d PROPERTIES
-  CUDA_SEPARABLE_COMPILATION OFF
-  CUDA_RUNTIME_LIBRARY Shared
-)
+# Two tiers, see README "Benchmarks".
+add_subdirectory(microbench)    # one operation, swept over message size
+add_subdirectory(application)   # one problem size, several operations combined

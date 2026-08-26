@@ -17,6 +17,24 @@ SUPPORTED_FIT_SCHEMA = 1
 
 TOPOLOGY_ORDER = ("1n1g", "1n2g", "1n4g", "2n1g", "2n4g", "4n4g", "8n4g")
 
+# The suite has two tiers (see README "Benchmarks").
+#
+#   microbenchmark  -- one operation, swept over message size. An alpha-beta fit
+#                      is meaningful because message size is the only variable.
+#   application     -- one problem size, several operations combined in the order
+#                      an application issues them. The axis is rank count, so a
+#                      fit over message size has nothing to fit: cg_step and moe
+#                      report a single size, and the "fit" degenerates to echoing
+#                      that size back as n_half.
+#
+# Benchmarks absent from this map are treated as microbenchmarks, so a new
+# message-size sweep needs no entry here.
+APPLICATION_BENCHMARKS = frozenset({"cg_step", "moe"})
+
+
+def is_application_benchmark(benchmark: str) -> bool:
+    return benchmark in APPLICATION_BENCHMARKS
+
 
 class SchemaMismatch(Exception):
     """A JSON file this tool cannot read, with the reason spelled out."""

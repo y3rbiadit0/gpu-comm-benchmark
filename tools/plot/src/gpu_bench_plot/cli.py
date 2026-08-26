@@ -11,6 +11,7 @@ from .data import (
     SUPPORTED_POINTS_SCHEMA,
     SchemaMismatch,
     Sweep,
+    is_application_benchmark,
     load_json,
 )
 from .figures import draw_cases, draw_distribution, draw_fit, draw_heatmap, draw_sweep
@@ -114,7 +115,14 @@ def render_benchmark(payload: dict, fit_payload: dict | None, benchmark: str,
                   file=sys.stderr)
         else:
             written.append(out)
-    if "fit" in wanted and fit_payload is not None:
+    if "fit" in wanted and is_application_benchmark(benchmark):
+        # Not a failure: an application benchmark has one message size by
+        # construction, so there is no size axis to fit. Only say so when the
+        # figure was named explicitly - otherwise --figure all gets noisy.
+        if args.figure == "fit":
+            print(f"warning: {benchmark} is an application benchmark (single message "
+                  f"size); an alpha-beta fit is not meaningful", file=sys.stderr)
+    elif "fit" in wanted and fit_payload is not None:
         out = draw_fit(fit_payload.get("fits", []), theme, benchmark,
                        args.outdir, f"{benchmark}-fit", args.ext, args.include_single_rank)
         if out is None:

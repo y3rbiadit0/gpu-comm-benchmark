@@ -18,7 +18,11 @@ src/
 
 ## Benchmarks
 
-The active suite contains six communication patterns:
+The active suite contains six communication patterns, organised in two tiers.
+
+**Microbenchmarks** isolate a single communication operation and sweep message
+size, yielding alpha-beta fits (latency floor `alpha`, asymptotic bandwidth
+`B_inf`, and `n_half = alpha * B_inf`):
 
 | Benchmark | Purpose |
 | --- | --- |
@@ -26,8 +30,23 @@ The active suite contains six communication patterns:
 | `halo_1d` | Neighbor communication and one-sided models ([guide](docs/halo_1d.md)) |
 | `allreduce` | Collective sum latency and bandwidth (message-size sweep) |
 | `alltoall` | All-to-all personalized exchange, message-size sweep (per-rank + bus bandwidth) |
+
+**Application benchmarks** fix the problem size and combine several operations
+in the order an application issues them. They are single iterations extracted
+from real applications, not complete ones. Their axis is rank count, not
+message size, so they carry no alpha-beta fit:
+
+| Benchmark | Purpose |
+| --- | --- |
 | `cg_step` | Conjugate-gradient iteration skeleton (SpMV halo + two reductions) |
 | `moe` | Top-1 MoE dispatch + combine with variable, skewed expert traffic |
+
+The second tier exists to test whether the first tier's ranking predicts real
+behaviour. Twice so far it has not: Open MPI's UCC collectives are 139x faster
+than the default at 16 MiB allreduce yet make `cg_step` 1.90x *slower*, because
+that solver's reductions are 8 bytes; and NVSHMEM has the lowest latency floor
+in the suite (7.5 us) yet is the slowest backend on `cg_step` at 16 and 32 GPUs.
+A suite of microbenchmarks alone would have reported both the wrong way round.
 
 ## Implementations
 

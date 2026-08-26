@@ -13,7 +13,7 @@ import json
 import pytest
 
 from gpu_bench_plot.cli import main
-from gpu_bench_plot.data import SchemaMismatch, Sweep, format_bytes, load_json, topology_key, topology_ranks
+from gpu_bench_plot.data import SchemaMismatch, Sweep, format_bytes, is_application_benchmark, load_json, topology_key, topology_ranks
 from gpu_bench_plot.figures import select_size
 from gpu_bench_plot.theme import BACKEND_ORDER, THEMES, colour_for
 
@@ -328,3 +328,23 @@ def test_multi_node_topologies_sort_by_rank_count():
     assert sorted(["16n4g", "8n4g", "4n4g"], key=topology_key) == ["4n4g", "8n4g", "16n4g"]
     assert topology_ranks("4n4g") == 16
     assert topology_ranks("8n4g") == 32
+
+
+def test_application_benchmarks_get_no_fit_figure(tmp_path, points):
+    """cg_step/moe have one message size, so an alpha-beta fit is meaningless."""
+    for p in points:
+        p["benchmark"] = "cg_step"
+    source = write_points(tmp_path / "points.json", points)
+    fit = tmp_path / "fit.json"
+    fit.write_text(json.dumps({
+        "schema_version": 1, "generated": "now", "alpha_max_bytes": 4096,
+        "fits": [{"benchmark": "cg_step", "case": "", "topology": "2n4g",
+                  "backend": "cuda_mpi", "unit": "us", "alpha": 4.0, "binf_gbs": 200.0,
+                  "peak_bytes": 4096, "nhalf_bytes": 4096.0, "tail_gbs": 1.0, "points": 1}],
+    }))
+    outdir = tmp_path / "figures"
+    assert main(["--points", str(source), "--fit", str(fit), "--outdir", str(outdir)]) == 0
+    assert not (outdir / "cg_step-fit.png").exists()
+    assert not (outdir / "cg_step-fit.csv").exists()
+    # Microbenchmarks are unaffected.
+    assert is_application_benchmark("cg_step") and not is_application_benchmark("allreduce")

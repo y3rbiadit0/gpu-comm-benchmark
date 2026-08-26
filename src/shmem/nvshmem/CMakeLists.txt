@@ -15,80 +15,12 @@ if(NOT NVSHMEM_INCLUDE_DIR OR NOT NVSHMEM_HOST_LIBRARY OR NOT NVSHMEM_DEVICE_LIB
   message(FATAL_ERROR "NVSHMEM not found. Set NVSHMEM_INCLUDE_DIR/NVSHMEM_LIBRARY_PATH or NVSHMEM_HOME")
 endif()
 
-add_executable(cuda_nvshmem_halo_1d halo_1d.cu)
-target_include_directories(cuda_nvshmem_halo_1d PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_halo_1d PRIVATE
-  gpu_bench_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
+# Binaries stay in this directory rather than in the tier subdirectories: the
+# experiment job scripts under cluster/leonardo/experiments hardcode
+# build/<preset>/src/shmem/nvshmem/<target>, and the source layout is a reading aid, not
+# a deployment contract.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable(cuda_nvshmem_pingpong pingpong.cu)
-target_include_directories(cuda_nvshmem_pingpong PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_pingpong PRIVATE
-  gpu_bench_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
-add_executable(cuda_nvshmem_alltoall alltoall.cu)
-target_include_directories(cuda_nvshmem_alltoall PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_alltoall PRIVATE
-  gpu_bench_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
-add_executable(cuda_nvshmem_allreduce allreduce.cu)
-target_include_directories(cuda_nvshmem_allreduce PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_allreduce PRIVATE
-  gpu_bench_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
-add_executable(cuda_nvshmem_cg_step cg_step.cu)
-target_include_directories(cuda_nvshmem_cg_step PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_cg_step PRIVATE
-  gpu_bench_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
-add_executable(cuda_nvshmem_moe moe.cu)
-target_include_directories(cuda_nvshmem_moe PRIVATE ${NVSHMEM_INCLUDE_DIR})
-target_link_libraries(cuda_nvshmem_moe PRIVATE
-  gpu_bench_common
-  MPI::MPI_CXX
-  ${NVSHMEM_HOST_LIBRARY}
-  ${NVSHMEM_DEVICE_LIBRARY}
-)
-
-set_target_properties(cuda_nvshmem_moe PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
-
-set_target_properties(cuda_nvshmem_cg_step PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
-
-set_target_properties(cuda_nvshmem_alltoall PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
-
-set_target_properties(cuda_nvshmem_allreduce PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
-
-set_target_properties(cuda_nvshmem_pingpong PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
-
-set_target_properties(cuda_nvshmem_halo_1d PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-)
+# Two tiers, see README "Benchmarks".
+add_subdirectory(microbench)    # one operation, swept over message size
+add_subdirectory(application)   # one problem size, several operations combined
