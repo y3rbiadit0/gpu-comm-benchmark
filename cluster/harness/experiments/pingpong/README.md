@@ -1,75 +1,29 @@
-# Leonardo Ping-Pong Experiments
+# Ping-Pong
 
-These jobs benchmark point-to-point **one-way latency and bandwidth** between two GPUs
-(OSU-style ping-pong). Rank 0 sends a message to rank 1, which echoes it back; the round
-trip is timed on the initiator and halved to report one-way figures. Each binary sweeps
-message sizes internally, printing one standardized line per size. By default the sweep
-uses powers of two from 1 element up to `GPU_BENCH_N`; set `GPU_BENCH_MSG_SIZES` to a comma-separated
-list to run specific element counts. Build setup is in [`cluster/leonardo/README.md`](../../../leonardo/README.md).
+`pingpong` measures one-way latency and bandwidth between exactly two GPUs. The
+initiator sends a GPU-resident buffer and waits for the reply; reports divide the
+measured round trip by two.
 
-## Topologies
+## Interface
 
-Ping-pong needs exactly two endpoints, so only two launchers exist per backend — chosen to
-isolate the transport:
+```text
+<max_elements> [iterations] [warmup] [comma-separated message sizes]
+```
 
-| Script | Nodes | GPUs/node | Transport |
-| --- | ---: | ---: | --- |
-| `1n2g.sh` | 1 | 2 | intra-node NVLink |
-| `2n1g.sh` | 2 | 1 | inter-node InfiniBand |
+The default run uses 4,194,304 maximum float elements, 100 timed iterations, and
+20 warmup iterations. Without an explicit list, each binary sweeps powers of two
+from one element to the maximum.
+
+Only `1n2g` and `2n1g` are valid because the benchmark requires two endpoints.
+All standard backends are declared; see the [support matrix](../../../../docs/support-matrix.md).
 
 ## Submit
 
 ```bash
 cluster/harness/launch.sh pingpong cuda_mpi 1n2g
-cluster/harness/launch.sh pingpong cuda_mpi 2n1g
-cluster/harness/launch.sh pingpong cuda_nccl 2n1g
-cluster/harness/launch.sh pingpong cuda_nvshmem 2n1g
-cluster/harness/launch.sh pingpong oshmpi 2n1g
-cluster/harness/launch.sh pingpong sycl_mpi 2n1g
-cluster/harness/launch.sh pingpong sycl_oneccl 2n1g
+GPU_BENCH_MSG_SIZES=1,1024,1048576 \
+  cluster/harness/launch.sh pingpong cuda_nccl 2n1g
 ```
 
-## Overrides
-
-```bash
-GPU_BENCH_N=16777216       # maximum message length in elements (float); sweep goes 1..GPU_BENCH_N by x2
-GPU_BENCH_MSG_SIZES=1,8,64,1024,1048576  # optional explicit message lengths in elements
-GPU_BENCH_ITERS=200        # timed round trips per size
-GPU_BENCH_WARMUP=50        # untimed warmup round trips per size
-GPU_BENCH_NTRIALS=5        # job-level repeats
-```
-
-Example:
-
-```bash
-GPU_BENCH_N=16777216 GPU_BENCH_ITERS=500 cluster/harness/launch.sh pingpong cuda_nvshmem 1n2g
-GPU_BENCH_MSG_SIZES=1,8,64,1024,1048576 cluster/harness/launch.sh pingpong cuda_mpi 2n1g
-```
-
-## Output
-
-One line per swept message size, e.g.:
-
-```text
-cuda_mpi_pingpong n=1024 ranks=2 bytes=4096 iters=100 warmup=20 time_per_iter_s=... usec=<one-way latency> ... gbytes_per_s=<one-way bandwidth> validation=PASS
-```
-
-`usec` is one-way latency (half the round trip); `gbytes_per_s` is one-way bandwidth.
-Plot `gbytes_per_s` vs `bytes` for the bandwidth curve and read small-message `usec` for
-the latency floor.
-
-## Notes
-
-- All backends ping-pong **device-resident** buffers. CUDA/SYCL MPI use CUDA-aware
-  `Send`/`Recv`; NCCL uses `ncclSend`/`ncclRecv`; OSHMPI uses host-driven one-sided
-  `shmem_putmem` with a `shmem_barrier_all` handshake (a point-to-point `wait_until` flag
-  deadlocks inter-node when passive RMA needs target-side progress, so the barrier — which
-  always progresses — is used instead; OSHMPI latency therefore includes barrier overhead).
-  NVSHMEM is **device-initiated** (the round-trip loop runs inside
-  one kernel using `nvshmemx_signal_op`/`nvshmem_signal_wait_until`, since NVSHMEM
-  point-to-point synchronization has no host variant); its per-size time is therefore the
-  amortized per-round-trip latency (no per-iteration min/max distribution).
-- **oneCCL caveat:** `sycl_oneccl_pingpong` uses `ccl::send`/`ccl::recv`. The UNISA
-  NCCL-enabled oneCCL fork does not implement every primitive (e.g. `broadcast`); if
-  point-to-point is likewise unimplemented this job will report a backend error. Treat that
-  as a documented backend gap, not a benchmark bug.
+Each message size emits one record using the
+[standard output schema](../../../../docs/output-schema.md).

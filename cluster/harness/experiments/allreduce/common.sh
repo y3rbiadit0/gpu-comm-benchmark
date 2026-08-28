@@ -6,6 +6,9 @@ GPU_BENCH_N_LABEL="max message elements"
 
 source "$GPU_BENCH_PROJECT_ROOT/cluster/harness/experiments/common.sh"
 
+# Device-buffer reductions use Open MPI's accelerated UCC collective path.
+export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-1}
+
 # allreduce sweeps powers of two from 1 element up to GPU_BENCH_N by default;
 # GPU_BENCH_MSG_SIZES can override that with a comma-separated list.
 gpu_bench_experiment_defaults() {
@@ -23,7 +26,7 @@ gpu_bench_experiment_extra_summary() {
   echo "message sizes: ${GPU_BENCH_MSG_SIZES:-powers-of-two}"
   # OSHMPI-only knob, but recorded for every run so the job log always says
   # which reduction memory path the results came from.
-  echo "oshmpi allreduce memory: ${GPU_BENCH_OSHMPI_ALLREDUCE_MEM:-staged}"
+  echo "oshmpi allreduce memory: ${GPU_BENCH_OSHMPI_ALLREDUCE_MEM:-device}"
 }
 
 gpu_bench_allreduce_main() { gpu_bench_experiment_main; }

@@ -1,69 +1,31 @@
-# Leonardo All-to-All Experiments
+# All-To-All
 
-These jobs benchmark an all-to-all personalized exchange — the heaviest collective and the
-classic **bisection-bandwidth** stress test (FFT / transpose / sparse / sort motif). Each
-rank holds a `ranks × GPU_BENCH_N` send buffer and sends a distinct `GPU_BENCH_N`-element block to every
-rank, receiving one block from each. The per-block value encodes `(source, destination)`,
-so the full permutation is validated **locally** (no gather). Build setup is in
-[`cluster/leonardo/README.md`](../../../leonardo/README.md).
+`alltoall` measures a personalized exchange: every rank sends a distinct
+GPU-resident block of float32 elements to every rank and validates the complete
+permutation locally.
 
-## Topologies
+## Interface
 
-| Script | Nodes | GPUs/node | Exercises |
-| --- | ---: | ---: | --- |
-| `1n1g.sh` | 1 | 1 | single-GPU baseline (self copy only) |
-| `1n2g.sh` | 1 | 2 | intra-node, NVLink |
-| `1n4g.sh` | 1 | 4 | intra-node, NVLink |
-| `2n1g.sh` | 2 | 1 | pure inter-node, InfiniBand |
-| `2n4g.sh` | 2 | 4 | mixed intra- + inter-node (full bisection) |
+```text
+<max_count_per_peer> [iterations] [warmup] [comma-separated counts]
+```
+
+The harness defaults to 65,536 maximum elements per peer, 100 timed iterations,
+and 20 warmup iterations. Without `GPU_BENCH_MSG_SIZES`, counts sweep powers of
+two. Buffers contain `ranks * count_per_peer` elements.
+
+Declared topologies are `1n1g`, `1n2g`, `1n4g`, `2n1g`, `2n4g`, `4n4g`, and
+`8n4g`.
 
 ## Submit
 
 ```bash
 cluster/harness/launch.sh alltoall cuda_mpi 1n4g
-cluster/harness/launch.sh alltoall cuda_nccl 1n4g
-cluster/harness/launch.sh alltoall cuda_nvshmem 1n4g
-cluster/harness/launch.sh alltoall oshmpi 1n4g
-cluster/harness/launch.sh alltoall sycl_mpi 1n4g
-cluster/harness/launch.sh alltoall sycl_oneccl 1n4g
+GPU_BENCH_MSG_SIZES=1,256,65536 \
+  cluster/harness/launch.sh alltoall cuda_nccl 2n4g
 ```
 
-## Overrides
-
-```bash
-GPU_BENCH_N=262144         # elements exchanged with EACH peer (buffers are ranks*GPU_BENCH_N)
-GPU_BENCH_ITERS=200        # timed iterations
-GPU_BENCH_WARMUP=50        # untimed warmup iterations
-GPU_BENCH_NTRIALS=5        # job-level repeats
-```
-
-Example:
-
-```bash
-GPU_BENCH_N=262144 GPU_BENCH_ITERS=200 cluster/harness/launch.sh alltoall cuda_nccl 2n4g
-```
-
-The binaries accept `<count_per_peer> [iterations] [warmup]`.
-
-## Output
-
-One standardized line per run (see the root README for the schema), e.g.:
-
-```text
-cuda_mpi_alltoall n=65536 ranks=4 bytes=1048576 iters=100 warmup=20 time_per_iter_s=... usec=... gbytes_per_s=... validation=PASS
-```
-
-`n` is the per-peer element count; `bytes` is the per-rank send volume
-(`ranks * count * sizeof(float)`). Compare `gbytes_per_s` for throughput and
-`usec`/`time_per_iter_s` for the per-iteration cost.
-
-## Notes
-
-- `cuda_mpi` / `sycl_mpi` use CUDA-aware `MPI_Alltoall`; `cuda_nvshmem` uses the native
-  `nvshmem_float_alltoall` team collective; `oshmpi` performs a one-sided `shmem_putmem`
-  loop with a `shmem_barrier_all` completion (no native device alltoall assumed).
-- **NCCL has no native all-to-all** — `cuda_nccl` emulates it with a grouped
-  `ncclSend`/`ncclRecv` to every peer. That asymmetry is itself a result worth reporting.
-- **oneCCL caveat:** `sycl_oneccl_alltoall` uses `ccl::alltoall`. If the UNISA NCCL-enabled
-  fork does not implement it (as with `broadcast`), this job reports a backend error — a
-  documented gap, not a benchmark bug.
+Each rank includes a self block that never crosses a link. Reports therefore
+include bus bandwidth corrected by `(ranks - 1) / ranks` alongside the raw
+per-rank bandwidth. NCCL expresses the exchange as grouped point-to-point
+operations; OSHMPI uses one-sided puts.
