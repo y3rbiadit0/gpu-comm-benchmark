@@ -50,7 +50,7 @@ collective).
 
 | Regime | Pattern | Why |
 | --- | --- | --- |
-| Swept across both | `pingpong`, `halo_1d`, `allreduce`, `alltoall` | the message-size sweep crosses from the alpha regime to the bandwidth regime; the crossover is itself a result (see `analysis/halo_1d-crossover.md`) |
+| Swept across both | `pingpong`, `halo_1d`, `allreduce`, `alltoall` | the message-size sweep crosses from the alpha regime to the bandwidth regime; the transition is itself a result (see the [`halo_1d` analysis methodology](../analysis/halo-1d-methodology.md)) |
 | Mixed | `cg_step` | two α-bound allreduces + one β-bound halo per iteration; not predictable from either regime alone |
 | Bandwidth- and imbalance-sensitive | `moe` | two variable-count global exchanges move a fixed useful payload, while routing controls locality, per-peer message sizes, and the busiest expert |
 

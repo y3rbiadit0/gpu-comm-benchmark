@@ -40,6 +40,6 @@ The peer's timing window is different and is not combined with the initiator's.
 - Runtime errors and validation failures are excluded from numeric summaries.
 - Contradictory status/validation pairs are treated as errors.
 
-[`tools/benchscribe`](../tools/benchscribe/README.md) owns parsing, grouping, and
-aggregation of this process-level output. Its versioned JSON is the separate
-contract consumed by the plotting package.
+[`tools/benchscribe`](../../tools/benchscribe/README.md) owns parsing, grouping,
+and aggregation of this process-level output. Its versioned JSON is the
+separate contract consumed by the plotting package.

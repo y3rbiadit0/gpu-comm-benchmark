@@ -36,5 +36,5 @@ cluster/harness/launch.sh allreduce sycl_oneccl 1n4g
 cluster/harness/launch.sh allreduce sycl_oneccl_oshmpi 1n4g
 ```
 
-The [support matrix](../../../docs/support-matrix.md) lists which benchmarks are
-declared for each transport.
+The [support matrix](../../../docs/reference/support-matrix.md) lists which
+benchmarks are declared for each transport.

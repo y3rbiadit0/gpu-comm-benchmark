@@ -14,7 +14,7 @@ libraries support both programming models.
 | Benchmark | Kind | Measures |
 | --- | --- | --- |
 | [`pingpong`](cluster/harness/experiments/pingpong/README.md) | Microbenchmark | Two-endpoint one-way latency and bandwidth |
-| [`halo_1d`](docs/halo_1d.md) | Microbenchmark | Neighbor exchange in a periodic ring |
+| [`halo_1d`](docs/benchmarks/halo-1d.md) | Microbenchmark | Neighbor exchange in a periodic ring |
 | [`allreduce`](cluster/harness/experiments/allreduce/README.md) | Microbenchmark | Collective sum latency and bandwidth |
 | [`alltoall`](cluster/harness/experiments/alltoall/README.md) | Microbenchmark | Personalized exchange and bus bandwidth |
 | [`cg_step`](cluster/harness/experiments/cg_step/README.md) | Application pattern | SpMV halo exchange followed by two reductions |
@@ -23,7 +23,7 @@ libraries support both programming models.
 Microbenchmarks sweep message size. Application patterns use a fixed problem
 size and sweep rank count, testing whether isolated communication results predict
 the behavior of a mixed workload. The rationale for this suite is documented in
-[`docs/experiments_considerations.md`](docs/experiments_considerations.md).
+[`docs/design/benchmark-selection.md`](docs/design/benchmark-selection.md).
 
 ## Implementations
 
@@ -36,7 +36,7 @@ the behavior of a mixed workload. The rationale for this suite is documented in
 | SHMEM | NVSHMEM | [`src/shmem/nvshmem`](src/shmem/nvshmem/README.md) |
 | SHMEM | OSHMPI | [`src/shmem/oshmpi`](src/shmem/oshmpi/README.md) |
 
-See the [support matrix](docs/support-matrix.md) for benchmark, backend, and
+See the [support matrix](docs/reference/support-matrix.md) for benchmark, backend, and
 topology coverage.
 
 ## Build
@@ -113,7 +113,7 @@ uv run --project tools/plot gpu-bench-plot \
 ```
 
 See [`tools/README.md`](tools/README.md) for the analysis workflow and
-[`docs/output-schema.md`](docs/output-schema.md) for the report contract.
+[`docs/reference/output-schema.md`](docs/reference/output-schema.md) for the report contract.
 
 ## Project Documentation
 

@@ -1,8 +1,8 @@
-# Halo 1D Crossover Analysis
+# Halo 1D Analysis Methodology
 
-This analysis identifies the message-size regimes in which each halo-exchange
-backend is latency or bandwidth limited. It defines a reproducible method rather
-than embedding results from a particular software revision.
+This guide defines a reproducible method for identifying the message-size
+regimes in which each halo-exchange backend is latency or bandwidth limited. It
+does not embed results from a particular software revision.
 
 ## Descriptive Model
 

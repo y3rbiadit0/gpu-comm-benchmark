@@ -55,5 +55,5 @@ captures placement and system variation and is the relevant quantity for
 reproducibility. Benchscribe preserves both in JSON, and GPU Bench Plot displays
 them separately in distribution figures.
 
-The concrete characterization and reproduction workflow is documented in
-[`halo_1d-crossover.md`](halo_1d-crossover.md).
+The concrete characterization and reproduction workflow is documented in the
+[`halo_1d` analysis methodology](halo-1d-methodology.md).

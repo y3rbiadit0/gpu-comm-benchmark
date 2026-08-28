@@ -33,7 +33,7 @@ Benchscribe:
 - preserves `NOT_IMPLEMENTED`/`SKIP` capability records as `N/I`.
 
 The process record contract is documented in
-[`docs/output-schema.md`](../../docs/output-schema.md).
+[`docs/reference/output-schema.md`](../../docs/reference/output-schema.md).
 
 ## Characterization
 

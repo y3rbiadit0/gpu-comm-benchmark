@@ -23,7 +23,8 @@ python3 tools/benchscribe results --fit --format json > fit.json
 
 uv run --project tools/plot gpu-bench-plot \
     --points points.json --fit fit.json \
-    --benchmark halo_1d --figure all --outdir docs/analysis/figures
+    --benchmark halo_1d --figure all \
+    --outdir docs/analysis/data/microbenchmarks/tuned/halo_1d/figures
 ```
 
 `--project tools/plot` keeps the working directory where it is, so the paths you

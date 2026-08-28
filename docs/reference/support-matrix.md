@@ -49,12 +49,6 @@ on the target system before a large sweep. A recognized unsupported MoE
 point-to-point operation emits `NOT_IMPLEMENTED`/`SKIP`; hangs and unexpected
 backend failures are errors and are bounded by the harness trial timeout.
 
-Published analysis artifacts contain successful `sycl_oneccl_oshmpi` results
-for every measured multi-rank topology in
-[`allreduce`](analysis/data/microbenchmarks/allreduce/figures/) and
-[`alltoall`](analysis/data/microbenchmarks/alltoall/figures/). `cg_step` is also
-declared for this transport in the executable harness matrix.
-
 Some implementations intentionally express an operation through native
 primitives rather than a dedicated collective:
 

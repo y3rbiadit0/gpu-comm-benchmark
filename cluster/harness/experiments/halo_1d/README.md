@@ -4,7 +4,7 @@
 GPU-resident halo with both neighbors over a swept halo width.
 
 The complete buffer, timing, bandwidth, validation, and backend contract is in
-[`docs/halo_1d.md`](../../../../docs/halo_1d.md).
+[`docs/benchmarks/halo-1d.md`](../../../../docs/benchmarks/halo-1d.md).
 
 ## Interface
 

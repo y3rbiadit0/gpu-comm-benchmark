@@ -76,7 +76,7 @@ visible when interpreting comparisons.
 
 oneCCL point-to-point support depends on the configured transport. Unexpected
 transport failures are benchmark errors rather than timing results; check the
-[support matrix](support-matrix.md) before a large sweep.
+[support matrix](../reference/support-matrix.md) before a large sweep.
 
 ## Build And Run
 
@@ -94,7 +94,7 @@ GPU_BENCH_MSG_SIZES=1,16,256,4096 GPU_BENCH_NTRIALS=1 \
   cluster/harness/launch.sh halo_1d cuda_nvshmem 2n4g
 ```
 
-See the [experiment guide](../cluster/harness/experiments/halo_1d/README.md) for
-defaults and valid topologies, and the
-[crossover methodology](analysis/halo_1d-crossover.md) for analysis and
-profiling.
+See the [experiment guide](../../cluster/harness/experiments/halo_1d/README.md)
+for defaults and valid topologies, and the
+[analysis methodology](../analysis/halo-1d-methodology.md) for comparison and
+profiling guidance.

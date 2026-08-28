@@ -35,7 +35,8 @@ uv run --project tools/plot ruff check tools/plot
   `cluster/harness/experiments/<benchmark>`.
 - Keep compiler modules, library paths, launchers, and transport tuning under
   `cluster/<name>`.
-- Preserve the output contract in [`docs/output-schema.md`](docs/output-schema.md).
+- Preserve the output contract in
+  [`docs/reference/output-schema.md`](docs/reference/output-schema.md).
   Incompatible Benchscribe JSON changes require a schema-version update and a
   matching plot-reader update.
 - Do not commit generated builds, benchmark output, profiler reports, or

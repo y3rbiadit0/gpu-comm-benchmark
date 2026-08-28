@@ -15,7 +15,8 @@ The default run uses 4,194,304 maximum float elements, 100 timed iterations, and
 from one element to the maximum.
 
 Only `1n2g` and `2n1g` are valid because the benchmark requires two endpoints.
-All standard backends are declared; see the [support matrix](../../../../docs/support-matrix.md).
+All standard backends are declared; see the
+[support matrix](../../../../docs/reference/support-matrix.md).
 
 ## Submit
 
@@ -26,4 +27,4 @@ GPU_BENCH_MSG_SIZES=1,1024,1048576 \
 ```
 
 Each message size emits one record using the
-[standard output schema](../../../../docs/output-schema.md).
+[standard output schema](../../../../docs/reference/output-schema.md).

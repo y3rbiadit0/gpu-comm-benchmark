@@ -27,5 +27,5 @@ cmake --build --preset leonardo-cuda-nvshmem
 cluster/harness/launch.sh halo_1d cuda_nvshmem 1n4g
 ```
 
-The [halo analysis](../../../docs/analysis/halo_1d-crossover.md) explains the
+The [halo analysis](../../../docs/analysis/halo-1d-methodology.md) explains the
 device-initiated timing and transport considerations.
