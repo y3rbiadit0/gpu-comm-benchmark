@@ -10,7 +10,7 @@
 #
 # Required of every implementation:
 #
-#   SBATCH_ACCOUNT, SBATCH_PARTITION      submission defaults
+#   SBATCH_PARTITION, optional SBATCH_ACCOUNT
 #   gpu_bench_backend_fields <backend>    -> stack, runtime, launcher, preset,
 #                                            bindir, binary prefix
 #   gpu_bench_backend_names               -> the backends this cluster can run
@@ -23,7 +23,7 @@
 
 GPU_BENCH_CLUSTER_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
-# Account and partition. Overridable so anyone can point at their own allocation.
+# Optional account and default partition.
 source "$GPU_BENCH_CLUSTER_DIR/slurm.sh"
 
 # Which backends exist here, and where their binaries land.
@@ -60,6 +60,8 @@ gpu_bench_cluster_env_files() {
   # The MPI-backed runtimes source the shared baseline before their own settings.
   grep -q '_openmpi.sh' "$GPU_BENCH_CLUSTER_DIR/runtime/$runtime.sh" 2>/dev/null \
     && echo "$GPU_BENCH_CLUSTER_DIR/runtime/_openmpi.sh"
+  grep -q '_ucx-gpu.sh' "$GPU_BENCH_CLUSTER_DIR/runtime/$runtime.sh" 2>/dev/null \
+    && echo "$GPU_BENCH_CLUSTER_DIR/runtime/_ucx-gpu.sh"
   echo "$GPU_BENCH_CLUSTER_DIR/runtime/$runtime.sh"
 }
 

@@ -63,3 +63,15 @@ gpu_bench_matrix_backends() {
   [[ -n "${!var:-}" ]] || { echo "error: no backends declared for '$bench'" >&2; return 1; }
   echo "${!var}"
 }
+
+gpu_bench_matrix_validate_cell() {
+  local bench="$1" backend="$2" topology="$3"
+  case " $(gpu_bench_matrix_backends "$bench") " in
+    *" $backend "*) ;;
+    *) echo "error: backend '$backend' is not declared for '$bench'" >&2; return 1 ;;
+  esac
+  case " $(gpu_bench_matrix_topologies "$bench") " in
+    *" $topology "*) ;;
+    *) echo "error: topology '$topology' is not declared for '$bench'" >&2; return 1 ;;
+  esac
+}

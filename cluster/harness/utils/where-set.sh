@@ -19,7 +19,8 @@ gpu_bench_where_set() {
   # the only thing that knows its own module and runtime files.
   files+=("$root/cluster/harness/experiments/$bench/common.sh")
   files+=("$root/cluster/harness/experiments/common.sh")
-  while IFS= read -r f; do files+=("$f"); done < <(gpu_bench_cluster_env_files "$stack" "$runtime")
+  while IFS= read -r f; do files+=("$f"); done \
+    < <(gpu_bench_cluster_env_files "$stack" "$runtime")
 
   for f in "${files[@]}"; do
     [[ -f "$f" ]] || continue

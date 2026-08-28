@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch benchmark jobs on Leonardo.
+# Launch benchmark jobs through the selected cluster integration.
 #
 # One cell:
 #   cluster/harness/launch.sh halo_1d cuda_mpi 1n2g
@@ -59,7 +59,7 @@ for arg in "$@"; do
     --all)     mode=all ;;
     --dry-run) dry_run=1 ;;
     --explain) explain=1; dry_run=1 ;;
-    -h|--help) sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)         args+=("$arg") ;;
   esac
 done
@@ -74,6 +74,7 @@ require_sbatch() {
 # submit <benchmark> <backend> <topology> [extra sbatch args...]
 submit() {
   local bench="$1" backend="$2" topo="$3"; shift 3
+  gpu_bench_matrix_validate_cell "$bench" "$backend" "$topo"
   gpu_bench_backend_fields "$backend"
   gpu_bench_topology_fields "$topo"
 
@@ -129,7 +130,7 @@ benchmark   : cluster/harness/experiments/$bench/common.sh
 topology    : $GPU_BENCH_NODES node(s) x $GPU_BENCH_TASKS_PER_NODE GPU(s) = $((GPU_BENCH_NODES * GPU_BENCH_TASKS_PER_NODE)) ranks
 sbatch      : --nodes=$GPU_BENCH_NODES --ntasks-per-node=$GPU_BENCH_TASKS_PER_NODE --gres=gpu:$GPU_BENCH_TASKS_PER_NODE --time=$(gpu_bench_walltime_for "$GPU_BENCH_NODES")
 results     : results/${bench//_/-}-${backend//_/-}-$topo/$bench
-account     : $SBATCH_ACCOUNT   partition: $SBATCH_PARTITION
+account     : ${SBATCH_ACCOUNT:-Slurm default}   partition: $SBATCH_PARTITION
 
 environment (definitions in execution order; the first one wins):
 EOF
@@ -173,6 +174,10 @@ matches() {  # matches <value> <space-separated-globs-or-empty>
   return 1
 }
 
+contains() {  # contains <value> <space-separated-values>
+  case " $2 " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+}
+
 require_sbatch
 
 repeats=${GPU_BENCH_REPEATS:-1}
@@ -186,6 +191,7 @@ for bench in "${benchmarks[@]}"; do
     continue
   fi
   for backend in $(gpu_bench_matrix_backends "$bench"); do
+    contains "$backend" "$(gpu_bench_backend_names)" || { skipped=$((skipped+1)); continue; }
     matches "$backend" "${GPU_BENCH_ONLY_BACKENDS:-}" || { skipped=$((skipped+1)); continue; }
     for topo in $(gpu_bench_matrix_topologies "$bench"); do
       matches "$topo" "${GPU_BENCH_ONLY_TOPOS:-}" || { skipped=$((skipped+1)); continue; }

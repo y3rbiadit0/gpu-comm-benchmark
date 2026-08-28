@@ -13,8 +13,8 @@ set -euo pipefail
 # means adding one file there - and one in runtime/, and one directory per
 # experiment.
 #
-# The only prerequisite this cannot install for you is a DPC++ compiler; point
-# DPCPP_HOME at it (see cluster/leonardo/env/sycl.sh).
+# The prerequisites this cannot install are a CUDA-capable DPC++ compiler and
+# hwloc; point DPCPP_HOME and HWLOC_ROOT at them (see the Leonardo README).
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 build_dir="$script_dir/deps"
@@ -90,5 +90,7 @@ for target in "${ordered[@]}"; do
 done
 
 printf '\nbootstrap complete\n'
-printf 'submit an experiment with:\n'
+printf 'build the complete benchmark suite with:\n'
+printf '  make leonardo\n'
+printf 'then submit an experiment with:\n'
 printf '  cluster/harness/launch.sh --all allreduce\n'
