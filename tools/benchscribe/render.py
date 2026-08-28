@@ -82,12 +82,22 @@ def render_markdown(table: SummaryTable, out: TextIO) -> None:
                     f"| Size (n) | Bytes | Backend | {metric.name.value} ({metric.unit}) | "
                     f"Min ({metric.unit}) | GB/s | Delta vs base | Speedup | Trials | Valid |\n"
                 )
-                out.write("| ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | :---: |\n")
+                out.write(
+                    "| ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | :---: |\n"
+                )
                 for n in table.sizes_for(benchmark, topology, case):
                     for row in table.rows_for(benchmark, topology, n, case):
                         bytes_field = "-" if row.nbytes is None else str(row.nbytes)
-                        delta = "N/I" if row.status == Status.NOT_IMPLEMENTED else format_delta(row, table.baseline)
-                        speedup = "N/I" if row.status == Status.NOT_IMPLEMENTED else format_speedup(row, table.baseline)
+                        delta = (
+                            "N/I"
+                            if row.status == Status.NOT_IMPLEMENTED
+                            else format_delta(row, table.baseline)
+                        )
+                        speedup = (
+                            "N/I"
+                            if row.status == Status.NOT_IMPLEMENTED
+                            else format_speedup(row, table.baseline)
+                        )
                         out.write(
                             f"| {row.n} | {bytes_field} | `{row.backend}` | {format_row_number(row, row.value)} "
                             f"| {format_row_number(row, row.value_min)} | {format_row_number(row, row.bandwidth)} "
@@ -113,9 +123,13 @@ def render_fit_markdown(chars: list[Characterization], out: TextIO) -> None:
         show_case = any(char.case for char in by_bench[benchmark])
         case_header = " Case |" if show_case else ""
         case_rule = " --- |" if show_case else ""
-        out.write(f"|{case_header} Topology | Backend | α | B∞ (GB/s) | peak @ | n½ | tail (GB/s) | pts |\n")
+        out.write(
+            f"|{case_header} Topology | Backend | α | B∞ (GB/s) | peak @ | n½ | tail (GB/s) | pts |\n"
+        )
         out.write(f"|{case_rule} --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
-        for char in sorted(by_bench[benchmark], key=lambda item: (item.case, item.topology, item.backend)):
+        for char in sorted(
+            by_bench[benchmark], key=lambda item: (item.case, item.topology, item.backend)
+        ):
             case_field = f" {char.case or '(default)'} |" if show_case else ""
             out.write(
                 f"|{case_field} {char.topology} | `{char.backend}` | {format_number(char.alpha)} {char.unit} "
@@ -128,8 +142,19 @@ def render_fit_markdown(chars: list[Characterization], out: TextIO) -> None:
 def render_fit_csv(chars: list[Characterization], out: TextIO) -> None:
     writer = csv.writer(out)
     writer.writerow(
-        ["benchmark", "case", "topology", "backend", "alpha", "alpha_unit",
-         "binf_gbytes_per_s", "peak_bytes", "nhalf_bytes", "tail_gbytes_per_s", "points"]
+        [
+            "benchmark",
+            "case",
+            "topology",
+            "backend",
+            "alpha",
+            "alpha_unit",
+            "binf_gbytes_per_s",
+            "peak_bytes",
+            "nhalf_bytes",
+            "tail_gbytes_per_s",
+            "points",
+        ]
     )
     for char in chars:
         writer.writerow(

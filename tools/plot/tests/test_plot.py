@@ -28,21 +28,42 @@ from gpu_bench_plot.theme import BACKEND_ORDER, THEMES, colour_for
 
 def make_point(backend, topology, case, n, usec, gbs, **overrides):
     point = {
-        "benchmark": "halo_1d", "topology": topology, "case": case, "backend": backend,
-        "n": n, "bytes": 16 * n, "metric": "usec", "unit": "us",
-        "value_mean": usec, "value_min": usec * 0.95, "gbytes_per_s": gbs,
-        "valid": True, "status": "OK",
+        "benchmark": "halo_1d",
+        "topology": topology,
+        "case": case,
+        "backend": backend,
+        "n": n,
+        "bytes": 16 * n,
+        "metric": "usec",
+        "unit": "us",
+        "value_mean": usec,
+        "value_min": usec * 0.95,
+        "gbytes_per_s": gbs,
+        "valid": True,
+        "status": "OK",
         # One RunStats per independent job, each a full five-number summary -
         # this is what the dist figure turns into a box.
         "runs": [
-            {"job": str(9000 + job), "mean": usec * shift, "median": usec * shift,
-             "p25": usec * shift * 0.96, "p75": usec * shift * 1.05,
-             "minimum": usec * shift * 0.92, "maximum": usec * shift * 1.11,
-             "stddev": usec * 0.03, "iterations": 100}
+            {
+                "job": str(9000 + job),
+                "mean": usec * shift,
+                "median": usec * shift,
+                "p25": usec * shift * 0.96,
+                "p75": usec * shift * 1.05,
+                "minimum": usec * shift * 0.92,
+                "maximum": usec * shift * 1.11,
+                "stddev": usec * 0.03,
+                "iterations": 100,
+            }
             for job, shift in enumerate((0.98, 1.0, 1.03))
         ],
-        "across_runs": {"n_runs": 3, "median": usec, "p25": usec * 0.97,
-                        "p75": usec * 1.05, "stddev": usec * 0.03},
+        "across_runs": {
+            "n_runs": 3,
+            "median": usec,
+            "p25": usec * 0.97,
+            "p75": usec * 1.05,
+            "stddev": usec * 0.03,
+        },
     }
     point.update(overrides)
     return point
@@ -152,36 +173,56 @@ def test_fit_figure_is_required_only_when_asked_for_by_name(tmp_path, points, ca
 def test_fit_figure_renders_from_fit_json(tmp_path, points):
     source = write_points(tmp_path / "points.json", points)
     fit = tmp_path / "fit.json"
-    fit.write_text(json.dumps({
-        "schema_version": 1, "generated": "now", "alpha_max_bytes": 4096,
-        "fits": [
-            {"benchmark": "halo_1d", "case": "steady", "topology": "1n2g",
-             "backend": backend, "unit": "us", "alpha": alpha, "binf_gbs": 200.0,
-             "peak_bytes": 1048576, "nhalf_bytes": alpha * 200.0 * 1e3,
-             "tail_gbs": 190.0, "points": 3}
-            for backend, alpha in (("cuda_mpi", 4.0), ("cuda_nvshmem", 2.0))
-        ],
-    }))
+    fit.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "generated": "now",
+                "alpha_max_bytes": 4096,
+                "fits": [
+                    {
+                        "benchmark": "halo_1d",
+                        "case": "steady",
+                        "topology": "1n2g",
+                        "backend": backend,
+                        "unit": "us",
+                        "alpha": alpha,
+                        "binf_gbs": 200.0,
+                        "peak_bytes": 1048576,
+                        "nhalf_bytes": alpha * 200.0 * 1e3,
+                        "tail_gbs": 190.0,
+                        "points": 3,
+                    }
+                    for backend, alpha in (("cuda_mpi", 4.0), ("cuda_nvshmem", 2.0))
+                ],
+            }
+        )
+    )
     outdir = tmp_path / "figures"
-    assert main(["--points", str(source), "--fit", str(fit),
-                 "--figure", "fit", "--outdir", str(outdir)]) == 0
+    assert (
+        main(
+            ["--points", str(source), "--fit", str(fit), "--figure", "fit", "--outdir", str(outdir)]
+        )
+        == 0
+    )
     rows = list(csv.DictReader((outdir / "halo_1d-fit.csv").open()))
     assert {r["backend"] for r in rows} == {"cuda_mpi", "cuda_nvshmem"}
 
 
 def test_no_matching_benchmark_is_an_error(tmp_path, points):
     source = write_points(tmp_path / "points.json", points)
-    assert main(["--points", str(source), "--benchmark", "nope",
-                 "--outdir", str(tmp_path / "f")]) == 1
+    assert (
+        main(["--points", str(source), "--benchmark", "nope", "--outdir", str(tmp_path / "f")]) == 1
+    )
 
 
 def test_select_size_snaps_to_a_swept_size(points):
     sweep = Sweep(points)
-    assert select_size(sweep, "min") == 16          # n=1   -> 16 bytes
-    assert select_size(sweep, "max") == 1048576     # n=65536
+    assert select_size(sweep, "min") == 16  # n=1   -> 16 bytes
+    assert select_size(sweep, "max") == 1048576  # n=65536
     # An arbitrary byte count lands on the nearest size actually measured,
     # rather than silently producing an empty figure.
-    assert select_size(sweep, "5000") == 4096       # n=256
+    assert select_size(sweep, "5000") == 4096  # n=256
     assert select_size(Sweep([]), "min") is None
 
 
@@ -194,17 +235,23 @@ def test_dist_reports_a_five_number_summary_per_job(tmp_path, points):
     assert rows
     assert all(int(row["bytes"]) == 16 for row in rows), "dist should default to the smallest size"
     for row in rows:
-        low, q1, med, q3, high = (
-            float(row[k]) for k in ("min", "p25", "median", "p75", "max")
-        )
+        low, q1, med, q3, high = (float(row[k]) for k in ("min", "p25", "median", "p75", "max"))
         assert low <= q1 <= med <= q3 <= high
 
 
 def test_dist_skips_runs_without_quartiles(tmp_path):
     """Results predating the percentile fields must not be guessed at."""
     bare = [
-        make_point("cuda_mpi", "1n2g", "steady", n, 4.0 + n, 1.0,
-                   runs=[{"job": "1", "mean": 4.0 + n}], across_runs=None)
+        make_point(
+            "cuda_mpi",
+            "1n2g",
+            "steady",
+            n,
+            4.0 + n,
+            1.0,
+            runs=[{"job": "1", "mean": 4.0 + n}],
+            across_runs=None,
+        )
         for n in (1, 256)
     ]
     source = write_points(tmp_path / "points.json", bare)
@@ -216,8 +263,12 @@ def test_dist_skips_runs_without_quartiles(tmp_path):
 def test_dist_uses_the_requested_size(tmp_path, points, capsys):
     source = write_points(tmp_path / "points.json", points)
     outdir = tmp_path / "figures"
-    assert main(["--points", str(source), "--figure", "dist", "--size", "max",
-                 "--outdir", str(outdir)]) == 0
+    assert (
+        main(
+            ["--points", str(source), "--figure", "dist", "--size", "max", "--outdir", str(outdir)]
+        )
+        == 0
+    )
     assert "1048576 bytes" in capsys.readouterr().err
     rows = list(csv.DictReader((outdir / "halo_1d-dist.csv").open()))
     assert {int(row["bytes"]) for row in rows} == {1048576}
@@ -270,8 +321,9 @@ def test_multiple_benchmarks_get_separate_figure_sets(tmp_path, points):
 
 def test_unknown_benchmark_lists_what_is_available(tmp_path, points, capsys):
     source = write_points(tmp_path / "points.json", points)
-    assert main(["--points", str(source), "--benchmark", "nope",
-                 "--outdir", str(tmp_path / "f")]) == 1
+    assert (
+        main(["--points", str(source), "--benchmark", "nope", "--outdir", str(tmp_path / "f")]) == 1
+    )
     assert "halo_1d" in capsys.readouterr().err
 
 
@@ -286,8 +338,12 @@ def test_sweep_is_accepted_as_an_alias_for_latency(tmp_path, points):
 
 def test_single_rank_topologies_are_excluded_by_default(tmp_path):
     """1n1g has one rank and therefore no communication."""
-    pts = [make_point(bk, tp, "", n, 10.0 + n, 1.0)
-           for bk in ("cuda_mpi", "cuda_nccl") for tp in ("1n1g", "1n4g") for n in (1, 256)]
+    pts = [
+        make_point(bk, tp, "", n, 10.0 + n, 1.0)
+        for bk in ("cuda_mpi", "cuda_nccl")
+        for tp in ("1n1g", "1n4g")
+        for n in (1, 256)
+    ]
     source = write_points(tmp_path / "points.json", pts)
     outdir = tmp_path / "figures"
     assert main(["--points", str(source), "--figure", "latency", "--outdir", str(outdir)]) == 0
@@ -295,34 +351,69 @@ def test_single_rank_topologies_are_excluded_by_default(tmp_path):
     assert {r["topology"] for r in rows} == {"1n4g"}
 
     out2 = tmp_path / "figures2"
-    assert main(["--points", str(source), "--figure", "latency",
-                 "--include-single-rank", "--outdir", str(out2)]) == 0
+    assert (
+        main(
+            [
+                "--points",
+                str(source),
+                "--figure",
+                "latency",
+                "--include-single-rank",
+                "--outdir",
+                str(out2),
+            ]
+        )
+        == 0
+    )
     rows2 = list(csv.DictReader((out2 / "halo_1d-latency.csv").open()))
     assert {r["topology"] for r in rows2} == {"1n1g", "1n4g"}
 
 
 def test_topology_rank_counts():
     from gpu_bench_plot.data import is_single_rank, topology_ranks
+
     assert topology_ranks("1n1g") == 1 and topology_ranks("2n4g") == 8
     assert topology_ranks("weird") is None
     assert is_single_rank("1n1g") and not is_single_rank("1n2g")
-    assert not is_single_rank("weird")   # unparseable is never dropped
+    assert not is_single_rank("weird")  # unparseable is never dropped
 
 
 def test_fit_figure_also_excludes_single_rank(tmp_path, points):
     """draw_fit reads fit.json, not the points, so it needs its own filter."""
     source = write_points(tmp_path / "points.json", points)
     fit = tmp_path / "fit.json"
-    fit.write_text(json.dumps({
-        "schema_version": 1, "generated": "now", "alpha_max_bytes": 4096,
-        "fits": [{"benchmark": "halo_1d", "case": "steady", "topology": tp,
-                  "backend": "cuda_mpi", "unit": "us", "alpha": 4.0, "binf_gbs": 200.0,
-                  "peak_bytes": 1048576, "nhalf_bytes": 8e5, "tail_gbs": 190.0, "points": 3}
-                 for tp in ("1n1g", "1n2g", "1n4g")],
-    }))
+    fit.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "generated": "now",
+                "alpha_max_bytes": 4096,
+                "fits": [
+                    {
+                        "benchmark": "halo_1d",
+                        "case": "steady",
+                        "topology": tp,
+                        "backend": "cuda_mpi",
+                        "unit": "us",
+                        "alpha": 4.0,
+                        "binf_gbs": 200.0,
+                        "peak_bytes": 1048576,
+                        "nhalf_bytes": 8e5,
+                        "tail_gbs": 190.0,
+                        "points": 3,
+                    }
+                    for tp in ("1n1g", "1n2g", "1n4g")
+                ],
+            }
+        )
+    )
     outdir = tmp_path / "figures"
-    assert main(["--points", str(source), "--fit", str(fit),
-                 "--figure", "fit", "--outdir", str(outdir)]) == 0
+    assert (
+        main(
+            ["--points", str(source), "--fit", str(fit), "--figure", "fit", "--outdir", str(outdir)]
+        )
+        == 0
+    )
     rows = list(csv.DictReader((outdir / "halo_1d-fit.csv").open()))
     assert {r["topology"] for r in rows} == {"1n2g", "1n4g"}
 
@@ -331,7 +422,14 @@ def test_multi_node_topologies_sort_by_rank_count():
     """4n4g/8n4g are listed; anything unlisted still orders by ranks, not name."""
     known = ["8n4g", "1n2g", "4n4g", "2n4g", "1n1g", "1n4g", "2n1g"]
     assert sorted(known, key=topology_key) == [
-        "1n1g", "1n2g", "1n4g", "2n1g", "2n4g", "4n4g", "8n4g"]
+        "1n1g",
+        "1n2g",
+        "1n4g",
+        "2n1g",
+        "2n4g",
+        "4n4g",
+        "8n4g",
+    ]
     # 16n4g is not in TOPOLOGY_ORDER; it must still land after 8n4g.
     assert sorted(["16n4g", "8n4g", "4n4g"], key=topology_key) == ["4n4g", "8n4g", "16n4g"]
     assert topology_ranks("4n4g") == 16
@@ -344,12 +442,30 @@ def test_application_benchmarks_get_no_fit_figure(tmp_path, points):
         p["benchmark"] = "cg_step"
     source = write_points(tmp_path / "points.json", points)
     fit = tmp_path / "fit.json"
-    fit.write_text(json.dumps({
-        "schema_version": 1, "generated": "now", "alpha_max_bytes": 4096,
-        "fits": [{"benchmark": "cg_step", "case": "", "topology": "2n4g",
-                  "backend": "cuda_mpi", "unit": "us", "alpha": 4.0, "binf_gbs": 200.0,
-                  "peak_bytes": 4096, "nhalf_bytes": 4096.0, "tail_gbs": 1.0, "points": 1}],
-    }))
+    fit.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "generated": "now",
+                "alpha_max_bytes": 4096,
+                "fits": [
+                    {
+                        "benchmark": "cg_step",
+                        "case": "",
+                        "topology": "2n4g",
+                        "backend": "cuda_mpi",
+                        "unit": "us",
+                        "alpha": 4.0,
+                        "binf_gbs": 200.0,
+                        "peak_bytes": 4096,
+                        "nhalf_bytes": 4096.0,
+                        "tail_gbs": 1.0,
+                        "points": 1,
+                    }
+                ],
+            }
+        )
+    )
     outdir = tmp_path / "figures"
     assert main(["--points", str(source), "--fit", str(fit), "--outdir", str(outdir)]) == 0
     assert not (outdir / "cg_step-fit.png").exists()

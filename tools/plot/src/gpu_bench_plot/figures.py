@@ -21,17 +21,29 @@ def axis_label(case: str, measure: str) -> str:
     return f"{case}\n{measure}" if case else measure
 
 
-def panel_grid(rows: int, cols: int, width: float = 3.5, height: float = 2.9,
-               sharex: bool | str = False, sharey: bool | str = False):
+def panel_grid(
+    rows: int,
+    cols: int,
+    width: float = 3.5,
+    height: float = 2.9,
+    sharex: bool | str = False,
+    sharey: bool | str = False,
+):
     fig, axes = plt.subplots(
-        rows, cols, figsize=(width * cols, height * rows), squeeze=False,
-        constrained_layout=True, sharex=sharex, sharey=sharey,
+        rows,
+        cols,
+        figsize=(width * cols, height * rows),
+        squeeze=False,
+        constrained_layout=True,
+        sharex=sharex,
+        sharey=sharey,
     )
     return fig, axes
 
 
-def draw_sweep(sweep: Sweep, theme: dict, value_axis: str, outdir: Path,
-               stem: str, ext: str) -> Path:
+def draw_sweep(
+    sweep: Sweep, theme: dict, value_axis: str, outdir: Path, stem: str, ext: str
+) -> Path:
     """Latency-or-bandwidth against message size, small-multipled by case x topology."""
     cases, topologies = sweep.cases, sweep.topologies
     # Latency is logarithmic, so one shared scale keeps every panel comparable.
@@ -40,8 +52,10 @@ def draw_sweep(sweep: Sweep, theme: dict, value_axis: str, outdir: Path,
     # line. Share down each column instead, so isolated and steady stay
     # comparable within a topology and each topology keeps a readable range.
     fig, axes = panel_grid(
-        len(cases), len(topologies),
-        sharex=True, sharey=True if value_axis == "latency" else "col",
+        len(cases),
+        len(topologies),
+        sharex=True,
+        sharey=True if value_axis == "latency" else "col",
     )
     handles: dict[str, object] = {}
     rows: list[list] = []
@@ -63,8 +77,15 @@ def draw_sweep(sweep: Sweep, theme: dict, value_axis: str, outdir: Path,
                 if any(y is None for y in ys):
                     continue
                 (line,) = ax.plot(
-                    xs, ys, color=colour, linewidth=2.0, marker="o", markersize=5,
-                    markeredgecolor=theme["surface"], markeredgewidth=1.0, label=backend,
+                    xs,
+                    ys,
+                    color=colour,
+                    linewidth=2.0,
+                    marker="o",
+                    markersize=5,
+                    markeredgecolor=theme["surface"],
+                    markeredgewidth=1.0,
+                    label=backend,
                 )
                 handles.setdefault(backend, line)
 
@@ -72,8 +93,12 @@ def draw_sweep(sweep: Sweep, theme: dict, value_axis: str, outdir: Path,
                     bands = [sweep.band(point) for point in series]
                     if all(band is not None for band in bands):
                         ax.fill_between(
-                            xs, [b[0] for b in bands], [b[1] for b in bands],
-                            color=colour, alpha=0.15, linewidth=0,
+                            xs,
+                            [b[0] for b in bands],
+                            [b[1] for b in bands],
+                            color=colour,
+                            alpha=0.15,
+                            linewidth=0,
                         )
                 for point, y in zip(series, ys, strict=True):
                     rows.append([case, topology, backend, point["bytes"], point["n"], y])
@@ -84,9 +109,7 @@ def draw_sweep(sweep: Sweep, theme: dict, value_axis: str, outdir: Path,
             if row == 0:
                 ax.set_title(topology)
             if col == 0:
-                measure = (
-                    f"latency ({sweep.unit})" if value_axis == "latency" else "GB/s (bus)"
-                )
+                measure = f"latency ({sweep.unit})" if value_axis == "latency" else "GB/s (bus)"
                 ax.set_ylabel(axis_label(case, measure))
             if row == len(cases) - 1:
                 ax.set_xlabel("message size (bytes)")
@@ -94,9 +117,9 @@ def draw_sweep(sweep: Sweep, theme: dict, value_axis: str, outdir: Path,
     ordered = [backend for backend in sweep.backends() if backend in handles]
     figure_legend(fig, [handles[backend] for backend in ordered], ordered, theme)
     fig.suptitle(
-        "Latency vs message size" if value_axis == "latency"
-        else "Bandwidth vs message size",
-        color=theme["text"], fontsize=12,
+        "Latency vs message size" if value_axis == "latency" else "Bandwidth vs message size",
+        color=theme["text"],
+        fontsize=12,
     )
 
     out = outdir / f"{stem}.{ext}"
@@ -104,8 +127,14 @@ def draw_sweep(sweep: Sweep, theme: dict, value_axis: str, outdir: Path,
     plt.close(fig)
     write_table(
         outdir / f"{stem}.csv",
-        ["case", "topology", "backend", "bytes", "n",
-         sweep.unit if value_axis == "latency" else "gbytes_per_s"],
+        [
+            "case",
+            "topology",
+            "backend",
+            "bytes",
+            "n",
+            sweep.unit if value_axis == "latency" else "gbytes_per_s",
+        ],
         rows,
     )
     return out
@@ -118,8 +147,15 @@ FIT_MEASURES = (
 )
 
 
-def draw_fit(fits: list[dict], theme: dict, benchmark: str | None, outdir: Path,
-             stem: str, ext: str, include_single_rank: bool = False) -> Path | None:
+def draw_fit(
+    fits: list[dict],
+    theme: dict,
+    benchmark: str | None,
+    outdir: Path,
+    stem: str,
+    ext: str,
+    include_single_rank: bool = False,
+) -> Path | None:
     """The three alpha-beta numbers as grouped bars, one panel per measure.
 
     Three measures on one pair of axes would be a dual-axis chart, which invents
@@ -159,15 +195,30 @@ def draw_fit(fits: list[dict], theme: dict, benchmark: str | None, outdir: Path,
                     xs.append(position - 0.4 + slot * width + width / 2)
                     ys.append(value)
                     if col == 0:
-                        rows.append([case, topology, backend, fit.get("alpha"),
-                                     fit.get("binf_gbs"), fit.get("nhalf_bytes"),
-                                     fit.get("tail_gbs"), fit.get("points")])
+                        rows.append(
+                            [
+                                case,
+                                topology,
+                                backend,
+                                fit.get("alpha"),
+                                fit.get("binf_gbs"),
+                                fit.get("nhalf_bytes"),
+                                fit.get("tail_gbs"),
+                                fit.get("points"),
+                            ]
+                        )
                 if not xs:
                     continue
                 # width * 0.88 leaves a surface gap between adjacent bars, which
                 # is how they are separated - never a drawn border.
-                bars = ax.bar(xs, ys, width=width * 0.88, color=colour_for(backend, theme),
-                              label=backend, linewidth=0)
+                bars = ax.bar(
+                    xs,
+                    ys,
+                    width=width * 0.88,
+                    color=colour_for(backend, theme),
+                    label=backend,
+                    linewidth=0,
+                )
                 handles.setdefault(backend, bars)
             ax.set_xticks(range(len(topologies)))
             ax.set_xticklabels(topologies)
@@ -189,8 +240,16 @@ def draw_fit(fits: list[dict], theme: dict, benchmark: str | None, outdir: Path,
     plt.close(fig)
     write_table(
         outdir / f"{stem}.csv",
-        ["case", "topology", "backend", f"alpha_{unit}", "binf_gbytes_per_s",
-         "nhalf_bytes", "tail_gbytes_per_s", "points"],
+        [
+            "case",
+            "topology",
+            "backend",
+            f"alpha_{unit}",
+            "binf_gbytes_per_s",
+            "nhalf_bytes",
+            "tail_gbytes_per_s",
+            "points",
+        ],
         rows,
     )
     return out
@@ -206,8 +265,12 @@ def draw_heatmap(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str) -
     must never be the only way to read a value.
     """
     lower_is_better = sweep.metric != "gbytes_per_s"
-    panels = [(case, topo) for case in sweep.cases for topo in sweep.topologies
-              if (case, topo) in sweep.curves]
+    panels = [
+        (case, topo)
+        for case in sweep.cases
+        for topo in sweep.topologies
+        if (case, topo) in sweep.curves
+    ]
     if not panels:
         return None
 
@@ -258,7 +321,9 @@ def draw_heatmap(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str) -
         bottom_row = position // cols == rows_count - 1
         ax.set_xticklabels(
             [format_bytes(size) for size in sizes] if bottom_row else [],
-            rotation=45, ha="right", fontsize=7,
+            rotation=45,
+            ha="right",
+            fontsize=7,
         )
         ax.set_yticks(range(len(listed)))
         ax.set_yticklabels(listed if position % cols == 0 else [], fontsize=8)
@@ -274,14 +339,18 @@ def draw_heatmap(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str) -
     bar.set_label(f"speedup vs {BASELINE_BACKEND} (>1 faster)", color=theme["muted"])
     bar.ax.tick_params(color=theme["muted"], labelcolor=theme["muted"])
     bar.outline.set_visible(False)
-    fig.suptitle(f"Speedup against the {BASELINE_BACKEND} baseline", color=theme["text"],
-                 fontsize=12)
+    fig.suptitle(
+        f"Speedup against the {BASELINE_BACKEND} baseline", color=theme["text"], fontsize=12
+    )
 
     out = outdir / f"{stem}.{ext}"
     fig.savefig(out, bbox_inches="tight")
     plt.close(fig)
-    write_table(outdir / f"{stem}.csv",
-                ["case", "topology", "backend", "bytes", "speedup_vs_baseline"], rows)
+    write_table(
+        outdir / f"{stem}.csv",
+        ["case", "topology", "backend", "bytes", "speedup_vs_baseline"],
+        rows,
+    )
     return out
 
 
@@ -294,8 +363,12 @@ def select_size(sweep: Sweep, requested: str) -> int | None:
     nearest swept size rather than silently plotting nothing.
     """
     sizes = sorted(
-        {point["bytes"] for backends in sweep.curves.values()
-         for series in backends.values() for point in series}
+        {
+            point["bytes"]
+            for backends in sweep.curves.values()
+            for series in backends.values()
+            for point in series
+        }
     )
     if not sizes:
         return None
@@ -327,8 +400,9 @@ def _run_box(run: dict, label: str) -> dict | None:
     }
 
 
-def draw_distribution(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str,
-                      requested_size: str = "min") -> tuple[Path, int] | None:
+def draw_distribution(
+    sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str, requested_size: str = "min"
+) -> tuple[Path, int] | None:
     """Per-job timing distributions at one message size, grouped by backend.
 
     Two dispersions are visible at once, and they mean different things: the
@@ -341,8 +415,12 @@ def draw_distribution(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: s
     if size is None:
         return None
 
-    panels = [(case, topo) for case in sweep.cases for topo in sweep.topologies
-              if (case, topo) in sweep.curves]
+    panels = [
+        (case, topo)
+        for case in sweep.cases
+        for topo in sweep.topologies
+        if (case, topo) in sweep.curves
+    ]
     if not panels:
         return None
 
@@ -361,17 +439,15 @@ def draw_distribution(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: s
 
         centres, labels = [], []
         for slot, backend in enumerate(listed):
-            point = next(
-                (p for p in backends_here[backend] if p["bytes"] == size), None
-            )
+            point = next((p for p in backends_here[backend] if p["bytes"] == size), None)
             centres.append(slot)
             labels.append(backend)
             if point is None:
                 continue
             boxes = [
-                box for box in (
-                    _run_box(run, run.get("job", "")) for run in point.get("runs", [])
-                ) if box is not None
+                box
+                for box in (_run_box(run, run.get("job", "")) for run in point.get("runs", []))
+                if box is not None
             ]
             if not boxes:
                 continue
@@ -380,8 +456,12 @@ def draw_distribution(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: s
             width = 0.8 / len(boxes)
             positions = [slot - 0.4 + index * width + width / 2 for index in range(len(boxes))]
             artists = ax.bxp(
-                boxes, positions=positions, widths=width * 0.8, patch_artist=True,
-                showfliers=False, manage_ticks=False,
+                boxes,
+                positions=positions,
+                widths=width * 0.8,
+                patch_artist=True,
+                showfliers=False,
+                manage_ticks=False,
             )
             for patch in artists["boxes"]:
                 patch.set_facecolor(colour)
@@ -398,8 +478,20 @@ def draw_distribution(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: s
             drew_anything = True
 
             for box in boxes:
-                rows.append([case, topology, backend, size, box["label"], box["whislo"],
-                             box["q1"], box["med"], box["q3"], box["whishi"]])
+                rows.append(
+                    [
+                        case,
+                        topology,
+                        backend,
+                        size,
+                        box["label"],
+                        box["whislo"],
+                        box["q1"],
+                        box["med"],
+                        box["q3"],
+                        box["whishi"],
+                    ]
+                )
 
         # Every panel lists the same backends, so label the bottom row only.
         ax.set_xticks(centres)
@@ -419,7 +511,8 @@ def draw_distribution(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: s
     fig.suptitle(
         f"Timing distribution at {format_bytes(size)} — one box per job; "
         "box = within-run IQR, whiskers = observed min/max",
-        color=theme["text"], fontsize=12,
+        color=theme["text"],
+        fontsize=12,
     )
 
     out = outdir / f"{stem}.{ext}"
@@ -444,8 +537,9 @@ def short_case(case: str) -> str:
     return case.split(",")[0] or "(default)"
 
 
-def draw_cases(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str,
-               reference: float | None = None) -> Path | None:
+def draw_cases(
+    sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str, reference: float | None = None
+) -> Path | None:
     """Metric per case, grouped by backend, one panel per topology.
 
     For a benchmark whose `case` axis is the point of the experiment -- moe's
@@ -488,8 +582,15 @@ def draw_cases(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str,
                 xs.append(position - 0.4 + slot * width + width / 2)
                 ys.append(value)
                 rs.append(value / ref_value if ref_value else 0.0)
-                rows.append([topology, backend, short_case(case), value,
-                             value / ref_value if ref_value else 0.0])
+                rows.append(
+                    [
+                        topology,
+                        backend,
+                        short_case(case),
+                        value,
+                        value / ref_value if ref_value else 0.0,
+                    ]
+                )
             if not xs:
                 continue
             colour = theme["series"][CASE_SLOTS[slot % len(CASE_SLOTS)]]
@@ -500,8 +601,15 @@ def draw_cases(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str,
         if reference is not None:
             bottom.axhline(reference, color=theme["text"], linewidth=1.0, linestyle=(0, (4, 3)))
             if col == 0:
-                bottom.text(-0.4, reference, f" load imbalance {reference:.2f}x",
-                            va="bottom", ha="left", fontsize=7, color=theme["text"])
+                bottom.text(
+                    -0.4,
+                    reference,
+                    f" load imbalance {reference:.2f}x",
+                    va="bottom",
+                    ha="left",
+                    fontsize=7,
+                    color=theme["text"],
+                )
         bottom.axhline(1.0, color=theme["grid"], linewidth=1.0)
 
         for ax in (top, bottom):
@@ -518,8 +626,11 @@ def draw_cases(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str,
 
     ordered = [short_case(c) for c in cases if short_case(c) in handles]
     figure_legend(fig, [handles[c] for c in ordered], ordered, theme)
-    fig.suptitle("Cost by case, and the penalty relative to the reference case",
-                 color=theme["text"], fontsize=12)
+    fig.suptitle(
+        "Cost by case, and the penalty relative to the reference case",
+        color=theme["text"],
+        fontsize=12,
+    )
 
     out = outdir / f"{stem}.{ext}"
     fig.savefig(out, bbox_inches="tight")

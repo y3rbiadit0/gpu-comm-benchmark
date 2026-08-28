@@ -42,35 +42,44 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--points", type=Path, required=True,
-                        help="benchscribe --format json output")
-    parser.add_argument("--fit", type=Path,
-                        help="benchscribe --fit --format json output (needed for the fit figure)")
+    parser.add_argument(
+        "--points", type=Path, required=True, help="benchscribe --format json output"
+    )
+    parser.add_argument(
+        "--fit",
+        type=Path,
+        help="benchscribe --fit --format json output (needed for the fit figure)",
+    )
     parser.add_argument("--figure", choices=(*FIGURES, *FIGURE_ALIASES, "all"), default="all")
     parser.add_argument("--benchmark", help="only plot this benchmark (e.g. halo_1d)")
     parser.add_argument("--outdir", type=Path, default=Path("figures"))
     parser.add_argument(
-        "--imbalance", type=float, default=None,
+        "--imbalance",
+        type=float,
+        default=None,
         help="reference line on the cases figure, e.g. moe's measured expert imbalance "
-             "(3.21 for hotspot80); a bar reaching it is purely imbalance-limited",
+        "(3.21 for hotspot80); a bar reaching it is purely imbalance-limited",
     )
     parser.add_argument(
-        "--size", default="min",
+        "--size",
+        default="min",
         help="message size in bytes for the dist figure: 'min' (default), 'max', "
-             "or a byte count, snapped to the nearest swept size",
+        "or a byte count, snapped to the nearest swept size",
     )
     parser.add_argument(
-        "--include-single-rank", action="store_true",
+        "--include-single-rank",
+        action="store_true",
         help="keep single-rank topologies (1n1g) in the figures; they contain no "
-             "communication and are excluded by default",
+        "communication and are excluded by default",
     )
     parser.add_argument("--theme", choices=tuple(THEMES), default="light")
     parser.add_argument("--format", dest="ext", choices=("svg", "png", "pdf"), default="svg")
     return parser.parse_args(argv)
 
 
-def render_benchmark(payload: dict, fit_payload: dict | None, benchmark: str,
-                     args: argparse.Namespace, theme: dict) -> tuple[list[Path], bool]:
+def render_benchmark(
+    payload: dict, fit_payload: dict | None, benchmark: str, args: argparse.Namespace, theme: dict
+) -> tuple[list[Path], bool]:
     """Draw the requested figures for one benchmark. Returns (paths, ok)."""
     sweep = Sweep(payload.get("points", []), benchmark, args.include_single_rank)
     if not sweep.curves:
@@ -78,8 +87,11 @@ def render_benchmark(payload: dict, fit_payload: dict | None, benchmark: str,
         return [], False
 
     if sweep.excluded_topologies:
-        print(f"{benchmark}: excluding single-rank {', '.join(sweep.excluded_topologies)} "
-              f"(no communication); --include-single-rank to keep", file=sys.stderr)
+        print(
+            f"{benchmark}: excluding single-rank {', '.join(sweep.excluded_topologies)} "
+            f"(no communication); --include-single-rank to keep",
+            file=sys.stderr,
+        )
 
     wanted = FIGURES if args.figure == "all" else (args.figure,)
     written: list[Path] = []
@@ -99,11 +111,13 @@ def render_benchmark(payload: dict, fit_payload: dict | None, benchmark: str,
         else:
             written.append(out)
     if "dist" in wanted:
-        result = draw_distribution(sweep, theme, args.outdir, f"{benchmark}-dist",
-                                   args.ext, args.size)
+        result = draw_distribution(
+            sweep, theme, args.outdir, f"{benchmark}-dist", args.ext, args.size
+        )
         if result is None:
-            print(f"warning: {benchmark}: no per-run quartiles, skipping dist figure",
-                  file=sys.stderr)
+            print(
+                f"warning: {benchmark}: no per-run quartiles, skipping dist figure", file=sys.stderr
+            )
         else:
             out, size = result
             print(f"{benchmark}: dist figure drawn at {size} bytes", file=sys.stderr)
@@ -111,8 +125,10 @@ def render_benchmark(payload: dict, fit_payload: dict | None, benchmark: str,
     if "heatmap" in wanted:
         out = draw_heatmap(sweep, theme, args.outdir, f"{benchmark}-speedup", args.ext)
         if out is None:
-            print(f"warning: {benchmark}: no baseline-relative points, skipping heatmap",
-                  file=sys.stderr)
+            print(
+                f"warning: {benchmark}: no baseline-relative points, skipping heatmap",
+                file=sys.stderr,
+            )
         else:
             written.append(out)
     if "fit" in wanted and is_application_benchmark(benchmark):
@@ -120,11 +136,21 @@ def render_benchmark(payload: dict, fit_payload: dict | None, benchmark: str,
         # construction, so there is no size axis to fit. Only say so when the
         # figure was named explicitly - otherwise --figure all gets noisy.
         if args.figure == "fit":
-            print(f"warning: {benchmark} is an application benchmark (single message "
-                  f"size); an alpha-beta fit is not meaningful", file=sys.stderr)
+            print(
+                f"warning: {benchmark} is an application benchmark (single message "
+                f"size); an alpha-beta fit is not meaningful",
+                file=sys.stderr,
+            )
     elif "fit" in wanted and fit_payload is not None:
-        out = draw_fit(fit_payload.get("fits", []), theme, benchmark,
-                       args.outdir, f"{benchmark}-fit", args.ext, args.include_single_rank)
+        out = draw_fit(
+            fit_payload.get("fits", []),
+            theme,
+            benchmark,
+            args.outdir,
+            f"{benchmark}-fit",
+            args.ext,
+            args.include_single_rank,
+        )
         if out is None:
             print(f"warning: {benchmark}: no usable fits, skipping fit figure", file=sys.stderr)
         else:
@@ -155,15 +181,19 @@ def main(argv: list[str] | None = None) -> int:
     available = sorted({point["benchmark"] for point in points})
     if args.benchmark:
         if args.benchmark not in available:
-            print(f"error: no benchmark {args.benchmark!r} in {args.points}; "
-                  f"found: {', '.join(available)}", file=sys.stderr)
+            print(
+                f"error: no benchmark {args.benchmark!r} in {args.points}; "
+                f"found: {', '.join(available)}",
+                file=sys.stderr,
+            )
             return 1
         benchmarks = [args.benchmark]
     else:
         benchmarks = available
         if len(benchmarks) > 1:
-            print(f"plotting {len(benchmarks)} benchmarks: {', '.join(benchmarks)}",
-                  file=sys.stderr)
+            print(
+                f"plotting {len(benchmarks)} benchmarks: {', '.join(benchmarks)}", file=sys.stderr
+            )
 
     fit_payload = None
     if "fit" in (FIGURES if args.figure == "all" else (args.figure,)):

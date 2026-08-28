@@ -98,13 +98,17 @@ class BenchscribeTest(unittest.TestCase):
 
         markdown = io.StringIO()
         render_markdown(table, markdown)
-        unsupported_line = next(line for line in markdown.getvalue().splitlines() if "`sycl_oneccl`" in line)
+        unsupported_line = next(
+            line for line in markdown.getvalue().splitlines() if "`sycl_oneccl`" in line
+        )
         self.assertIn("N/I", unsupported_line)
         self.assertNotIn("FAIL", unsupported_line)
 
         csv_output = io.StringIO()
         render_csv(table, csv_output)
-        csv_rows = {row["backend"]: row for row in csv.DictReader(io.StringIO(csv_output.getvalue()))}
+        csv_rows = {
+            row["backend"]: row for row in csv.DictReader(io.StringIO(csv_output.getvalue()))
+        }
         self.assertEqual(csv_rows["sycl_oneccl"]["status"], "NOT_IMPLEMENTED")
         self.assertEqual(csv_rows["sycl_oneccl"]["valid"], "N/I")
         self.assertEqual(csv_rows["sycl_oneccl"]["value_mean"], "")
@@ -237,7 +241,6 @@ class BenchscribeTest(unittest.TestCase):
         self.assertNotIn("## allreduce", stdout.getvalue())
         self.assertEqual(stderr.getvalue(), "")
 
-
     def test_fit_json_is_versioned_and_carries_every_characterization(self):
         measurements = self.scan_lines(
             "cuda_mpi_halo_1d n=16 case=steady usec=5 bytes=256 gbytes_per_s=0.05 validation=PASS status=OK",
@@ -259,8 +262,19 @@ class BenchscribeTest(unittest.TestCase):
         self.assertEqual(set(by_backend), {"cuda_mpi", "cuda_nccl"})
         # The plotter reads these keys by name; a rename is a schema break.
         self.assertLessEqual(
-            {"benchmark", "case", "topology", "backend", "unit", "alpha",
-             "binf_gbs", "peak_bytes", "nhalf_bytes", "tail_gbs", "points"},
+            {
+                "benchmark",
+                "case",
+                "topology",
+                "backend",
+                "unit",
+                "alpha",
+                "binf_gbs",
+                "peak_bytes",
+                "nhalf_bytes",
+                "tail_gbs",
+                "points",
+            },
             set(by_backend["cuda_mpi"]),
         )
         self.assertEqual(by_backend["cuda_mpi"]["alpha"], 5.0)

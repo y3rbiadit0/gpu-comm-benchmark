@@ -111,7 +111,9 @@ def relative_delta(base: float | None, value: float | None) -> float | None:
     return (value - base) / base * 100.0
 
 
-def relative_speedup(base: float | None, value: float | None, lower_is_better: bool) -> float | None:
+def relative_speedup(
+    base: float | None, value: float | None, lower_is_better: bool
+) -> float | None:
     if base is None or value is None or base == 0 or value == 0:
         return None
     if lower_is_better:
@@ -152,7 +154,9 @@ class SummaryTable:
         return dict(grouped)
 
     @staticmethod
-    def _select_metrics(grouped: GroupedMeasurements, metric_override: MetricName | None) -> dict[str, MetricSpec]:
+    def _select_metrics(
+        grouped: GroupedMeasurements, metric_override: MetricName | None
+    ) -> dict[str, MetricSpec]:
         if metric_override is not None:
             benchmarks = {benchmark for benchmark, _topology, _n, _case, _backend in grouped}
             return {benchmark: METRIC_SPECS[metric_override] for benchmark in benchmarks}
@@ -160,30 +164,43 @@ class SummaryTable:
         records_by_benchmark: dict[str, list[Measurement]] = defaultdict(list)
         for (benchmark, _topology, _n, _case, _backend), records in grouped.items():
             records_by_benchmark[benchmark].extend(records)
-        return {benchmark: preferred_metric(records) for benchmark, records in records_by_benchmark.items()}
+        return {
+            benchmark: preferred_metric(records)
+            for benchmark, records in records_by_benchmark.items()
+        }
 
     @staticmethod
-    def _aggregate_groups(grouped: GroupedMeasurements, metric_by_benchmark: dict[str, MetricSpec]) -> SummaryGroups:
+    def _aggregate_groups(
+        grouped: GroupedMeasurements, metric_by_benchmark: dict[str, MetricSpec]
+    ) -> SummaryGroups:
         groups: SummaryGroups = defaultdict(dict)
         for (benchmark, topology, n, case, backend), records in grouped.items():
             metric = metric_by_benchmark[benchmark]
-            supported_records = [record for record in records if record.status == Status.OK and record.valid]
+            supported_records = [
+                record for record in records if record.status == Status.OK and record.valid
+            ]
             metric_values = [
                 value
-                for value in (parse_float(record.fields.get(metric.name.value)) for record in supported_records)
+                for value in (
+                    parse_float(record.fields.get(metric.name.value))
+                    for record in supported_records
+                )
                 if value is not None
             ]
             bandwidths = [
                 value
                 for value in (
-                    parse_float(record.fields.get(MetricName.GBYTES_PER_S.value)) for record in supported_records
+                    parse_float(record.fields.get(MetricName.GBYTES_PER_S.value))
+                    for record in supported_records
                 )
                 if value is not None and value > 0.0
             ]
             nbytes = next(
                 (
                     int(value)
-                    for value in (parse_float(record.fields.get("bytes")) for record in supported_records)
+                    for value in (
+                        parse_float(record.fields.get("bytes")) for record in supported_records
+                    )
                     if value is not None
                 ),
                 None,
@@ -219,7 +236,9 @@ class SummaryTable:
         return sorted({key.case for key in self.groups if key.benchmark == benchmark})
 
     def topologies_for(self, benchmark: str, case: str = "") -> list[str]:
-        return sorted({key.topology for key in self.groups if key.benchmark == benchmark and key.case == case})
+        return sorted(
+            {key.topology for key in self.groups if key.benchmark == benchmark and key.case == case}
+        )
 
     def sizes_for(self, benchmark: str, topology: str, case: str = "") -> list[int]:
         return sorted(
@@ -243,7 +262,10 @@ class SummaryTable:
         metric = self.metric_by_benchmark[benchmark]
         base_summary = summaries.get(self.baseline)
         base_value = metric_value_for(base_summary, metric) if base_summary is not None else None
-        rows = [self._row_from_summary(key, metric, summary, base_value) for summary in summaries.values()]
+        rows = [
+            self._row_from_summary(key, metric, summary, base_value)
+            for summary in summaries.values()
+        ]
         return sorted(rows, key=self._row_sort_key)
 
     def _row_from_summary(

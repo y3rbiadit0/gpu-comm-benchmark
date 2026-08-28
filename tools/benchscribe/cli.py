@@ -27,11 +27,21 @@ relative to the cuda_mpi baseline.
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=DESCRIPTION, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("results_dir", nargs="?", default="results", help="results directory (default: results)")
-    parser.add_argument("--format", choices=[item.value for item in OutputFormat], default=OutputFormat.MARKDOWN.value)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "results_dir", nargs="?", default="results", help="results directory (default: results)"
+    )
+    parser.add_argument(
+        "--format",
+        choices=[item.value for item in OutputFormat],
+        default=OutputFormat.MARKDOWN.value,
+    )
     parser.add_argument("--benchmark", help="only summarize this benchmark (e.g. allreduce)")
-    parser.add_argument("--metric", choices=[item.value for item in MetricName], help="override the primary metric")
+    parser.add_argument(
+        "--metric", choices=[item.value for item in MetricName], help="override the primary metric"
+    )
     parser.add_argument(
         "--fit",
         action="store_true",
@@ -49,7 +59,9 @@ def main(argv: list[str] | None = None) -> int:
 
     measurements = scan_results(results_dir)
     if args.benchmark:
-        measurements = [measurement for measurement in measurements if measurement.benchmark == args.benchmark]
+        measurements = [
+            measurement for measurement in measurements if measurement.benchmark == args.benchmark
+        ]
     if not measurements:
         print(f"error: no benchmark lines found under {results_dir}", file=sys.stderr)
         return 1

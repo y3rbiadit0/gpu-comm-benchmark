@@ -17,14 +17,20 @@ from pathlib import Path
 
 # (alpha_us, Binf_GB/s) per backend, for intra-node and inter-node paths.
 INTRA = {
-    "cuda_mpi": (4.2, 210.0), "cuda_nccl": (9.5, 240.0),
-    "cuda_nvshmem": (2.1, 250.0), "oshmpi": (5.8, 120.0),
-    "sycl_mpi": (4.6, 200.0), "sycl_oneccl": (11.0, 230.0),
+    "cuda_mpi": (4.2, 210.0),
+    "cuda_nccl": (9.5, 240.0),
+    "cuda_nvshmem": (2.1, 250.0),
+    "oshmpi": (5.8, 120.0),
+    "sycl_mpi": (4.6, 200.0),
+    "sycl_oneccl": (11.0, 230.0),
 }
 INTER = {
-    "cuda_mpi": (7.8, 22.0), "cuda_nccl": (14.0, 24.0),
-    "cuda_nvshmem": (3.6, 18.0), "oshmpi": (9.9, 14.0),
-    "sycl_mpi": (8.4, 21.0), "sycl_oneccl": (16.0, 23.0),
+    "cuda_mpi": (7.8, 22.0),
+    "cuda_nccl": (14.0, 24.0),
+    "cuda_nvshmem": (3.6, 18.0),
+    "oshmpi": (9.9, 14.0),
+    "sycl_mpi": (8.4, 21.0),
+    "sycl_oneccl": (16.0, 23.0),
 }
 TOPOLOGIES = {"1n2g": (INTRA, 2), "1n4g": (INTRA, 4), "2n1g": (INTER, 2), "2n4g": (INTER, 8)}
 HALO_WIDTHS = [1 << k for k in range(0, 21, 2)]

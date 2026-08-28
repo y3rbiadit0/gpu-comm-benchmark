@@ -109,8 +109,9 @@ def write_table(path: Path, header: list[str], rows: list[list]) -> None:
 class Sweep:
     """Benchscribe points reshaped into (case, topology) -> backend -> curve."""
 
-    def __init__(self, points: list[dict], benchmark: str | None = None,
-                 include_single_rank: bool = False):
+    def __init__(
+        self, points: list[dict], benchmark: str | None = None, include_single_rank: bool = False
+    ):
         from .theme import BACKEND_ORDER
 
         self._backend_order = BACKEND_ORDER
