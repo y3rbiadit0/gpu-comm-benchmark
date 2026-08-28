@@ -68,9 +68,10 @@ network transports.
 
 ## Versioning And Releases
 
-`VERSION` is the single source of truth for the benchmark suite version. CMake
-validates it, exposes it as `PROJECT_VERSION`, and embeds it in benchmark output.
-Do not duplicate the suite version in another source file.
+The `VERSION` argument to `project()` in the top-level `CMakeLists.txt` is the
+single source of truth for the benchmark suite version. CMake exposes it as
+`PROJECT_VERSION` and embeds it in benchmark output. Do not duplicate the suite
+version in another source file.
 
 Before 1.0, increment the version as follows:
 
@@ -90,12 +91,14 @@ version and changes only when that package is released.
 
 To make a release:
 
-1. Update `VERSION` and move the relevant `CHANGELOG.md` entries from
-   `[Unreleased]` to `[<version>] - YYYY-MM-DD`.
+1. Update the top-level `project(... VERSION <version> ...)` declaration and move
+   the relevant `CHANGELOG.md` entries from `[Unreleased]` to
+   `[<version>] - YYYY-MM-DD`.
 2. Run the CPU test commands above and all affected GPU build and benchmark
    presets.
 3. Commit the release changes and create an annotated tag whose name exactly
-   matches `VERSION`, for example `git tag -a 0.2.0 -m "Release 0.2.0"`.
+   matches the project version, for example
+   `git tag -a 0.2.0 -m "Release 0.2.0"`.
 4. Build release binaries from the tag. Their records will contain both
    `suite_version=<version>` and `source_revision=<tag>`.
 

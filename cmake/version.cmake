@@ -1,12 +1,3 @@
-file(READ "${CMAKE_CURRENT_LIST_DIR}/../VERSION" GPU_BENCH_VERSION)
-string(STRIP "${GPU_BENCH_VERSION}" GPU_BENCH_VERSION)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_LIST_DIR}/../VERSION")
-
-if(NOT GPU_BENCH_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
-  message(FATAL_ERROR "VERSION must contain a semantic version such as 0.1.0")
-endif()
-
 set(GPU_BENCH_SOURCE_REVISION "" CACHE STRING
     "Source revision embedded in benchmark output (auto-detected when empty)")
 
