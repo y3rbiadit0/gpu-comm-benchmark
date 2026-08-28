@@ -5,13 +5,13 @@ against two transports, producing two runtime backends from the same SYCL source
 
 | Harness backend | Source | Communication library | Leonardo preset |
 | --- | --- | --- | --- |
-| `cuda_mpi` | `src/mpi/cuda` | HPC-X MPI | `leonardo-cuda-mpi` |
-| `sycl_mpi` | `src/mpi/sycl` | HPC-X MPI | `leonardo-sycl-mpi` |
-| `cuda_nccl` | `src/xccl/cuda` | NCCL | `leonardo-cuda-nccl` |
-| `cuda_nvshmem` | `src/shmem/nvshmem` | NVSHMEM | `leonardo-cuda-nvshmem` |
-| `oshmpi` | `src/shmem/oshmpi` | OSHMPI | `leonardo-oshmpi` |
-| `sycl_oneccl` | `src/xccl/sycl` | oneCCL with NCCL | `leonardo-sycl-oneccl` |
-| `sycl_oneccl_oshmpi` | `src/xccl/sycl` | oneCCL with OSHMPI | `leonardo-sycl-oneccl-oshmpi` |
+| `cuda_mpi` | [`src/mpi/cuda`](../../src/mpi/cuda/README.md) | HPC-X MPI | `leonardo-cuda-mpi` |
+| `sycl_mpi` | [`src/mpi/sycl`](../../src/mpi/sycl/README.md) | HPC-X MPI | `leonardo-sycl-mpi` |
+| `cuda_nccl` | [`src/xccl/cuda`](../../src/xccl/cuda/README.md) | NCCL | `leonardo-cuda-nccl` |
+| `cuda_nvshmem` | [`src/shmem/nvshmem`](../../src/shmem/nvshmem/README.md) | NVSHMEM | `leonardo-cuda-nvshmem` |
+| `oshmpi` | [`src/shmem/oshmpi`](../../src/shmem/oshmpi/README.md) | OSHMPI | `leonardo-oshmpi` |
+| `sycl_oneccl` | [`src/xccl/sycl`](../../src/xccl/sycl/README.md) | oneCCL with NCCL | `leonardo-sycl-oneccl` |
+| `sycl_oneccl_oshmpi` | [`src/xccl/sycl`](../../src/xccl/sycl/README.md) | oneCCL with OSHMPI | `leonardo-sycl-oneccl-oshmpi` |
 
 ## Declared Experiment Coverage
 
@@ -21,12 +21,12 @@ library build or transport.
 
 | Benchmark | MPI, NCCL, NVSHMEM, OSHMPI, oneCCL/NCCL | oneCCL/OSHMPI |
 | --- | :---: | :---: |
-| `pingpong` | Yes | No |
-| `halo_1d` | Yes | No |
-| `allreduce` | Yes | Yes |
-| `alltoall` | Yes | Yes |
-| `moe` | Yes | No |
-| `cg_step` | Yes | Yes |
+| [`pingpong`](../benchmarks/pingpong.md) | Yes | No |
+| [`halo_1d`](../benchmarks/halo-1d.md) | Yes | No |
+| [`allreduce`](../benchmarks/allreduce.md) | Yes | Yes |
+| [`alltoall`](../benchmarks/alltoall.md) | Yes | Yes |
+| [`cg_step`](../benchmarks/cg-step.md) | Yes | Yes |
+| [`moe`](../benchmarks/moe.md) | Yes | No |
 
 The common column represents `cuda_mpi`, `sycl_mpi`, `cuda_nccl`,
 `cuda_nvshmem`, `oshmpi`, and `sycl_oneccl`.

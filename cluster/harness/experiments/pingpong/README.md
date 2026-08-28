@@ -4,7 +4,10 @@
 initiator sends a GPU-resident buffer and waits for the reply; reports divide the
 measured round trip by two.
 
-## Interface
+The complete operation, timing, validation, and bandwidth contract is in
+[`docs/benchmarks/pingpong.md`](../../../../docs/benchmarks/pingpong.md).
+
+## Configuration
 
 ```text
 <max_elements> [iterations] [warmup] [comma-separated message sizes]
@@ -18,7 +21,7 @@ Only `1n2g` and `2n1g` are valid because the benchmark requires two endpoints.
 All standard backends are declared; see the
 [support matrix](../../../../docs/reference/support-matrix.md).
 
-## Submit
+## Run
 
 ```bash
 cluster/harness/launch.sh pingpong cuda_mpi 1n2g

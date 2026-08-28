@@ -5,7 +5,10 @@ a five-point stencil over a column-slab decomposition, one neighbor halo
 exchange, and two scalar global sums. It is an application pattern, not a full
 solver.
 
-## Interface
+The complete operation, timing, validation, and metric contract is in
+[`docs/benchmarks/cg-step.md`](../../../../docs/benchmarks/cg-step.md).
+
+## Configuration
 
 ```text
 <grid_side> [iterations] [warmup]
@@ -19,7 +22,7 @@ Declared topologies are `1n1g`, `1n2g`, `1n4g`, `2n1g`, `2n4g`, `4n4g`, and
 `8n4g`. At one rank, the benchmark provides a compute and local-reduction
 baseline.
 
-## Submit
+## Run
 
 ```bash
 cluster/harness/launch.sh cg_step cuda_mpi 1n4g

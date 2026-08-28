@@ -3,6 +3,8 @@
 This backend uses oneCCL with SYCL USM device buffers. The same sources are built
 against NCCL and OSHMPI oneCCL transports on Leonardo.
 
+## Implemented operations
+
 | Benchmark | oneCCL operation |
 | --- | --- |
 | `pingpong` | Point-to-point send and receive |
@@ -17,7 +19,7 @@ recognizes an unavailable point-to-point API and emits
 `status=NOT_IMPLEMENTED validation=SKIP`; unexpected failures in other binaries
 remain errors.
 
-## Build And Run
+## Build
 
 Leonardo provides two presets and runtime backend names:
 
@@ -32,9 +34,12 @@ cmake --preset leonardo-sycl-oneccl
 cmake --build --preset leonardo-sycl-oneccl
 cmake --preset leonardo-sycl-oneccl-oshmpi
 cmake --build --preset leonardo-sycl-oneccl-oshmpi
-cluster/harness/launch.sh allreduce sycl_oneccl 1n4g
-cluster/harness/launch.sh allreduce sycl_oneccl_oshmpi 1n4g
 ```
 
 The [support matrix](../../../docs/reference/support-matrix.md) lists which
 benchmarks are declared for each transport.
+
+For benchmark semantics, see the
+[benchmark contracts](../../../docs/README.md#benchmark-contracts). For
+arguments, defaults, topologies, and launch examples, see the
+[experiment operations](../../../cluster/harness/README.md#experiment-operations).

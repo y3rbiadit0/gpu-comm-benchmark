@@ -2,6 +2,8 @@
 
 This backend uses NVSHMEM symmetric GPU buffers and one-sided or team operations.
 
+## Implemented operations
+
 | Benchmark | NVSHMEM operation |
 | --- | --- |
 | `pingpong` | Persistent device-initiated puts and completion signals |
@@ -15,7 +17,7 @@ The ping-pong and halo implementations use cooperative kernels so communication
 can be device initiated. On proxy-based inter-node transports, their grid size
 is capped by default; `GPU_BENCH_NVSHMEM_MAX_BLOCKS` overrides the cap.
 
-## Build And Run
+## Build
 
 Leonardo provides NVSHMEM through NVHPC and uses the
 `leonardo-cuda-nvshmem` preset:
@@ -24,8 +26,12 @@ Leonardo provides NVSHMEM through NVHPC and uses the
 source cluster/leonardo/environment.sh cuda
 cmake --preset leonardo-cuda-nvshmem
 cmake --build --preset leonardo-cuda-nvshmem
-cluster/harness/launch.sh halo_1d cuda_nvshmem 1n4g
 ```
 
 The [halo analysis](../../../docs/analysis/halo-1d-methodology.md) explains the
 device-initiated timing and transport considerations.
+
+For benchmark semantics, see the
+[benchmark contracts](../../../docs/README.md#benchmark-contracts). For
+arguments, defaults, topologies, and launch examples, see the
+[experiment operations](../../../cluster/harness/README.md#experiment-operations).

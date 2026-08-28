@@ -31,10 +31,12 @@ uv run --project tools/plot ruff check tools/plot
 
 - Keep shared timing, reporting, validation, and statistics behavior under
   `include/`; do not duplicate it in individual backends.
-- Add benchmark semantics and defaults under
+- Define operation semantics, timing, validation, and metrics under
+  `docs/benchmarks`, and keep defaults and launch behavior under
   `cluster/harness/experiments/<benchmark>`.
 - Keep compiler modules, library paths, launchers, and transport tuning under
-  `cluster/<name>`.
+  `cluster/<name>`. Benchmark-level collective policy may remain with the shared
+  experiment when it is part of the measured configuration.
 - Preserve the output contract in
   [`docs/reference/output-schema.md`](docs/reference/output-schema.md).
   Incompatible Benchscribe JSON changes require a schema-version update and a
@@ -49,10 +51,16 @@ uv run --project tools/plot ruff check tools/plot
 2. Add the benchmark to `cluster/harness/matrix.sh` with its valid backends and
    topologies.
 3. Add `cluster/harness/experiments/<benchmark>/common.sh` for arguments and
-   defaults, plus a concise README describing the measured operation.
-4. Confirm that every implementation emits the standardized report fields and
+   defaults, plus a concise operational README linking the benchmark contract.
+4. Add a kebab-case `docs/benchmarks/<benchmark-doc>.md` defining the operation,
+   timing boundary, validation, metrics, and implementation completion
+   differences.
+5. Add the contract to `docs/README.md` and the root benchmark table, add the
+   operational guide to `cluster/harness/README.md`, and update the support
+   matrix.
+6. Confirm that every implementation emits the standardized report fields and
    handles unsupported capabilities explicitly.
-5. Add focused tests for shared parsing, reporting, or statistical behavior.
+7. Add focused tests for shared parsing, reporting, or statistical behavior.
 
 ## Adding A Backend Or Cluster
 

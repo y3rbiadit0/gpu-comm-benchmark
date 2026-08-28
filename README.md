@@ -13,19 +13,21 @@ libraries support both programming models.
 
 | Benchmark | Kind | Measures |
 | --- | --- | --- |
-| [`pingpong`](cluster/harness/experiments/pingpong/README.md) | Microbenchmark | Two-endpoint one-way latency and bandwidth |
+| [`pingpong`](docs/benchmarks/pingpong.md) | Microbenchmark | Two-endpoint one-way latency and bandwidth |
 | [`halo_1d`](docs/benchmarks/halo-1d.md) | Microbenchmark | Neighbor exchange in a periodic ring |
-| [`allreduce`](cluster/harness/experiments/allreduce/README.md) | Microbenchmark | Collective sum latency and bandwidth |
-| [`alltoall`](cluster/harness/experiments/alltoall/README.md) | Microbenchmark | Personalized exchange and bus bandwidth |
-| [`cg_step`](cluster/harness/experiments/cg_step/README.md) | Application pattern | SpMV halo exchange followed by two reductions |
-| [`moe`](cluster/harness/experiments/moe/README.md) | Application pattern | Variable, skewed mixture-of-experts traffic |
+| [`allreduce`](docs/benchmarks/allreduce.md) | Microbenchmark | Collective sum latency and bandwidth |
+| [`alltoall`](docs/benchmarks/alltoall.md) | Microbenchmark | Personalized exchange and bus bandwidth |
+| [`cg_step`](docs/benchmarks/cg-step.md) | Application pattern | Stencil halo exchange followed by two reductions |
+| [`moe`](docs/benchmarks/moe.md) | Application pattern | Variable, skewed mixture-of-experts traffic |
 
 Microbenchmarks sweep message size. Application patterns use a fixed problem
 size and sweep rank count, testing whether isolated communication results predict
 the behavior of a mixed workload. The rationale for this suite is documented in
 [`docs/design/benchmark-selection.md`](docs/design/benchmark-selection.md).
+Defaults, supported topologies, and launch examples are in the
+[experiment operations](cluster/harness/README.md#experiment-operations).
 
-## Implementations
+## Backend implementations
 
 | Model | Backend | Implementation |
 | --- | --- | --- |
@@ -117,7 +119,7 @@ See [`tools/README.md`](tools/README.md) for the analysis workflow and
 
 ## Project Documentation
 
-- [`docs/README.md`](docs/README.md): benchmark design and analysis notes
+- [`docs/README.md`](docs/README.md): benchmark contracts, design, reference, and analysis
 - [`cluster/README.md`](cluster/README.md): cluster integration and supported systems
 - [`CHANGELOG.md`](CHANGELOG.md): release history and pending changes
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): development and contribution workflow

@@ -4,7 +4,10 @@
 to owner ranks with variable counts, then returned through the inverse exchange.
 It measures dispatch and combine together.
 
-## Interface
+The complete operation, timing, validation, and metric contract is in
+[`docs/benchmarks/moe.md`](../../../../docs/benchmarks/moe.md).
+
+## Configuration
 
 ```text
 <tokens_per_rank> [hidden] [iterations] [warmup] [comma-separated routing cases]
@@ -22,7 +25,7 @@ iterations, and 20 warmup iterations. It runs three deterministic distributions:
 Declared topologies are `1n1g`, `1n2g`, `1n4g`, `2n1g`, `2n4g`, `4n4g`, and
 `8n4g`.
 
-## Submit
+## Run
 
 ```bash
 cluster/harness/launch.sh moe cuda_mpi 1n4g

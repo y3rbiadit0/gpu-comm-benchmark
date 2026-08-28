@@ -3,7 +3,10 @@
 `allreduce` measures an element-wise float32 sum over GPU-resident buffers. Every
 rank contributes the same element count and receives the result.
 
-## Interface
+The complete operation, timing, validation, and bandwidth contract is in
+[`docs/benchmarks/allreduce.md`](../../../../docs/benchmarks/allreduce.md).
+
+## Configuration
 
 ```text
 <max_elements> [iterations] [warmup] [comma-separated message sizes]
@@ -16,7 +19,7 @@ powers of two.
 Declared topologies are `1n1g`, `1n2g`, `1n4g`, `2n1g`, `2n4g`, `4n4g`, and
 `8n4g`. The single-rank case is a control rather than a network measurement.
 
-## Submit
+## Run
 
 ```bash
 cluster/harness/launch.sh allreduce cuda_mpi 1n4g

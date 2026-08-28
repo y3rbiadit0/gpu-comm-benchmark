@@ -1,8 +1,9 @@
 # Experiment Harness
 
 The harness turns a `(benchmark, backend, topology)` cell into a scheduler job.
-It owns experiment arguments and result collection but contains no compiler
-modules, scheduler account, install prefix, or transport tuning.
+It owns experiment defaults, benchmark-level collective policy, and result
+collection but contains no compiler modules, scheduler account, install prefix,
+or machine-specific transport tuning.
 
 ## Launch
 
@@ -30,6 +31,23 @@ GPU_BENCH_CLUSTER=<name> cluster/harness/launch.sh --dry-run --all
 The topology syntax is `<nodes>n<gpus-per-node>g`; one rank drives one GPU.
 `matrix.sh` defines the valid benchmark, backend, and topology combinations.
 
+## Experiment operations
+
+| Benchmark | Operational guide | Contract |
+| --- | --- | --- |
+| `pingpong` | [`experiments/pingpong`](experiments/pingpong/README.md) | [`docs/benchmarks/pingpong.md`](../../docs/benchmarks/pingpong.md) |
+| `halo_1d` | [`experiments/halo_1d`](experiments/halo_1d/README.md) | [`docs/benchmarks/halo-1d.md`](../../docs/benchmarks/halo-1d.md) |
+| `allreduce` | [`experiments/allreduce`](experiments/allreduce/README.md) | [`docs/benchmarks/allreduce.md`](../../docs/benchmarks/allreduce.md) |
+| `alltoall` | [`experiments/alltoall`](experiments/alltoall/README.md) | [`docs/benchmarks/alltoall.md`](../../docs/benchmarks/alltoall.md) |
+| `cg_step` | [`experiments/cg_step`](experiments/cg_step/README.md) | [`docs/benchmarks/cg-step.md`](../../docs/benchmarks/cg-step.md) |
+| `moe` | [`experiments/moe`](experiments/moe/README.md) | [`docs/benchmarks/moe.md`](../../docs/benchmarks/moe.md) |
+
+Contracts define benchmark semantics, timing, validation, metrics, and
+command-line meaning. These operational guides repeat the invocation syntax for
+convenience and define harness defaults, topology constraints, overrides, and
+launch examples. Library mappings and build instructions are in the
+[backend implementations](../../src/README.md).
+
 ## Overrides
 
 Experiment defaults are environment variables inherited by each job. Common
@@ -56,7 +74,7 @@ GPU_BENCH_MSG_SIZES=1,1024 GPU_BENCH_NTRIALS=1 \
   cluster/harness/launch.sh allreduce cuda_mpi 1n4g
 ```
 
-## Results And Profiling
+## Results and profiling
 
 Each trial writes separate standard output and error files:
 
@@ -84,7 +102,7 @@ summaries.
 The harness reaches machine-specific behavior only through
 `cluster/<name>/cluster.sh`.
 
-## Adding A Cluster
+## Adding a cluster
 
 Create `cluster/<name>/cluster.sh` and the environment/runtime files it dispatches
 to. The cluster interface provides:

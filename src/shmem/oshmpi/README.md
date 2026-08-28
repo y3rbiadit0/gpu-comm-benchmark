@@ -3,6 +3,8 @@
 This backend uses OSHMPI's OpenSHMEM API and CUDA memory-space extension for
 symmetric GPU buffers.
 
+## Implemented operations
+
 | Benchmark | OSHMPI operation |
 | --- | --- |
 | `pingpong` | One-sided puts, device completion, and barrier handshake |
@@ -16,7 +18,7 @@ The barrier-based neighbor paths avoid passive-target progress deadlocks on the
 validated inter-node transport. Barrier and device-completion costs remain in
 the measured operation.
 
-## Build And Run
+## Build
 
 Leonardo's bootstrap installs OSHMPI, and `leonardo-oshmpi` builds the backend:
 
@@ -25,10 +27,9 @@ Leonardo's bootstrap installs OSHMPI, and `leonardo-oshmpi` builds the backend:
 source cluster/leonardo/environment.sh cuda
 cmake --preset leonardo-oshmpi
 cmake --build --preset leonardo-oshmpi
-cluster/harness/launch.sh allreduce oshmpi 1n4g
 ```
 
-## CUDA Memory Space
+## CUDA memory space
 
 `oshmpi_space.{h,c}` wraps the extension lifecycle used by every benchmark:
 
@@ -44,3 +45,8 @@ shmemx_space_create
 
 Buffers are released with `shmem_free` before their CUDA memory space is detached
 and destroyed.
+
+For benchmark semantics, see the
+[benchmark contracts](../../../docs/README.md#benchmark-contracts). For
+arguments, defaults, topologies, and launch examples, see the
+[experiment operations](../../../cluster/harness/README.md#experiment-operations).

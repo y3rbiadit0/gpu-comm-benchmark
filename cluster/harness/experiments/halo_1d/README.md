@@ -6,7 +6,7 @@ GPU-resident halo with both neighbors over a swept halo width.
 The complete buffer, timing, bandwidth, validation, and backend contract is in
 [`docs/benchmarks/halo-1d.md`](../../../../docs/benchmarks/halo-1d.md).
 
-## Interface
+## Configuration
 
 ```text
 <max_halo_elements> [iterations] [warmup] [comma-separated halo sizes]
@@ -20,7 +20,7 @@ Valid topologies are `1n2g`, `1n4g`, `2n1g`, `2n4g`, `4n4g`, and `8n4g`.
 The single-rank control is excluded because a periodic ring needs at least two
 ranks.
 
-## Submit
+## Run
 
 ```bash
 cluster/harness/launch.sh halo_1d cuda_mpi 1n4g

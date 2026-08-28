@@ -3,6 +3,8 @@
 This backend uses NCCL for GPU-resident communication and MPI only for process
 launch, NCCL bootstrap, and result collection.
 
+## Implemented operations
+
 | Benchmark | NCCL operation |
 | --- | --- |
 | `pingpong` | Matched point-to-point send and receive |
@@ -15,7 +17,7 @@ launch, NCCL bootstrap, and result collection.
 NCCL has no dedicated all-to-all or halo collective; grouped point-to-point
 operations are its native expression of those patterns.
 
-## Build And Run
+## Build
 
 Leonardo provides NCCL through NVHPC and uses the `leonardo-cuda-nccl` preset:
 
@@ -23,8 +25,12 @@ Leonardo provides NCCL through NVHPC and uses the `leonardo-cuda-nccl` preset:
 source cluster/leonardo/environment.sh cuda
 cmake --preset leonardo-cuda-nccl
 cmake --build --preset leonardo-cuda-nccl
-cluster/harness/launch.sh allreduce cuda_nccl 1n4g
 ```
 
 For another cluster, provide `NCCL_INCLUDE_DIR` and `NCCL_LIBRARY` in a CMake
 preset and register the resulting backend with the harness.
+
+For benchmark semantics, see the
+[benchmark contracts](../../../docs/README.md#benchmark-contracts). For
+arguments, defaults, topologies, and launch examples, see the
+[experiment operations](../../../cluster/harness/README.md#experiment-operations).
