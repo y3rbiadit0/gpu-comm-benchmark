@@ -1,25 +1,31 @@
 # CUDA + NVSHMEM
 
-CUDA examples using NVSHMEM symmetric buffers.
+This backend uses NVSHMEM symmetric GPU buffers and one-sided or team operations.
 
-## Targets
+| Benchmark | NVSHMEM operation |
+| --- | --- |
+| `pingpong` | Persistent device-initiated puts and completion signals |
+| `halo_1d` | Cooperative multi-block puts with neighbor signals |
+| `allreduce` | `nvshmem_float_sum_reduce` |
+| `alltoall` | `nvshmem_float_alltoall` |
+| `cg_step` | Host-driven puts, barrier, and two double reductions |
+| `moe` | Variable-count puts with quiet and barrier completion |
 
-| Target | Problem | Communication model |
-| --- | --- | --- |
-| `cuda_nvshmem_halo_1d` | Comm-only 1D halo exchange, periodic ring, swept halo width. | A persistent cooperative kernel (`nvshmemx_collective_launch` + `grid.sync()`) runs each measured batch in one launch. Multiple blocks move halo chunks, complete their NBI puts, then block 0 emits one completion signal per direction. Inter-node the grid is capped (8 blocks by default; `GPU_BENCH_NVSHMEM_MAX_BLOCKS` overrides) to avoid flooding the host-proxy path when IBGDA is disabled. See [`docs/analysis/halo_1d-crossover.md`](../../../docs/analysis/halo_1d-crossover.md). |
-| `cuda_nvshmem_pingpong` | Two-endpoint one-way latency/bandwidth, internal size sweep. | Device-initiated persistent cooperative kernel: the payload is split across a multi-block grid (`nvshmemx_float_put_nbi_block` per chunk, `grid.sync()` carrying the leg dependency), then block 0 raises one `nvshmemx_signal_op` per leg and the peer waits on it (NVSHMEM p2p sync is device-only). Multi-block because one block is SM-limited, not link-limited; the same transport-aware block cap as `halo_1d` applies inter-node. |
-| `cuda_nvshmem_allreduce` | Float32 sum allreduce latency/bandwidth, internal size sweep. | `nvshmem_float_sum_reduce` over device-symmetric buffers. |
-| `cuda_nvshmem_alltoall` | All-to-all personalized exchange (bisection bandwidth). | Native `nvshmem_float_alltoall` team collective over symmetric buffers. |
-| `cuda_nvshmem_cg_step` | CG iteration skeleton (SpMV halo + two reductions). | Host-driven `nvshmem_float_put`+barrier halo + two `nvshmem_double_sum_reduce`. |
-| `cuda_nvshmem_moe` | Top-1 MoE dispatch + combine with variable expert loads. | Variable-count `nvshmem_float_put` loops over device-symmetric buffers, with `quiet` + `barrier_all` after dispatch and inverse combine. |
+The ping-pong and halo implementations use cooperative kernels so communication
+can be device initiated. On proxy-based inter-node transports, their grid size
+is capped by default; `GPU_BENCH_NVSHMEM_MAX_BLOCKS` overrides the cap.
 
-## Run
+## Build And Run
+
+Leonardo provides NVSHMEM through NVHPC and uses the
+`leonardo-cuda-nvshmem` preset:
 
 ```bash
-mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_halo_1d 1048576 100 20
-mpirun -np 2 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_pingpong 4194304 100 20
-mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_allreduce 4194304 100 20
-mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_alltoall 65536 100 20
-mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_cg_step 512 50 10
-mpirun -np 4 ./build/leonardo-cuda-nvshmem/src/shmem/nvshmem/cuda_nvshmem_moe 16384 256 100 20 uniform,locality80,hotspot80
+source cluster/leonardo/environment.sh cuda
+cmake --preset leonardo-cuda-nvshmem
+cmake --build --preset leonardo-cuda-nvshmem
+cluster/harness/launch.sh halo_1d cuda_nvshmem 1n4g
 ```
+
+The [halo analysis](../../../docs/analysis/halo_1d-crossover.md) explains the
+device-initiated timing and transport considerations.

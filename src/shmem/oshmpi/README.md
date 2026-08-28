@@ -1,44 +1,46 @@
 # OSHMPI
 
-CUDA examples using OSHMPI/OpenSHMEM CUDA memory spaces.
+This backend uses OSHMPI's OpenSHMEM API and CUDA memory-space extension for
+symmetric GPU buffers.
 
-## Targets
+| Benchmark | OSHMPI operation |
+| --- | --- |
+| `pingpong` | One-sided puts, device completion, and barrier handshake |
+| `halo_1d` | Neighbor puts, quiet, device completion, and barrier |
+| `allreduce` | Device or explicitly staged float sum |
+| `alltoall` | Per-peer puts and barrier |
+| `cg_step` | Put-based halo and two double reductions |
+| `moe` | Variable-byte puts with quiet and barrier completion |
 
-| Target | Problem | Communication model |
-| --- | --- | --- |
-| `oshmpi_halo_1d` | Comm-only 1D halo exchange, periodic ring, swept halo width. | One-sided `shmem_putmem` writes halos into symmetric neighbor buffers; `shmem_quiet` + `shmem_barrier_all` handshake (point-to-point `wait_until` can deadlock inter-node when passive RMA needs target-side progress, so the timed loop includes barrier overhead). |
-| `oshmpi_pingpong` | Two-endpoint one-way latency/bandwidth, internal size sweep. | One-sided `shmem_putmem` on device symmetric memory, closed with `shmem_quiet` + `cudaDeviceSynchronize`, then a `shmem_barrier_all` handshake between 2 PEs (barrier sync avoids an inter-node passive-progress deadlock; latency includes barrier overhead). The device sync is required: CUDA-space RMA can enqueue work that outlives `shmem_quiet`, and without it the legs pipeline and the halved round trip reports bandwidth above the link ceiling. |
-| `oshmpi_allreduce` | Float32 sum allreduce latency/bandwidth, internal size sweep. | GPU-resident data. `GPU_BENCH_OSHMPI_ALLREDUCE_MEM=device` (default) reduces directly on CUDA-space symmetric buffers and needs `OMPI_MCA_coll_ucc_enable=1`; `=staged` falls back to D2H staging + `shmem_float_sum_to_all` + H2D staging. Reported in `memory=`. |
-| `oshmpi_alltoall` | All-to-all personalized exchange (bisection bandwidth). | One-sided `shmem_putmem` loop to every PE + `barrier_all` (no native device alltoall assumed). |
-| `oshmpi_cg_step` | CG iteration skeleton (SpMV halo + two reductions). | `shmem_putmem`+barrier halo + two `shmem_double_sum_to_all` (host-resident scalars). |
-| `oshmpi_moe` | Top-1 MoE dispatch + combine with variable expert loads. | Variable-byte `shmem_putmem` loops over CUDA symmetric memory, with `quiet` + `barrier_all` after dispatch and inverse combine. |
+The barrier-based neighbor paths avoid passive-target progress deadlocks on the
+validated inter-node transport. Barrier and device-completion costs remain in
+the measured operation.
 
-## Run
+## Build And Run
+
+Leonardo's bootstrap installs OSHMPI, and `leonardo-oshmpi` builds the backend:
 
 ```bash
-oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_halo_1d 1048576 100 20
-oshrun -np 2 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_pingpong 4194304 100 20
-oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_allreduce 4194304 100 20
-oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_alltoall 65536 100 20
-oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_cg_step 512 50 10
-oshrun -np 4 ./build/leonardo-oshmpi/src/shmem/oshmpi/oshmpi_moe 16384 256 100 20 uniform,locality80,hotspot80
+./cluster/leonardo/bootstrap.sh oneccl-oshmpi
+source cluster/leonardo/environment.sh cuda
+cmake --preset leonardo-oshmpi
+cmake --build --preset leonardo-oshmpi
+cluster/harness/launch.sh allreduce oshmpi 1n4g
 ```
 
-## CUDA memory space lifecycle
+## CUDA Memory Space
 
-`oshmpi_space.{h,c}` wraps the OSHMPI extension behind three calls so the
-benchmark sources stay readable. The order matters, and matches OSHMPI's own
-CUDA-space test:
+`oshmpi_space.{h,c}` wraps the extension lifecycle used by every benchmark:
 
-```
-shmemx_space_create(config with memkind = SHMEMX_MEM_CUDA)
+```text
+shmemx_space_create
   -> shmemx_space_attach
-    -> shmemx_space_malloc  (device symmetric buffers)
-      -> shmem_putmem / shmem_getmem on those buffers
-    -> shmem_free           (there is no shmemx_space_free)
+    -> shmemx_space_malloc
+      -> communication
+    -> shmem_free
   -> shmemx_space_detach
 -> shmemx_space_destroy
 ```
 
-Buffers taken from a space are released with the ordinary `shmem_free`, before
-the space they came from is detached and destroyed.
+Buffers are released with `shmem_free` before their CUDA memory space is detached
+and destroyed.

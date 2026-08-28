@@ -1,39 +1,40 @@
 # SYCL + oneCCL
 
-SYCL examples using oneCCL collectives.
+This backend uses oneCCL with SYCL USM device buffers. The same sources are built
+against NCCL and OSHMPI oneCCL transports on Leonardo.
 
-## Targets
+| Benchmark | oneCCL operation |
+| --- | --- |
+| `pingpong` | Point-to-point send and receive |
+| `halo_1d` | Grouped neighbor sends and receives |
+| `allreduce` | `ccl::allreduce` with sum |
+| `alltoall` | `ccl::alltoall` |
+| `cg_step` | Grouped halo exchange and two allreduces |
+| `moe` | Variable-count point-to-point dispatch and combine |
 
-| Target | Problem | Communication model |
+oneCCL capabilities depend on the configured transport. MoE collectively
+recognizes an unavailable point-to-point API and emits
+`status=NOT_IMPLEMENTED validation=SKIP`; unexpected failures in other binaries
+remain errors.
+
+## Build And Run
+
+Leonardo provides two presets and runtime backend names:
+
+| Transport | Preset | Harness backend |
 | --- | --- | --- |
-| `sycl_oneccl_halo_1d` | Comm-only 1D halo exchange, periodic ring, swept halo width. | Grouped point-to-point `ccl::send`/`ccl::recv` exchange device-buffer halos with both neighbors (see caveat). |
-| `sycl_oneccl_pingpong` | Two-endpoint one-way latency/bandwidth, internal size sweep. | `ccl::send`/`ccl::recv` round-trip device buffers between 2 ranks (see caveat). |
-| `sycl_oneccl_allreduce` | Float32 sum allreduce latency/bandwidth, internal size sweep. | `ccl::allreduce(sum)` over device buffers. |
-| `sycl_oneccl_alltoall` | All-to-all personalized exchange (bisection bandwidth). | `ccl::alltoall` collective (see caveat). |
-| `sycl_oneccl_cg_step` | CG iteration skeleton (SpMV halo + two reductions). | `ccl::send`/`ccl::recv` halo + two `ccl::allreduce` (see caveat). |
-| `sycl_oneccl_moe` | Top-1 MoE dispatch + combine with variable expert loads. | Two sets of per-peer variable-count `ccl::send`/`ccl::recv` operations: dispatch followed by inverse combine (see caveat). |
-
-> **Caveat:** the NCCL-enabled oneCCL fork does not implement every primitive
-> (for example, `broadcast`). If a required operation is unimplemented, the
-> non-MoE binaries report a backend error rather than results. MoE detects
-> unsupported point-to-point operations collectively,
-> emits `status=NOT_IMPLEMENTED reason=point_to_point validation=SKIP` for the affected and
-> remaining routing cases, and exits successfully so unsupported capability is not reported
-> as a failed benchmark.
->
-> The Leonardo oneCCL fork dispatches public groups through `group_impl` to
-> native NCCL groups and defers events until the outermost group ends. Grouped
-> point-to-point is enabled by default for `halo_1d`, multi-rank CG, and MoE.
-> MoE retains a runtime point-to-point capability probe so a backend that does
-> not implement `send`/`recv` still reports `NOT_IMPLEMENTED` explicitly.
-
-## Run
+| NCCL | `leonardo-sycl-oneccl` | `sycl_oneccl` |
+| OSHMPI | `leonardo-sycl-oneccl-oshmpi` | `sycl_oneccl_oshmpi` |
 
 ```bash
-mpirun -np 4 ./build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_halo_1d 1048576 100 20
-mpirun -np 2 ./build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_pingpong 4194304 100 20
-mpirun -np 4 ./build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_allreduce 4194304 100 20
-mpirun -np 4 ./build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_alltoall 65536 100 20
-mpirun -np 4 ./build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_cg_step 512 50 10
-mpirun -np 4 ./build/leonardo-sycl-oneccl/src/xccl/sycl/sycl_oneccl_moe 16384 256 100 20 uniform,locality80,hotspot80
+source cluster/leonardo/environment.sh sycl
+cmake --preset leonardo-sycl-oneccl
+cmake --build --preset leonardo-sycl-oneccl
+cmake --preset leonardo-sycl-oneccl-oshmpi
+cmake --build --preset leonardo-sycl-oneccl-oshmpi
+cluster/harness/launch.sh allreduce sycl_oneccl 1n4g
+cluster/harness/launch.sh allreduce sycl_oneccl_oshmpi 1n4g
 ```
+
+The [support matrix](../../../docs/support-matrix.md) lists which benchmarks are
+declared for each transport.

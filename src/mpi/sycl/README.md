@@ -1,25 +1,32 @@
 # SYCL + MPI
 
-SYCL examples using MPI for process launch, data movement, and result collection.
+This backend combines SYCL USM device buffers with GPU-aware MPI. MPI provides
+process launch, data movement, reductions, and result collection.
 
-## Targets
+| Benchmark | MPI operation |
+| --- | --- |
+| `pingpong` | Blocking `MPI_Send`/`MPI_Recv` round trip |
+| `halo_1d` | Persistent nonblocking neighbor sends and receives |
+| `allreduce` | `MPI_Allreduce` |
+| `alltoall` | `MPI_Alltoall` |
+| `cg_step` | `MPI_Sendrecv` halo and two `MPI_Allreduce` calls |
+| `moe` | Variable-count `MPI_Alltoallv` dispatch and combine |
 
-| Target | Problem | Communication model |
-| --- | --- | --- |
-| `sycl_mpi_halo_1d` | Comm-only 1D halo exchange, periodic ring, swept halo width. | SYCL-aware `MPI_Isend`/`MPI_Irecv`/`MPI_Waitall` exchange USM device-buffer halos with both neighbors. |
-| `sycl_mpi_pingpong` | Two-endpoint one-way latency/bandwidth, internal size sweep. | CUDA-aware `MPI_Send`/`MPI_Recv` round-trip USM device buffers between 2 ranks. |
-| `sycl_mpi_allreduce` | Float32 sum allreduce latency/bandwidth, internal size sweep. | CUDA-aware `MPI_Allreduce` over USM device buffers. |
-| `sycl_mpi_alltoall` | All-to-all personalized exchange (bisection bandwidth). | CUDA-aware `MPI_Alltoall` over USM device buffers. |
-| `sycl_mpi_cg_step` | CG iteration skeleton (SpMV halo + two reductions). | CUDA-aware `MPI_Sendrecv` halo + two `MPI_Allreduce` (SYCL reductions). |
-| `sycl_mpi_moe` | Top-1 MoE dispatch + combine with variable expert loads. | Two CUDA-aware `MPI_Alltoallv` operations over USM device buffers: variable-count dispatch followed by inverse combine. |
+## Build And Run
 
-## Run
+Use the portable preset after loading a SYCL compiler and compatible GPU-aware
+MPI:
 
 ```bash
-mpirun -np 4 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_halo_1d 1048576 100 20
-mpirun -np 2 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_pingpong 4194304 100 20
-mpirun -np 4 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_allreduce 4194304 100 20
-mpirun -np 4 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_alltoall 65536 100 20
-mpirun -np 4 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_cg_step 512 50 10
-mpirun -np 4 ./build/sycl-mpi/src/mpi/sycl/sycl_mpi_moe 16384 256 100 20 uniform,locality80,hotspot80
+cmake --preset sycl-mpi
+cmake --build --preset sycl-mpi
 ```
+
+Leonardo uses `leonardo-sycl-mpi` and the `sycl_mpi` harness backend:
+
+```bash
+cluster/harness/launch.sh halo_1d sycl_mpi 1n4g
+```
+
+See the [Leonardo guide](../../../cluster/leonardo/README.md) for its DPC++ and
+HPC-X setup.
