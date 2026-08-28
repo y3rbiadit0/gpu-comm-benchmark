@@ -14,13 +14,8 @@ module load nccl/2.22.3-1--gcc--12.2.0-cuda-12.2-spack0.22
 # MPI for the SYCL stack: HPC-X 2.19, the same bundle the CUDA stack links.
 # cuda_mpi and sycl_mpi therefore differ only in programming model.
 #
-# The cluster's openmpi/4.1.6 module is deliberately not used. It has no UCC, and
-# Open MPI's `tuned` collectives reduce with host ompi_op functions, so an
-# allreduce on device buffers stages through host memory at a flat 0.42 GB/s
-# whatever the size -- measured 176x slower at 16 MiB (39710 us vs 224.6 us,
-# 1n2g, 2026-08-26). Collectives that only move bytes were unaffected either way,
-# which is what identifies the missing device-side reduction as the cause rather
-# than the programming model. See cluster/leonardo/README.md.
+# The cluster's stock Open MPI module has no UCC and stages device reductions
+# through host memory, so it is deliberately not used.
 
 # The prefix comes from the hpcx-mpi module, which cannot be loaded here --
 # it pulls in nvhpc and would replace DPC++ and CUDA 12.2. Ask a login shell

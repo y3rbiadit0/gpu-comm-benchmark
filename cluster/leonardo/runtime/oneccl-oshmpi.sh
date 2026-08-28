@@ -5,9 +5,8 @@ set -euo pipefail
 #
 # Unlike oneccl-nccl.sh this deliberately does not touch Intel MPI. oneCCL's
 # native MPI transport is disabled in this build (ENABLE_MPI=OFF): OSHMPI
-# supplies the MPI transport, and it is the OpenMPI 4.1.6 that the sycl stack
-# loads. Setting I_MPI_*/FI_* here would configure a library that is not in the
-# process.
+# supplies the transport through the HPC-X MPI selected by the SYCL stack.
+# Setting I_MPI_*/FI_* here would configure a library that is not in the process.
 
 # Same definition the bootstrap installs into, so the two cannot drift.
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/layout.sh"

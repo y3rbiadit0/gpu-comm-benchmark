@@ -160,8 +160,9 @@ for setting in "clean:$clean" "build examples:$build_examples" "install:$run_ins
 done
 
 if [[ "$load_environment" == 1 ]]; then
-    env_script=${env_script:-${COMM_PLAYGROUND_ROOT:-$HOME/comm-playground}/cluster/leonardo/environment.sh}
-    [[ -f "$env_script" ]] || die "Leonardo environment script not found: $env_script (use --env-script or --skip-env)"
+    env_script=${env_script:-${GPU_BENCH_PROJECT_ROOT:+$GPU_BENCH_PROJECT_ROOT/cluster/leonardo/environment.sh}}
+    [[ -n "$env_script" && -f "$env_script" ]] \
+        || die "Leonardo environment script not found (set GPU_BENCH_PROJECT_ROOT or use --env-script)"
     # environment.sh accepts the stack name; direct stack scripts safely ignore it.
     source "$env_script" sycl
 fi

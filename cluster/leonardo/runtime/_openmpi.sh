@@ -5,10 +5,9 @@
 # whose data plane is Open MPI + UCX. The two oneCCL runtimes do NOT source this:
 # oneCCL has its own transport and none of these apply.
 #
-# This exists because the block below was copied into four files, and the four
-# copies drifted. `OMPI_MCA_coll_ucc_enable` in particular was changed in some
-# and not others, which is how a broken collective baseline survived a whole
-# measurement round. One definition, four users.
+# This exists because the shared placement and transport settings previously
+# drifted across four runtime files. Experiment definitions may override a
+# setting before this baseline is sourced.
 #
 # Leading underscore marks a non-runtime file, matching deps/_lib.sh; the backend
 # registry never resolves a runtime name starting with one.
@@ -25,9 +24,5 @@ export SLURM_CPU_BIND=${SLURM_CPU_BIND:-none}
 export OMPI_MCA_btl=${OMPI_MCA_btl:-^openib}
 export OMPI_MCA_coll_hcoll_enable=${OMPI_MCA_coll_hcoll_enable:-0}
 export OMPI_MCA_opal_cuda_support=${OMPI_MCA_opal_cuda_support:-1}
-
-# UCC is ON by default: it is transformative for large allreduce (139x at 16 MiB)
-# and costs latency below ~64 KiB. Benchmarks in the small-message regime turn it
-# off in their own common.sh, which wins because of the ${:-} default here.
-# See cluster/leonardo/runtime/mpi-cuda.sh for the measured table.
+# Experiments with operation-specific behavior override this default.
 export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-1}
