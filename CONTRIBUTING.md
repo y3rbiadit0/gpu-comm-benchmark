@@ -66,6 +66,43 @@ To add a cluster, implement the interface documented in
 experiment files must not name cluster modules, partitions, install prefixes, or
 network transports.
 
+## Versioning And Releases
+
+`VERSION` is the single source of truth for the benchmark suite version. CMake
+validates it, exposes it as `PROJECT_VERSION`, and embeds it in benchmark output.
+Do not duplicate the suite version in another source file.
+
+Before 1.0, increment the version as follows:
+
+- Patch (`0.1.0` to `0.1.1`) for compatible fixes. Correctness fixes that change
+  numerical results must call that out in the changelog.
+- Minor (`0.1.0` to `0.2.0`) for new benchmarks or backends and for intentional
+  changes to measurement semantics, command-line interfaces, or output behavior.
+- Major (`1.0.0`) when the suite's measurement and user-facing contracts are
+  considered stable. After 1.0, incompatible changes increment the major version,
+  additive changes increment the minor version, and compatible fixes increment
+  the patch version.
+
+The suite version is independent of the Benchscribe JSON `schema_version`, which
+changes only when that data contract becomes incompatible. The
+`gpu-bench-plot` package in `tools/plot/pyproject.toml` also has its own package
+version and changes only when that package is released.
+
+To make a release:
+
+1. Update `VERSION` and move the relevant `CHANGELOG.md` entries from
+   `[Unreleased]` to `[<version>] - YYYY-MM-DD`.
+2. Run the CPU test commands above and all affected GPU build and benchmark
+   presets.
+3. Commit the release changes and create an annotated tag whose name exactly
+   matches `VERSION`, for example `git tag -a 0.2.0 -m "Release 0.2.0"`.
+4. Build release binaries from the tag. Their records will contain both
+   `suite_version=<version>` and `source_revision=<tag>`.
+
+Normal Git checkouts derive `source_revision` from `git describe`, including a
+`-dirty` suffix for uncommitted changes. Source archives without Git metadata use
+`unknown`; packagers can set `-DGPU_BENCH_SOURCE_REVISION=<revision>` explicitly.
+
 ## Pull Requests
 
 Describe which benchmark/backend/topology combinations changed and how they were

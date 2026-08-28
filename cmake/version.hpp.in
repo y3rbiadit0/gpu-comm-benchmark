@@ -1,0 +1,8 @@
+#pragma once
+
+namespace gpu_bench {
+
+inline constexpr char suite_version[] = "@GPU_BENCH_VERSION@";
+inline constexpr char source_revision[] = "@GPU_BENCH_SOURCE_REVISION@";
+
+}  // namespace gpu_bench

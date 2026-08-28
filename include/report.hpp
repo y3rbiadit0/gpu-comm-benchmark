@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 
+#include "gpu_bench/version.hpp"
 #include "stats/summary.hpp"
 
 namespace gpu_bench {
@@ -100,7 +101,8 @@ inline void print_report(const bench_report& report) {
             << " bytes=" << report.bytes_per_iter << " iters=" << report.iterations
             << " warmup=" << report.warmup << " time_per_iter_s=" << report.time_per_iter_s
             << " usec=" << (report.time_per_iter_s * 1.0e6) << " min_usec=" << (report.min_s * 1.0e6)
-            << " max_usec=" << (report.max_s * 1.0e6) << " gbytes_per_s=" << gbytes_per_s;
+            << " max_usec=" << (report.max_s * 1.0e6) << " gbytes_per_s=" << gbytes_per_s
+            << " suite_version=" << suite_version << " source_revision=" << source_revision;
     if (report.has_distribution) {
       std::cout << " median_usec=" << (report.median_s * 1.0e6)
                 << " p25_usec=" << (report.p25_s * 1.0e6)

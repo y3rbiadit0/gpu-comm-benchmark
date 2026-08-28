@@ -188,8 +188,13 @@ class BenchscribeTest(unittest.TestCase):
         self.assertIn("FAIL", markdown.getvalue())
 
     def test_skip_status_parses_and_malformed_lines_are_rejected(self):
-        parsed = parse_report_line("sycl_oneccl_moe validation=SKIP status=NOT_IMPLEMENTED case=decode")
+        parsed = parse_report_line(
+            "sycl_oneccl_moe suite_version=0.1.0 source_revision=0.1.0 "
+            "validation=SKIP status=NOT_IMPLEMENTED case=decode"
+        )
         self.assertIsNotNone(parsed)
+        self.assertEqual(parsed.fields["suite_version"], "0.1.0")
+        self.assertEqual(parsed.fields["source_revision"], "0.1.0")
         self.assertIsNone(parse_report_line("sycl_oneccl_moe status=NOT_IMPLEMENTED"))
         self.assertIsNone(parse_report_line("sycl_oneccl_moe validation=SKIP status=UNKNOWN"))
         self.assertIsNone(parse_report_line('sycl_oneccl_moe validation="SKIP'))

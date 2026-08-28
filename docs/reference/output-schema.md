@@ -7,6 +7,7 @@ single parser can compare every backend:
 <name> n=<elements> ranks=<n> bytes=<per-iteration> iters=<n> warmup=<n> \
   time_per_iter_s=<seconds> usec=<microseconds> min_usec=<microseconds> \
   max_usec=<microseconds> gbytes_per_s=<GB/s> \
+  suite_version=<semver> source_revision=<git-description> \
   [median_usec=<microseconds> p25_usec=<microseconds> \
    p75_usec=<microseconds> stddev_usec=<microseconds>] \
   [case=<case>] [status=OK|NOT_IMPLEMENTED|ERROR] \
@@ -15,6 +16,9 @@ single parser can compare every backend:
 
 Additional benchmark-specific fields may be present. `case` is part of the
 result grouping key; MoE, for example, emits one record per routing distribution.
+`suite_version` identifies the released suite behavior, while `source_revision`
+distinguishes exact tags, development commits, and dirty builds. Both values are
+fixed when CMake configures the build.
 
 ## Timing Semantics
 

@@ -2,11 +2,13 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
 
+#include "report.hpp"
 #include "stats/collective.hpp"
 #include "stats/summary.hpp"
 #include "timing.hpp"
@@ -106,6 +108,24 @@ void test_isolated_case_gets_its_own_sample_count() {
   require(rejected, "batch_samples_for accepted a non-positive sample count");
 }
 
+void test_report_contains_build_provenance() {
+  gpu_bench::bench_report report;
+  report.name = "cuda_mpi_test";
+  report.valid = true;
+
+  std::ostringstream output;
+  auto* original_buffer = std::cout.rdbuf(output.rdbuf());
+  gpu_bench::print_report(report);
+  std::cout.rdbuf(original_buffer);
+
+  require(output.str().find(std::string("suite_version=") + gpu_bench::suite_version) !=
+              std::string::npos,
+          "report omitted the suite version");
+  require(output.str().find(std::string("source_revision=") + gpu_bench::source_revision) !=
+              std::string::npos,
+          "report omitted the source revision");
+}
+
 }  // namespace
 
 int main() {
@@ -113,5 +133,6 @@ int main() {
   test_wall_timing_samples_completed_bodies();
   test_batched_timing_amortizes_completed_operations();
   test_isolated_case_gets_its_own_sample_count();
+  test_report_contains_build_provenance();
   return 0;
 }

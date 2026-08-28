@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(gpu_bench LANGUAGES CXX)
+include(cmake/version.cmake)
+
+project(gpu_bench VERSION ${GPU_BENCH_VERSION} LANGUAGES CXX)
 
 include(CTest)
 
@@ -15,8 +17,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+configure_file(cmake/version.hpp.in generated/gpu_bench/version.hpp @ONLY)
+
 add_library(gpu_bench_common INTERFACE)
-target_include_directories(gpu_bench_common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(gpu_bench_common INTERFACE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_BINARY_DIR}/generated
+)
 
 if(BUILD_TESTING)
   find_package(Threads REQUIRED)

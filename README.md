@@ -119,5 +119,6 @@ See [`tools/README.md`](tools/README.md) for the analysis workflow and
 
 - [`docs/README.md`](docs/README.md): benchmark design and analysis notes
 - [`cluster/README.md`](cluster/README.md): cluster integration and supported systems
+- [`CHANGELOG.md`](CHANGELOG.md): release history and pending changes
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): development and contribution workflow
 - [`LICENSE`](LICENSE): MIT license
