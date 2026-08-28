@@ -524,6 +524,9 @@ def draw_cases(sweep: Sweep, theme: dict, outdir: Path, stem: str, ext: str,
     out = outdir / f"{stem}.{ext}"
     fig.savefig(out, bbox_inches="tight")
     plt.close(fig)
-    write_table(outdir / f"{stem}.csv",
-                ["topology", "backend", "case", sweep.unit, f"relative_to_{short_case(base)}"], rows)
+    write_table(
+        outdir / f"{stem}.csv",
+        ["topology", "backend", "case", sweep.unit, f"relative_to_{short_case(base)}"],
+        rows,
+    )
     return out

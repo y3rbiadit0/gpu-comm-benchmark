@@ -1,4 +1,4 @@
-# gpu-bench-plot
+# GPU Bench Plot
 
 Figures for the gpu-comm-bench results, drawn from Benchscribe JSON.
 
@@ -27,7 +27,8 @@ uv run --project tools/plot gpu-bench-plot \
 ```
 
 `--project tools/plot` keeps the working directory where it is, so the paths you
-pass stay relative to the repository root. `python -m gpu_bench_plot` works too.
+pass stay relative to the repository root. Inside a synchronized project
+environment, `uv run --project tools/plot python -m gpu_bench_plot` is equivalent.
 
 | Figure | What it shows |
 | --- | --- |

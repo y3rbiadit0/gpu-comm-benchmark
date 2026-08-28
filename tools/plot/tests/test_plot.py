@@ -13,7 +13,15 @@ import json
 import pytest
 
 from gpu_bench_plot.cli import main
-from gpu_bench_plot.data import SchemaMismatch, Sweep, format_bytes, is_application_benchmark, load_json, topology_key, topology_ranks
+from gpu_bench_plot.data import (
+    SchemaMismatch,
+    Sweep,
+    format_bytes,
+    is_application_benchmark,
+    load_json,
+    topology_key,
+    topology_ranks,
+)
 from gpu_bench_plot.figures import select_size
 from gpu_bench_plot.theme import BACKEND_ORDER, THEMES, colour_for
 

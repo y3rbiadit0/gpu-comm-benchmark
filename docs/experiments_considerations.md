@@ -23,7 +23,8 @@ The full experiment design is a three-axis matrix:
    (`cuda_nvshmem`), or host-initiated one-sided put+quiet with global barrier
    completion (`oshmpi`).
 3. **Topology** — the transport: intra-node NVLink (`1n2g`, `1n4g`), pure inter-node
-   InfiniBand (`2n1g`), and mixed (`2n4g`), with `1n1g` as the no-communication baseline.
+   InfiniBand (`2n1g`), and mixed multi-node shapes through `8n4g`, with `1n1g`
+   as the no-communication baseline.
 
 ## Classification
 
@@ -49,15 +50,14 @@ collective).
 
 | Regime | Pattern | Why |
 | --- | --- | --- |
-| Bandwidth-bound (β) | `alltoall` | bisection bandwidth is the whole point |
-| Swept across both | `pingpong`, `halo_1d`, `allreduce` | the message-size sweep crosses from the α regime to the β regime; the crossover n½ is itself a result (see `docs/analysis/halo_1d-crossover.md`) |
+| Swept across both | `pingpong`, `halo_1d`, `allreduce`, `alltoall` | the message-size sweep crosses from the alpha regime to the bandwidth regime; the crossover is itself a result (see `analysis/halo_1d-crossover.md`) |
 | Mixed | `cg_step` | two α-bound allreduces + one β-bound halo per iteration; not predictable from either regime alone |
 | Bandwidth- and imbalance-sensitive | `moe` | two variable-count global exchanges move a fixed useful payload, while routing controls locality, per-peer message sizes, and the busiest expert |
 
 The axes are kept separate on purpose: `pingpong` is not "the latency benchmark" — it is
 the point-to-point pattern measured across both regimes. Its small-message and
-large-message asymptotes are the fitted α and β per transport. The other patterns then
-test whether those fitted parameters, pushed through each pattern's cost model, predict
+large-message asymptotes characterize each transport. The other patterns then
+test whether those parameters, pushed through each pattern's cost model, predict
 the measured numbers:
 
 - `halo_1d` ring exchange: ≈ 2α + 2βn per iteration
@@ -96,8 +96,6 @@ independently.
 
 The suite covers point-to-point, reduction collective, neighbor exchange, dense personalized
 collective, variable/skewed personalized application traffic, and composite communication. New
-patterns are added only when they introduce a new *class* of communication; each addition
-costs one source per backend + generated launchers, and `tools/benchscribe` picks it up
-automatically.
-
-The known gap is broadcast, which remains blocked until the oneCCL fork implements it.
+patterns are added only when they introduce a new *class* of communication. Each addition
+requires implementations for applicable backends, one harness experiment definition, and one
+matrix entry. Benchscribe discovers standardized output without benchmark-specific parsing.

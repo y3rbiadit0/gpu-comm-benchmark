@@ -3,6 +3,7 @@ name = "gpu-bench-plot"
 version = "0.1.0"
 description = "Figures for gpu-comm-bench results, drawn from Benchscribe JSON"
 readme = "README.md"
+license = "MIT"
 authors = [
     { name = "Franco N. Merenda", email = "merenda.franco83@gmail.com" },
 ]
