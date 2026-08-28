@@ -6,6 +6,8 @@
 gpu_bench_print_env() {
   local vars=(
     # UCX (Open MPI / OSHMPI data plane)
+    UCX_NET_DEVICES
+    UCX_IB_GPU_DIRECT_RDMA
     UCX_IB_SL
     UCX_MAX_RNDV_RAILS
     UCX_TLS
