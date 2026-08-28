@@ -15,7 +15,9 @@
 /logs/
 /results/
 /docs/data-backup/
-/docs/analysis/data/
+/docs/analysis/data/**/figures/
+/docs/analysis/data/**/points.json
+/docs/analysis/data/**/fit.json
 *.log
 *.err
 *.out
