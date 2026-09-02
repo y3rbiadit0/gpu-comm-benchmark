@@ -6,7 +6,10 @@ GPU_BENCH_N_LABEL="grid side"
 
 source "$GPU_BENCH_PROJECT_ROOT/cluster/harness/experiments/common.sh"
 
-# UCC adds overhead to cg_step's two 8-byte reductions.
+# UCC adds overhead to cg_step's two 8-byte reductions -- confirmed by the
+# allreduce sweep at multi-node topologies (+25% to +49% at 2n4g/4n4g/8n4g), but
+# reversed on one node, where UCC is 30-50% faster at these sizes. A scalar
+# default cannot express that; this one is correct for the multi-node cells.
 export OMPI_MCA_coll_ucc_enable=${OMPI_MCA_coll_ucc_enable:-0}
 
 # cg_step works on a square GPU_BENCH_N x GPU_BENCH_N grid; GPU_BENCH_N is the side length.

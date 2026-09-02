@@ -114,7 +114,6 @@ submit() {
 # determined without a cluster, without modules, and without $SCRATCH.
 explain_cell() {
   local bench="$1" backend="$2" topo="$3"
-  local ucc_note=""
   cat <<EOF
 cell        : $bench / $backend / $topo
 run entry   : cluster/harness/launch.sh

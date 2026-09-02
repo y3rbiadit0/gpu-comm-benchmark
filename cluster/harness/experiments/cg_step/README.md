@@ -32,5 +32,9 @@ GPU_BENCH_N=1024 GPU_BENCH_NTRIALS=1 \
 
 The reductions contain one double each. Leonardo disables UCC for this
 small-message operation; OSHMPI consequently defaults to its staged scalar path.
+The allreduce topology sweep supports that default on multi-node topologies,
+where UCC costs 25-49% at these sizes, but contradicts it on `1n2g`, `1n4g` and
+`2n1g`, where UCC is 30-50% faster. Set the variable explicitly when the
+single-node cells matter.
 Set both `OMPI_MCA_coll_ucc_enable=1` and
 `GPU_BENCH_OSHMPI_CG_REDUCE_MEM=device` to measure its device path explicitly.
