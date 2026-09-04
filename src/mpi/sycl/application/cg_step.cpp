@@ -104,8 +104,9 @@ int main(int argc, char** argv) {
             const auto i = id[0];
             send_west[i] = p_field[i * width + 1U];
             send_east[i] = p_field[i * width + last];
-          }).wait();
+          });
         }
+        queue.wait();
       };
       const auto halo = [&]() {
         MPI_Sendrecv(send_west, column_count, MPI_FLOAT, left, 0, recv_east, column_count, MPI_FLOAT, right, 0,
@@ -113,16 +114,25 @@ int main(int argc, char** argv) {
         MPI_Sendrecv(send_east, column_count, MPI_FLOAT, right, 1, recv_west, column_count, MPI_FLOAT, left, 1,
                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       };
+      /* One wait, at the end, not one per submission.
+       *
+       * The queue is in-order, so every submission below already runs after the
+       * one before it; the only ordering this phase has to establish is against
+       * the host, which reads partial_pq/partial_qq in the reduction that follows.
+       * Waiting on each submission separately cost about 68 us per iteration at
+       * 4n4g -- 90% of this backend's gap over cuda_mpi, which runs the same MPI
+       * and issues its kernels asynchronously with a single synchronization. That
+       * gap was an artifact of this loop, not of SYCL. */
       const auto compute = [&]() {
-        queue.memset(partial_pq, 0, sizeof(double)).wait();
-        queue.memset(partial_qq, 0, sizeof(double)).wait();
+        queue.memset(partial_pq, 0, sizeof(double));
+        queue.memset(partial_qq, 0, sizeof(double));
         if (local_cols > 0) {
           const auto east_ghost = local_cols + 1U;
           queue.parallel_for(sycl::range<1>{side}, [=](sycl::id<1> id) {
             const auto i = id[0];
             p_field[i * width + 0U] = recv_west[i];
             p_field[i * width + east_ghost] = recv_east[i];
-          }).wait();
+          });
           queue.parallel_for(sycl::range<2>{side, local_cols}, [=](sycl::id<2> id) {
             const auto i = id[0];
             const auto j = id[1] + 1U;
@@ -131,7 +141,7 @@ int main(int argc, char** argv) {
             const float west = p_field[i * width + (j - 1U)];
             const float east = p_field[i * width + (j + 1U)];
             q_field[i * width + j] = 0.25F * (north + south + west + east);
-          }).wait();
+          });
           queue.submit([&](sycl::handler& handler) {
             auto sum_pq = sycl::reduction(partial_pq, sycl::plus<double>());
             auto sum_qq = sycl::reduction(partial_qq, sycl::plus<double>());
@@ -144,8 +154,9 @@ int main(int argc, char** argv) {
                                    acc_pq += pv * qv;
                                    acc_qq += qv * qv;
                                  });
-          }).wait();
+          });
         }
+        queue.wait();
       };
       const auto reduce = [&]() {
         MPI_Allreduce(partial_pq, result_pq, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
