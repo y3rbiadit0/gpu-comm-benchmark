@@ -28,7 +28,26 @@ baseline.
 cluster/harness/launch.sh cg_step cuda_mpi 1n4g
 GPU_BENCH_N=1024 GPU_BENCH_NTRIALS=1 \
   cluster/harness/launch.sh cg_step cuda_nvshmem 2n4g
+
+# Sweep the grid side. GPU_BENCH_MSG_SIZES carries grid sides here, not message
+# sizes, and GPU_BENCH_N must be at least the largest of them.
+GPU_BENCH_N=2048 GPU_BENCH_MSG_SIZES=256,512,1024,2048 \
+  cluster/harness/launch.sh cg_step cuda_mpi 4n4g
+
+# Break the step into pack / halo / compute / reduce.
+GPU_BENCH_CG_PHASES=1 cluster/harness/launch.sh cg_step cuda_mpi 4n4g
 ```
+
+A bare run measures the single grid `GPU_BENCH_N` names; the side sets each
+rank's column count, so sweeping it by default would change what "the cg_step
+result" means. One record is emitted per side.
+
+`GPU_BENCH_CG_PHASES=1` adds `phase_pack_usec`, `phase_halo_usec`,
+`phase_compute_usec`, `phase_reduce_usec` and `phase_sum_usec` to the record.
+They come from a second, more synchronized pass, so the headline `usec` is
+unchanged and stays comparable with earlier results; see
+[`docs/benchmarks/cg-step.md`](../../../../docs/benchmarks/cg-step.md). The pass
+roughly doubles run time and is off by default.
 
 The reductions contain one double each. Leonardo disables UCC for this
 small-message operation; OSHMPI consequently defaults to its staged scalar path.
