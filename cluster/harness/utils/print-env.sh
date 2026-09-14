@@ -21,6 +21,16 @@ gpu_bench_print_env() {
     OMPI_MCA_coll_ucc_enable
     OMPI_MCA_opal_cuda_support
     # NCCL
+    # Which NCCL this run resolved, and from where -- same reasoning as the
+    # NVSHMEM pair below. "module" is the one the nvhpc module ships; anything
+    # else is a source build from deps/nccl.sh, and only those have the
+    # device API a GPU-initiated benchmark would call.
+    GPU_BENCH_NCCL_VERSION
+    NCCL_HOME
+    # Which side rings the NIC doorbell for a device-API (GIN) run: 2 is the CPU
+    # proxy, 3 is GDAKI. Load-bearing on Leonardo, where GDAKI initializes and
+    # then hangs, so a log that does not name it cannot say what it measured.
+    NCCL_GIN_TYPE
     NCCL_IB_SL
     NCCL_ALGO
     NCCL_PROTO

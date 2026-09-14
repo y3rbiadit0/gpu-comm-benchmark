@@ -117,6 +117,16 @@ explain_cell() {
   # Kept in step with job.sh, which computes these two paths for real. A
   # non-default library version suffixes both; see cluster/<cluster>/layout.sh.
   local tag="${GPU_BENCH_VARIANT_TAG:-}"
+  # One line per library the cluster lets a run select, each naming the version
+  # and -- once it is no longer the module's -- the prefix it resolved to. Read
+  # per library rather than off the tag, so selecting one does not print a
+  # prefix for the other.
+  local nvshmem_line="NVSHMEM ${GPU_BENCH_NVSHMEM_VERSION:-module}"
+  [[ "${GPU_BENCH_NVSHMEM_VERSION:-module}" == module ]] ||
+    nvshmem_line+="   prefix $NVSHMEM_HOME"
+  local nccl_line="NCCL    ${GPU_BENCH_NCCL_VERSION:-module}"
+  [[ "${GPU_BENCH_NCCL_VERSION:-module}" == module ]] ||
+    nccl_line+="   prefix $NCCL_HOME"
   cat <<EOF
 cell        : $bench / $backend / $topo
 run entry   : cluster/harness/launch.sh
@@ -133,7 +143,8 @@ topology    : $GPU_BENCH_NODES node(s) x $GPU_BENCH_TASKS_PER_NODE GPU(s) = $((G
 sbatch      : --nodes=$GPU_BENCH_NODES --ntasks-per-node=$GPU_BENCH_TASKS_PER_NODE --gres=gpu:$GPU_BENCH_TASKS_PER_NODE --time=$(gpu_bench_walltime_for "$GPU_BENCH_NODES")
 results     : ${GPU_BENCH_RESULTS_ROOT:-results$tag}/${bench//_/-}-${backend//_/-}-$topo/$bench
 account     : ${SBATCH_ACCOUNT:-Slurm default}   partition: $SBATCH_PARTITION
-libraries   : NVSHMEM $GPU_BENCH_NVSHMEM_VERSION${tag:+   prefix $NVSHMEM_HOME}
+libraries   : $nvshmem_line
+              $nccl_line
 
 environment (definitions in execution order; the first one wins):
 EOF

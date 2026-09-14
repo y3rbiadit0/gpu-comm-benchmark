@@ -32,6 +32,22 @@ gpu_bench_clone_at "$repo" "$ref" "$src"
 
 build_dir=$GPU_BENCH_BUILD_DIR/oneCCL-nccl
 
+# A cuda-stack NCCL selection must not reach this build. layout.sh repoints
+# NCCL_HOME at a bootstrapped prefix whenever GPU_BENCH_NCCL_VERSION names a
+# release, and the recipe below falls back to NCCL_HOME when the nccl module
+# exports no NCCL_ROOT -- which would link a library built against the cuda
+# stack's CUDA 12.4 into a sycl stack that has CUDA 12.2. Which of the two the
+# module sets decides whether that happens, so refuse the ambiguity instead of
+# resolving it.
+if [[ ${GPU_BENCH_NCCL_VERSION:-module} != module ]]; then
+    printf 'error: GPU_BENCH_NCCL_VERSION=%s is set\n' "$GPU_BENCH_NCCL_VERSION" >&2
+    printf 'that selection is for the cuda stack (deps/nccl.sh). oneCCL is built\n' >&2
+    printf 'on the sycl stack against the nccl module, so unset it first:\n' >&2
+    printf '  env -u GPU_BENCH_NCCL_VERSION %s\n' \
+        "$(dirname "$script_dir")/bootstrap.sh oneccl-nccl" >&2
+    exit 2
+fi
+
 if gpu_bench_build_done "$ONECCL_NCCL_ROOT/env/vars.sh"; then
     gpu_bench_build_log "oneCCL (NCCL) already at $ONECCL_NCCL_ROOT"
 else

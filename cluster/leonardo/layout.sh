@@ -92,24 +92,44 @@ gpu_bench_select_variant() {
     return 2
   fi
 
+  local home_var="${upper}_HOME"
   GPU_BENCH_VARIANT_TAG="${GPU_BENCH_VARIANT_TAG}-${lower}-${version}"
-  printf -v "${upper}_HOME" '%s' "$GPU_BENCH_PREFIX_ROOT/${lower}-${version}"
-  export "${upper}_HOME"
+  printf -v "$home_var" '%s' "$GPU_BENCH_PREFIX_ROOT/${lower}-${version}"
+  export "${home_var?}"
+
+  # That assignment happens in the shell, so `launch.sh --explain` cannot find
+  # it by reading the files -- and env/<stack>.sh does contain a literal
+  # `export <LIB>_HOME=${<LIB>_HOME:-<module path>}`, which is what --explain
+  # would otherwise report as the winner while the run used this prefix. Report
+  # it instead, in the format harness/utils/where-set.sh reads: tab-separated
+  # name, value, and the source to print for it.
+  GPU_BENCH_RESOLVED_VARS+="${home_var}	${!home_var}	cluster/${GPU_BENCH_CLUSTER:-leonardo}/layout.sh (${version_var}=${version})
+"
 }
 
 # Recomputed from scratch on every source: this file is sourced more than once
 # per shell (cluster.sh, then environment.sh), and an accumulating tag would
 # append the same suffix twice.
 GPU_BENCH_VARIANT_TAG=""
-if ! gpu_bench_select_variant nvshmem; then
+GPU_BENCH_RESOLVED_VARS=""
+# One name per selectable library, in a fixed order, so a run that selects two
+# of them gets one tag and always the same one. NCCL is selectable because the
+# device API arrived in 2.28 and the nvhpc module's NCCL predates it. That
+# selection is a cuda-stack one: the sycl stack takes its NCCL from the nccl
+# module, and deps/oneccl-nccl.sh refuses to build while a version is selected
+# rather than risk resolving this NCCL_HOME instead of the module's.
+for _gpu_bench_lib in nvshmem nccl; do
+  gpu_bench_select_variant "$_gpu_bench_lib" && continue
   # Must not fall through. An unusable version leaves the tag empty and
   # <LIB>_HOME at the module's, so the run would quietly measure the default
   # library and file the results in the default tree -- the exact confusion the
   # tag exists to prevent. Exit in a script; in an interactive shell only stop
   # sourcing, so a typo does not close the terminal.
+  unset _gpu_bench_lib
   case $- in
     *i*) return 2 ;;
     *)   exit 2 ;;
   esac
-fi
-export GPU_BENCH_VARIANT_TAG
+done
+unset _gpu_bench_lib
+export GPU_BENCH_VARIANT_TAG GPU_BENCH_RESOLVED_VARS
