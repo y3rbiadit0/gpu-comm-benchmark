@@ -25,7 +25,7 @@ allreduce_TOPOLOGIES="1n1g 1n2g 1n4g 2n1g 2n4g 4n4g 8n4g"
 allreduce_BACKENDS="$GPU_BENCH_ALL_BACKENDS sycl_oneccl_oshmpi"
 
 alltoall_TOPOLOGIES="1n1g 1n2g 1n4g 2n1g 2n4g 4n4g 8n4g"
-alltoall_BACKENDS="$GPU_BENCH_ALL_BACKENDS sycl_oneccl_oshmpi"
+alltoall_BACKENDS="$GPU_BENCH_ALL_BACKENDS sycl_oneccl_oshmpi cuda_nccl_device"
 
 moe_TOPOLOGIES="1n1g 1n2g 1n4g 2n1g 2n4g 4n4g 8n4g"
 moe_BACKENDS="$GPU_BENCH_ALL_BACKENDS"

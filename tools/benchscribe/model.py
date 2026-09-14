@@ -11,6 +11,7 @@ class Backend(str, Enum):
     CUDA_NVSHMEM = "cuda_nvshmem"
     SYCL_ONECCL_OSHMPI = "sycl_oneccl_oshmpi"
     SYCL_ONECCL = "sycl_oneccl"
+    CUDA_NCCL_DEVICE = "cuda_nccl_device"
     CUDA_NCCL = "cuda_nccl"
     CUDA_MPI = "cuda_mpi"
     SYCL_MPI = "sycl_mpi"

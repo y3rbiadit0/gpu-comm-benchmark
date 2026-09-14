@@ -24,6 +24,10 @@
 GPU_BENCH_BACKENDS=(
   "cuda_mpi:cuda:mpi-cuda:srun:leonardo-cuda-mpi:src/mpi/cuda:cuda_mpi"
   "cuda_nccl:cuda:mpi-cuda:srun:leonardo-cuda-nccl:src/xccl/cuda:cuda_nccl"
+  # Same preset and same library as cuda_nccl; the difference is the programming
+  # model, so it is a backend rather than a variant. Its binaries exist only when
+  # the selected NCCL has a device API (>= 2.28) -- see src/xccl/cuda/CMakeLists.txt.
+  "cuda_nccl_device:cuda:nccl-device:srun:leonardo-cuda-nccl:src/xccl/cuda:cuda_nccl_device"
   "cuda_nvshmem:cuda:nvshmem:srun:leonardo-cuda-nvshmem:src/shmem/nvshmem:cuda_nvshmem"
   "oshmpi:cuda:oshmpi:srun:leonardo-oshmpi:src/shmem/oshmpi:oshmpi"
   "sycl_mpi:sycl:sycl-mpi:srun:leonardo-sycl-mpi:src/mpi/sycl:sycl_mpi"

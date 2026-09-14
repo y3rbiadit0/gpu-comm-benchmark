@@ -1,13 +1,16 @@
 # Support Matrix
 
 The suite contains six source backends. Leonardo additionally builds oneCCL
-against two transports, producing two runtime backends from the same SYCL source.
+against two transports, producing two runtime backends from the same SYCL
+source, and exposes NCCL twice: once through its host API and once through its
+device API, which is a different programming model over the same library.
 
 | Harness backend | Source | Communication library | Leonardo preset |
 | --- | --- | --- | --- |
 | `cuda_mpi` | [`src/mpi/cuda`](../../src/mpi/cuda/README.md) | HPC-X MPI | `leonardo-cuda-mpi` |
 | `sycl_mpi` | [`src/mpi/sycl`](../../src/mpi/sycl/README.md) | HPC-X MPI | `leonardo-sycl-mpi` |
-| `cuda_nccl` | [`src/xccl/cuda`](../../src/xccl/cuda/README.md) | NCCL | `leonardo-cuda-nccl` |
+| `cuda_nccl` | [`src/xccl/cuda`](../../src/xccl/cuda/README.md) | NCCL, host API | `leonardo-cuda-nccl` |
+| `cuda_nccl_device` | [`src/xccl/cuda`](../../src/xccl/cuda/README.md) | NCCL >= 2.28, device API (GIN today, LSA next) | `leonardo-cuda-nccl` |
 | `cuda_nvshmem` | [`src/shmem/nvshmem`](../../src/shmem/nvshmem/README.md) | NVSHMEM | `leonardo-cuda-nvshmem` |
 | `oshmpi` | [`src/shmem/oshmpi`](../../src/shmem/oshmpi/README.md) | OSHMPI | `leonardo-oshmpi` |
 | `sycl_oneccl` | [`src/xccl/sycl`](../../src/xccl/sycl/README.md) | oneCCL with NCCL | `leonardo-sycl-oneccl` |
@@ -29,7 +32,11 @@ library build or transport.
 | [`moe`](../benchmarks/moe.md) | Yes | No |
 
 The common column represents `cuda_mpi`, `sycl_mpi`, `cuda_nccl`,
-`cuda_nvshmem`, `oshmpi`, and `sycl_oneccl`.
+`cuda_nvshmem`, `oshmpi`, and `sycl_oneccl`. `cuda_nccl_device` is declared for
+`alltoall` only: it exists to compare device-initiated communication against the
+host API on the same operation, and it builds only when the selected NCCL has a
+device API (2.28 or newer -- see
+[Recipe A](../../cluster/leonardo/README.md#-recipe-a-swap-a-library-version)).
 
 | Benchmark | Declared topologies |
 | --- | --- |

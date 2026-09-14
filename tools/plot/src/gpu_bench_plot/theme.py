@@ -15,6 +15,12 @@ BACKEND_ORDER = (
     "sycl_mpi",
     "sycl_oneccl",
     "sycl_oneccl_oshmpi",
+    # Appended, never inserted: the tuple index selects the colour, so putting a
+    # new backend next to its relative would recolour every backend after it and
+    # break the guarantee above. There are seven validated categorical slots, so
+    # this eighth entry falls through to muted grey in colour_for() until an
+    # eighth is validated -- known and ordered, but not yet distinctly coloured.
+    "cuda_nccl_device",
 )
 BASELINE_BACKEND = "cuda_mpi"
 
