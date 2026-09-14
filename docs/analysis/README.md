@@ -6,6 +6,8 @@ Authored analysis documents live in this directory:
   latency/bandwidth model and where that model stops being reliable.
 - [`halo-1d-methodology.md`](halo-1d-methodology.md) defines a reproducible
   workflow for comparing halo-exchange backends and attributing latency.
+- [`acg-correlation.md`](acg-correlation.md) validates how well the suite
+  predicts aCG reduction and end-to-end performance on Leonardo.
 
 ## Local Artifacts
 

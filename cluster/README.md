@@ -47,6 +47,6 @@ anything is submitted -- read it, then submit. Unset the variable to return to
 the default; no cleanup is needed in between.
 
 Each machine decides which of its libraries work this way, and the list is
-deliberately small. Leonardo supports it for NVSHMEM only -- see its
+deliberately small. Leonardo supports it for NVSHMEM and NCCL -- see its
 [communication libraries](leonardo/README.md#-communication-libraries) table for
-every other library it links and the recipe for changing that one.
+every other library it links and the recipe for changing those.

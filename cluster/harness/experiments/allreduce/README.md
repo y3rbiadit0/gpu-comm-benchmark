@@ -40,16 +40,16 @@ Measured across every declared topology (`cuda_mpi` and `sycl_mpi` agree within
 | Regime | Effect of UCC |
 | --- | --- |
 | `1n2g`, `1n4g`, `2n1g`, all sizes | 1.1x-140x faster |
-| `2n4g`/`4n4g`/`8n4g`, below 64 KB | 1.06x-2.2x **slower** |
-| `2n4g`/`4n4g`/`8n4g`, at and above 64 KB | 1.05x-35x faster |
+| `2n4g`/`4n4g`/`8n4g`, below 64 KiB | 1.06x-2.2x **slower** |
+| `2n4g`/`4n4g`/`8n4g`, at and above 64 KiB | 1.05x-35x faster |
 
 Two features of the curve are worth knowing before reading a result:
 
-- **A cliff at 4 KB** on every topology with 4 GPUs per node. Latency roughly
-  doubles crossing 2 KB to 4 KB with UCC on (+81% at `1n4g`, +120% at `8n4g`)
+- **A cliff at 4 KiB** on every topology with 4 GPUs per node. Latency roughly
+  doubles crossing 2 KiB to 4 KiB with UCC on (+81% at `1n4g`, +120% at `8n4g`)
   while the non-UCC path is flat across the same step. Both backends reproduce
   it, so it is a UCC algorithm switch rather than noise.
-- **A crossover at 64 KB** on multi-node topologies, below which UCC costs more
+- **A crossover at 64 KiB** on multi-node topologies, below which UCC costs more
   than it saves. The default keeps UCC because the losses cap near 2.2x while
   the wins reach 140x, not because it wins everywhere.
 

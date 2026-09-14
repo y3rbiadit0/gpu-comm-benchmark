@@ -14,7 +14,8 @@
 # Benchmark and profiler output
 /logs/
 /results*/
-/docs/analysis/
+/docs/analysis/*
+!/docs/analysis/acg-correlation.md
 *.points.json
 *.fit.json
 *.log
@@ -43,4 +44,3 @@ dist/
 .vscode/
 *~
 *.swp
-

@@ -108,8 +108,10 @@ application-level normalization, not exact link traffic.
 | `sycl_oneccl_oshmpi` | Same oneCCL operations over OSHMPI | oneCCL event completion |
 
 OSHMPI reports whether the two reductions used host staging or symmetric device
-memory. Staging copies are included in the timed step. oneCCL point-to-point
-support depends on the configured transport.
+memory. The staged path includes both copies required by a GPU consumer: the
+local scalar moves device-to-host before the reduction and the reduced result
+moves host-to-device afterward. oneCCL point-to-point support depends on the
+configured transport.
 
 ## Related guides
 

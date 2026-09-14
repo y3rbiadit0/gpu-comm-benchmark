@@ -23,7 +23,7 @@ Run the Python tool tests and checks with:
 
 ```bash
 python3 -m unittest discover -s tools/benchscribe/tests
-uv run --project tools/plot pytest tools/plot/tests
+uv run --project tools/plot --with pytest python -m pytest tools/plot/tests
 uv run --project tools/plot ruff check tools/plot
 ```
 
@@ -41,6 +41,9 @@ uv run --project tools/plot ruff check tools/plot
   [`docs/reference/output-schema.md`](docs/reference/output-schema.md).
   Incompatible Benchscribe JSON changes require a schema-version update and a
   matching plot-reader update.
+- Write comments that carry what the code cannot: a measured number, a failure
+  that was diagnosed, a site constraint, why an alternative was rejected. Do not
+  restate the code, and do not record what the code replaced -- Git holds that.
 - Do not commit generated builds, benchmark output, profiler reports, or
   synthetic sample data.
 
@@ -65,9 +68,29 @@ uv run --project tools/plot ruff check tools/plot
 ## Adding A Backend Or Cluster
 
 A backend is registered by the cluster because its compiler, launcher, and
-runtime transport are machine-specific. Add its preset and implementation, then
-add one backend row, environment, and runtime definition under each supporting
-cluster.
+runtime transport are machine-specific. A backend name appears in six places,
+and most of them fail quietly rather than loudly:
+
+| Register in | Consequence if missed |
+| --- | --- |
+| `src/<model>/<backend>` and a CMake preset | nothing to run |
+| `cluster/<name>/backends.sh` | `launch.sh` rejects the backend |
+| `cluster/<name>/runtime/<runtime>.sh` | job dies sourcing it, after the allocation |
+| `cluster/harness/matrix.sh` | skipped by `--all`; explicit cells rejected |
+| `tools/benchscribe/model.py` `Backend` | every record silently skipped |
+| `tools/plot` `BACKEND_ORDER` | plots in muted grey, not a fixed colour |
+
+Also add the preset to the `Makefile` group and the row to
+[`docs/reference/support-matrix.md`](docs/reference/support-matrix.md).
+
+**A library version is not a backend.** Linking the same sources against a
+second version of a communication library must not add a backend row, preset,
+enum entry, or plot colour. Use the version selector instead: add a
+`cluster/<name>/deps/<lib>.sh` and one `gpu_bench_select_variant <lib>` call in
+`cluster/<name>/layout.sh`. That repoints `<LIB>_HOME` and appends to
+`GPU_BENCH_VARIANT_TAG`, which keys the build tree and the results tree so two
+versions cannot share a binary or be averaged into one cell. See
+[communication libraries](cluster/leonardo/README.md#-communication-libraries).
 
 To add a cluster, implement the interface documented in
 [`cluster/harness/README.md`](cluster/harness/README.md#adding-a-cluster). Shared

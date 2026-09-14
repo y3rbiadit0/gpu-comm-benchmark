@@ -125,12 +125,12 @@ enum class reduce_memory { device, staged };
  * `device` refuses to start unless OMPI_MCA_coll_ucc_enable=1 is set with it.
  * Without UCC the reduction reaches a host Open MPI op and segfaults.
  *
- * `staged` (default) copies the two doubles device->host and reduces in the
- * default symmetric heap. At 8 bytes that is actually faster, but it is not
- * what the other backends do, so the difference must be reported rather than
- * presented as a like-for-like result. Measured on Leonardo 2n4g, job 54065216:
- * staged 81.4 us, device 221.9 us -- 2.73x, of which ~116 us is UCC's
- * small-message penalty, which the device path cannot avoid.
+ * `staged` (default) copies each double device->host, reduces in the default
+ * symmetric heap, then copies the result host->device. The round trip matches
+ * aCG, where the next GPU operation consumes the reduced scalar. At 8 bytes
+ * staging is faster than the direct device path, but it is not what the other
+ * backends do, so the difference must be reported rather than presented as a
+ * like-for-like result.
  */
 reduce_memory parse_reduce_memory() {
   const char* value = std::getenv("GPU_BENCH_OSHMPI_CG_REDUCE_MEM");
@@ -325,10 +325,14 @@ int main(int argc, char** argv) {
         } else {
           check_cuda(cudaMemcpy(&source[0], partial_pq, sizeof(double), cudaMemcpyDeviceToHost),
                      "cudaMemcpy(pq)");
+          shmem_double_sum_to_all(&result[0], &source[0], 1, 0, 0, pes, pwrk_pq, psync_pq);
+          check_cuda(cudaMemcpy(partial_pq, &result[0], sizeof(double), cudaMemcpyHostToDevice),
+                     "cudaMemcpy(reduced pq)");
           check_cuda(cudaMemcpy(&source[1], partial_qq, sizeof(double), cudaMemcpyDeviceToHost),
                      "cudaMemcpy(qq)");
-          shmem_double_sum_to_all(&result[0], &source[0], 1, 0, 0, pes, pwrk_pq, psync_pq);
           shmem_double_sum_to_all(&result[1], &source[1], 1, 0, 0, pes, pwrk_qq, psync_qq);
+          check_cuda(cudaMemcpy(partial_qq, &result[1], sizeof(double), cudaMemcpyHostToDevice),
+                     "cudaMemcpy(reduced qq)");
         }
       };
 
@@ -371,8 +375,11 @@ int main(int argc, char** argv) {
         final_pq = host_result[0];
         final_qq = host_result[1];
       } else {
-        final_pq = result[0];
-        final_qq = result[1];
+        // Validate the copy-back, not the intermediate host result.
+        check_cuda(cudaMemcpy(&final_pq, partial_pq, sizeof(double), cudaMemcpyDeviceToHost),
+                   "cudaMemcpy(reduced pq validation)");
+        check_cuda(cudaMemcpy(&final_qq, partial_qq, sizeof(double), cudaMemcpyDeviceToHost),
+                   "cudaMemcpy(reduced qq validation)");
       }
       int local_ok =
           gpu_bench::nearly_equal(final_pq, ref_pq) && gpu_bench::nearly_equal(final_qq, ref_qq) ? 1 : 0;
@@ -415,7 +422,7 @@ int main(int argc, char** argv) {
         gpu_bench::set_distribution(report, global);
         report.valid = global_ok != 0;
         report.extra = std::string("reduce_mem=") +
-                       (reduce_mode == reduce_memory::device ? "device_symmetric" : "host_staged");
+                       (reduce_mode == reduce_memory::device ? "device_symmetric" : "host_staged_roundtrip");
         if (phase_pass) {
           report.extra += ' ' + gpu_bench::cg_phase_fields(phase_global);
         }

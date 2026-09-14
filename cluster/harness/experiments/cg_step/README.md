@@ -51,6 +51,12 @@ roughly doubles run time and is off by default.
 
 The reductions contain one double each. Leonardo disables UCC for this
 small-message operation; OSHMPI consequently defaults to its staged scalar path.
+The current benchmark source includes the complete device-to-host, host
+reduction, and host-to-device round trip. It aligns with an experimental aCG
+implementation, but neither corrected path has been measured on Leonardo. The
+stored aCG campaign instead uses CUDA-aware `MPI_Allreduce` for scalar
+reductions, so the existing OSHMPI reduction data are not a matched application
+comparison.
 The allreduce topology sweep supports that default on multi-node topologies,
 where UCC costs 25-49% at these sizes, but contradicts it on `1n2g`, `1n4g` and
 `2n1g`, where UCC is 30-50% faster. Set the variable explicitly when the
