@@ -6,6 +6,16 @@
 # which means the answer can be read straight out of the files -- no running, no
 # cluster, no snapshotting the environment before and after each source.
 #
+# One kind of definition cannot be read that way: a variable a cluster computes
+# in the shell rather than writing as `export NAME=...`, which is how a library
+# version selection repoints <LIB>_HOME (cluster/<name>/layout.sh). Scanning
+# text alone would report the module default as the winner while the run used
+# the selected prefix -- the reader would check `--explain` and be told the
+# opposite of what happens. A cluster therefore reports those in
+# GPU_BENCH_RESOLVED_VARS, one "NAME<tab>VALUE<tab>source" per line; they are
+# already set before the first file runs, so they enter the scan first and win
+# there for the same reason they win at run time.
+#
 # gpu_bench_where_set <benchmark> <stack> <runtime>
 #
 # Prints one block per variable, definitions in execution order, winner first.
@@ -21,6 +31,9 @@ gpu_bench_where_set() {
   files+=("$root/cluster/harness/experiments/common.sh")
   while IFS= read -r f; do files+=("$f"); done \
     < <(gpu_bench_cluster_env_files "$stack" "$runtime")
+
+  {
+    [[ -n "${GPU_BENCH_RESOLVED_VARS:-}" ]] && printf '%s\n' "$GPU_BENCH_RESOLVED_VARS"
 
   for f in "${files[@]}"; do
     [[ -f "$f" ]] || continue
@@ -38,7 +51,10 @@ gpu_bench_where_set() {
         printf "%s\t%s\t%s (unconditional)\n", name, value, file; next
       }
     ' "$f"
-  done | awk -F'\t' '
+  done
+  } | awk -F'\t' '
+    # GPU_BENCH_RESOLVED_VARS ends in a newline, so skip the blank line it adds.
+    $1 == "" { next }
     { n = ++count[$1]; val[$1, n] = $2; src[$1, n] = $3; if (n == 1) order[++k] = $1 }
     END {
       for (i = 1; i <= k; i++) {

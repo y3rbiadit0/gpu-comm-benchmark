@@ -117,6 +117,7 @@ to. The cluster interface provides:
 | `gpu_bench_cluster_environment <stack>` | Load build/runtime modules and compiler paths |
 | `gpu_bench_cluster_runtime <runtime>` | Apply communication-library settings |
 | `gpu_bench_cluster_env_files <stack> <runtime>` | List those files for `--explain` |
+| `GPU_BENCH_RESOLVED_VARS` | Optional. Variables the cluster set in the shell rather than in one of those files, so `--explain` reports them instead of the file default they override. One `NAME<tab>VALUE<tab>source` per line |
 
 Keep build-time compiler setup under `env/` and run-time communication tuning
 under `runtime/`. Adding a cluster must not require changes under `harness/`.
