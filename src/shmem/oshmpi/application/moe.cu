@@ -128,7 +128,13 @@ int main(int argc, char** argv) {
             check_cuda(cudaMemcpy(target, source, block_bytes, cudaMemcpyDeviceToDevice),
                        "cudaMemcpy(dispatch self)");
           } else {
-            shmem_putmem(target, source, block_bytes, destination);
+            // Non-blocking: the shmem_quiet() below already closes the
+            // whole phase, so a blocking put per peer only serializes what
+            // OSHMPI could overlap. With P peers that is P round trips instead
+            // of one -- the same deficiency the NVSHMEM moe had, and worth up
+            // to 13x at 32 ranks by the edge-list cost model. halo_1d.cu has
+            // always used the _nbi form for this reason.
+            shmem_putmem_nbi(target, source, block_bytes, destination);
           }
         }
         // CUDA-space RMA may enqueue device work that outlives shmem_quiet;
@@ -152,7 +158,7 @@ int main(int argc, char** argv) {
             check_cuda(cudaMemcpy(target, source, block_bytes, cudaMemcpyDeviceToDevice),
                        "cudaMemcpy(combine self)");
           } else {
-            shmem_putmem(target, source, block_bytes, source_pe);
+            shmem_putmem_nbi(target, source, block_bytes, source_pe);
           }
         }
         // CUDA-space RMA may enqueue device work that outlives shmem_quiet;
