@@ -45,6 +45,26 @@ Other options: `--figure` picks one of the above or `all`, `--theme light|dark`,
 chooses which message size the `dist` figure shows (`min` by default, `max`, or
 a byte count snapped to the nearest swept size).
 
+### One figure per topology
+
+By default every figure small-multiples over case x topology, which reads well
+on screen and badly in a document: a single wide figure has to be shrunk until
+its axis labels are unreadable. `--per-topology` writes one figure per topology
+instead, named `<benchmark>-<topology>-<figure>`:
+
+```bash
+uv run --project tools/plot gpu-bench-plot \
+    --points points.json --benchmark moe --figure cases \
+    --per-topology --format png --outdir figures
+# figures/moe-1n2g-cases.png, moe-1n4g-cases.png, ... one per topology
+```
+
+Each is drawn from a sweep restricted to that topology, so its axes are scaled
+for that topology alone. That is the point rather than a side effect: one shared
+scale across intra- and inter-node flattens the intra-node panels, because the
+inter-node numbers are an order of magnitude larger. The combined figure is not
+also written.
+
 ### Reading the `phases` figure
 
 Bars total the phase sum, which is the step's cost with no overlap between

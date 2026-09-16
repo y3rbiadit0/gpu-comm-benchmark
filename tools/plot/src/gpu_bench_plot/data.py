@@ -7,6 +7,7 @@ here and adjust the readers - do not widen the check.
 
 from __future__ import annotations
 
+import copy
 import csv
 import json
 import re
@@ -139,6 +140,18 @@ class Sweep:
         for backends in self.curves.values():
             for series in backends.values():
                 series.sort(key=lambda item: item["bytes"])
+
+    def for_topology(self, topology: str) -> "Sweep":
+        """A view holding one topology, for per-topology figures.
+
+        Every figure small-multiples over case x topology, so restricting the
+        curves is all a one-topology figure needs -- no drawing code changes.
+        Shallow: the point dicts are shared, never mutated by a figure.
+        """
+        clone = copy.copy(self)
+        clone.curves = {key: value for key, value in self.curves.items() if key[1] == topology}
+        clone.excluded_topologies = []
+        return clone
 
     @property
     def cases(self) -> list[str]:

@@ -79,6 +79,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="keep single-rank topologies (1n1g) in the figures; they contain no "
         "communication and are excluded by default",
     )
+    parser.add_argument(
+        "--per-topology",
+        action="store_true",
+        help="one figure per topology instead of one figure small-multipled over "
+        "all of them, named <benchmark>-<topology>-<figure>; easier to place "
+        "individually in a document",
+    )
     parser.add_argument("--theme", choices=tuple(THEMES), default="light")
     parser.add_argument("--format", dest="ext", choices=("svg", "png", "pdf"), default="svg")
     return parser.parse_args(argv)
@@ -100,26 +107,66 @@ def render_benchmark(
             file=sys.stderr,
         )
 
+    if not args.per_topology:
+        return draw_all(sweep, fit_payload, benchmark, benchmark, args, theme)
+
+    # One figure per topology. Each is drawn from a sweep restricted to that
+    # topology, so the panel grid collapses to that topology's cases and the
+    # axis scales are chosen for it alone -- which is the point: a shared scale
+    # across intra- and inter-node flattens the intra-node panels.
+    written: list[Path] = []
+    for topology in sweep.topologies:
+        paths, ok = draw_all(
+            sweep.for_topology(topology),
+            _fits_for_topology(fit_payload, topology),
+            benchmark,
+            f"{benchmark}-{topology}",
+            args,
+            theme,
+        )
+        written.extend(paths)
+        if not ok:
+            return written, False
+    return written, True
+
+
+def _fits_for_topology(fit_payload: dict | None, topology: str) -> dict | None:
+    """The fit figure reads a flat list rather than a Sweep, so filter it here."""
+    if fit_payload is None:
+        return None
+    fits = [fit for fit in fit_payload.get("fits", []) if fit["topology"] == topology]
+    return {**fit_payload, "fits": fits}
+
+
+def draw_all(
+    sweep: Sweep,
+    fit_payload: dict | None,
+    benchmark: str,
+    stem: str,
+    args: argparse.Namespace,
+    theme: dict,
+) -> tuple[list[Path], bool]:
+    """Draw the requested figures from one sweep, under one filename stem."""
     wanted = FIGURES if args.figure == "all" else (args.figure,)
     written: list[Path] = []
 
     if "latency" in wanted:
         written.append(
-            draw_sweep(sweep, theme, "latency", args.outdir, f"{benchmark}-latency", args.ext)
+            draw_sweep(sweep, theme, "latency", args.outdir, f"{stem}-latency", args.ext)
         )
     if "bandwidth" in wanted:
         written.append(
-            draw_sweep(sweep, theme, "bandwidth", args.outdir, f"{benchmark}-bandwidth", args.ext)
+            draw_sweep(sweep, theme, "bandwidth", args.outdir, f"{stem}-bandwidth", args.ext)
         )
     if "cases" in wanted:
-        out = draw_cases(sweep, theme, args.outdir, f"{benchmark}-cases", args.ext, args.imbalance)
+        out = draw_cases(sweep, theme, args.outdir, f"{stem}-cases", args.ext, args.imbalance)
         if out is None:
             print(f"note: {benchmark} has a single case, skipping cases figure", file=sys.stderr)
         else:
             written.append(out)
     if "dist" in wanted:
         result = draw_distribution(
-            sweep, theme, args.outdir, f"{benchmark}-dist", args.ext, args.size
+            sweep, theme, args.outdir, f"{stem}-dist", args.ext, args.size
         )
         if result is None:
             print(
@@ -130,7 +177,7 @@ def render_benchmark(
             print(f"{benchmark}: dist figure drawn at {size} bytes", file=sys.stderr)
             written.append(out)
     if "phases" in wanted:
-        result = draw_phases(sweep, theme, args.outdir, f"{benchmark}-phases", args.ext, args.size)
+        result = draw_phases(sweep, theme, args.outdir, f"{stem}-phases", args.ext, args.size)
         if result is None:
             # Not a failure: only cg_step carries a breakdown, and only when
             # measured with GPU_BENCH_CG_PHASES=1.
@@ -145,7 +192,7 @@ def render_benchmark(
             print(f"{benchmark}: phases figure drawn at {size} bytes", file=sys.stderr)
             written.append(out)
     if "heatmap" in wanted:
-        out = draw_heatmap(sweep, theme, args.outdir, f"{benchmark}-speedup", args.ext)
+        out = draw_heatmap(sweep, theme, args.outdir, f"{stem}-speedup", args.ext)
         if out is None:
             print(
                 f"warning: {benchmark}: no baseline-relative points, skipping heatmap",
@@ -169,7 +216,7 @@ def render_benchmark(
             theme,
             benchmark,
             args.outdir,
-            f"{benchmark}-fit",
+            f"{stem}-fit",
             args.ext,
             args.include_single_rank,
         )

@@ -472,3 +472,51 @@ def test_application_benchmarks_get_no_fit_figure(tmp_path, points):
     assert not (outdir / "cg_step-fit.csv").exists()
     # Microbenchmarks are unaffected.
     assert is_application_benchmark("cg_step") and not is_application_benchmark("allreduce")
+
+
+def test_per_topology_writes_one_figure_set_per_topology(tmp_path, points):
+    """--per-topology replaces the small-multiple with one figure each.
+
+    The filenames carry the topology, so a document can place them
+    individually; the combined figure is no longer written.
+    """
+    source = write_points(tmp_path / "points.json", points)
+    outdir = tmp_path / "figures"
+    assert main(["--points", str(source), "--figure", "latency", "--per-topology",
+                 "--outdir", str(outdir)]) == 0
+
+    topologies = sorted({point["topology"] for point in points})
+    drawn = sorted(path.name for path in outdir.glob("*.svg"))
+    for topology in topologies:
+        assert f"halo_1d-{topology}-latency.svg" in drawn
+    # the combined figure is not also emitted
+    assert "halo_1d-latency.svg" not in drawn
+    # every figure still ships its table view
+    for path in outdir.glob("*.svg"):
+        assert path.with_suffix(".csv").exists()
+
+
+def test_per_topology_panels_hold_only_that_topology(tmp_path, points):
+    """Each figure's table view must not leak rows from another topology."""
+    source = write_points(tmp_path / "points.json", points)
+    outdir = tmp_path / "figures"
+    main(["--points", str(source), "--figure", "latency", "--per-topology",
+          "--outdir", str(outdir)])
+
+    for table in outdir.glob("*-latency.csv"):
+        topology = table.name.split("-")[1]
+        with table.open() as handle:
+            rows = list(csv.DictReader(handle))
+        assert rows, f"{table.name} is empty"
+        assert {row["topology"] for row in rows} == {topology}
+
+
+def test_for_topology_is_a_view_not_a_mutation(points):
+    """Restricting must not disturb the sweep it came from."""
+    sweep = Sweep(points, "halo_1d")
+    before = dict(sweep.curves)
+    topology = sweep.topologies[0]
+    restricted = sweep.for_topology(topology)
+    assert restricted.topologies == [topology]
+    assert restricted.metric == sweep.metric
+    assert sweep.curves == before
