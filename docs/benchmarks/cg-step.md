@@ -18,17 +18,16 @@ Each step:
 3. Computes the four-neighbor stencil
    `q(i,j) = 0.25 * (north + south + west + east)`, with zero outside the grid.
 4. Computes local double-precision partials for `dot(p,q)` and `dot(q,q)`.
-5. Globally sums the two doubles.
+5. Performs two separate global sum reductions, each carrying one double.
 
 The input field remains fixed between iterations. The benchmark does not perform
 CG vector updates, residual calculation, or convergence testing.
 
-Step 5 reduces the same two doubles everywhere, but backends differ in how many
-calls they use to do it, and the two are not comparable at this phase. Both
-scalars are latency-bound at one element, so a backend issuing two one-element
-reductions pays very nearly twice the reduce phase of one issuing a single
-two-element reduction. `cuda_nvshmem` fuses; every other backend still issues
-two. Read `phase_reduce_usec` with that in mind until they agree.
+Two calls rather than one is deliberate. Fusing them into a single two-element
+reduction is measurably faster, but aCG issues two one-element reductions per
+iteration, and this benchmark exists to predict aCG. A fused step would
+characterise a solver nobody runs, and would also stop `phase_reduce_usec` from
+being comparable across backends.
 
 ## Command-line contract
 

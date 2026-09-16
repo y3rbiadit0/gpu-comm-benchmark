@@ -277,11 +277,17 @@ int main(int argc, char** argv) {
     auto* send_east = static_cast<float*>(nvshmem_malloc(max_side * sizeof(float)));
     auto* recv_west = static_cast<float*>(nvshmem_malloc(max_side * sizeof(float)));
     auto* recv_east = static_cast<float*>(nvshmem_malloc(max_side * sizeof(float)));
-    // The two dot-product scalars are adjacent so the step reduces them in one
-    // call instead of two. They are latency-bound at one element each, so a
-    // second call very nearly doubles the reduce phase. NOTE: the other
-    // backends still issue two reductions here, so this phase is not
-    // like-for-like against them until they are fused too.
+    // The two dot-product scalars are adjacent, which lets one memset clear
+    // both -- but they are reduced by TWO separate one-element calls, not one
+    // two-element call.
+    //
+    // Fusing them is faster (measured: 23.3 us against 31.7 us for NCCL's two
+    // at 1n4g) and was tried. It is wrong here. aCG issues
+    // acgcomm_allreduce(..., 1, ACG_DOUBLE, ...) at every call site and its
+    // logs measure 2.0 reductions per iteration at 8 bytes each. This benchmark
+    // exists to predict that, so it has to make the same calls; a fused
+    // benchmark would predict a solver nobody runs. It also restores
+    // like-for-like comparison with the five backends that issue two.
     auto* partial = static_cast<double*>(nvshmem_malloc(2U * sizeof(double)));
     auto* result = static_cast<double*>(nvshmem_malloc(2U * sizeof(double)));
     // Two counters, never reset: the neighbour pair never changes across the
@@ -401,8 +407,12 @@ int main(int argc, char** argv) {
       };
       const auto reduce = [&]() {
         check_nvshmem(
-            nvshmemx_double_sum_reduce_on_stream(NVSHMEM_TEAM_WORLD, result, partial, 2, stream),
-            "nvshmemx_double_sum_reduce_on_stream");
+            nvshmemx_double_sum_reduce_on_stream(NVSHMEM_TEAM_WORLD, result, partial, 1, stream),
+            "nvshmemx_double_sum_reduce_on_stream(pq)");
+        check_nvshmem(
+            nvshmemx_double_sum_reduce_on_stream(NVSHMEM_TEAM_WORLD, result + 1, partial + 1, 1,
+                                                 stream),
+            "nvshmemx_double_sum_reduce_on_stream(qq)");
       };
 
       nvshmem_barrier_all();
