@@ -10,12 +10,20 @@ This backend uses NVSHMEM symmetric GPU buffers and one-sided or team operations
 | `halo_1d` | Cooperative multi-block puts with neighbor signals |
 | `allreduce` | `nvshmem_float_sum_reduce` |
 | `alltoall` | `nvshmem_float_alltoall` |
-| `cg_step` | Host-driven puts, barrier, and two double reductions |
-| `moe` | Variable-count puts with quiet and barrier completion |
+| `cg_step` | Cooperative halo puts with neighbour signals, one fused double reduction |
+| `moe` | Multi-block puts with per-peer dispatch/combine signals, split per phase |
 
-The ping-pong and halo implementations use cooperative kernels so communication
-can be device initiated. On proxy-based inter-node transports, their grid size
-is capped by default; `GPU_BENCH_NVSHMEM_MAX_BLOCKS` overrides the cap.
+The ping-pong, halo, and CG-step implementations use cooperative kernels so
+communication can be device initiated. On proxy-based inter-node transports
+their grid size is capped by default, because each block there sends to a
+*different* peer and every block's remote op is separately proxied.
+
+`moe` is capped too, but at 64 rather than 8: its blocks split one peer's
+payload, so the limit is how many concurrent proxied block-puts the host proxy
+absorbs, not how many peers are in flight. A 2n1g sweep put the optimum at 64
+(1656 / 877 / 2439 usec for uniform / locality80 / hotspot80) and measured the
+full 992-block grid at roughly 1.9x slower with 50x the run-to-run variance.
+`GPU_BENCH_NVSHMEM_MAX_BLOCKS` sets the cap for any of them.
 
 ## Build
 

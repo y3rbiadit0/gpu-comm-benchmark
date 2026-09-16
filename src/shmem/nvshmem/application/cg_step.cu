@@ -1,11 +1,14 @@
 #include <mpi.h>
 
+#include <cooperative_groups.h>
 #include <cuda_runtime.h>
 #include <nvshmem.h>
 #include <nvshmemx.h>
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
@@ -21,6 +24,8 @@
 #include "timing.hpp"
 #include "validation.hpp"
 
+namespace cg = cooperative_groups;
+
 namespace {
 
 void check_cuda(cudaError_t status, const char* call) {
@@ -29,9 +34,110 @@ void check_cuda(cudaError_t status, const char* call) {
   }
 }
 
+void check_nvshmem(int status, const char* call) {
+  if (status != 0) {
+    throw std::runtime_error(std::string(call) + " failed with status " + std::to_string(status));
+  }
+}
+
 // CG iteration communication skeleton (see src/mpi/cuda/application/cg_step.cu). The halo
 // columns and the reduction scalars live in NVSHMEM symmetric memory; the field
 // stays in plain device memory.
+//
+// Every phase is stream-ordered and the step synchronizes once at the end, the
+// same shape the NCCL backend has. The earlier version blocked the host inside
+// pack and compute and closed the halo with nvshmem_quiet() +
+// nvshmem_barrier_all(), which serialized a step NCCL was free to overlap and
+// paid a global barrier for a two-neighbour exchange.
+//
+// Dropping the barrier is safe because the reduction already orders the
+// iterations: it is a collective over TEAM_WORLD, so no PE can enqueue the next
+// iteration's halo until this iteration's reduce completed, which required
+// every PE to have finished its compute -- and compute is the only reader of
+// the halo buffers. That is the same reason the NCCL backend needs no barrier
+// here.
+
+constexpr int sig_west = 0;  // raised by my left neighbour: my recv_west has landed
+constexpr int sig_east = 1;  // raised by my right neighbour: my recv_east has landed
+
+// Blocks to move `elements`, given the cooperative-launch ceiling. Same
+// constant and same reason as halo_1d.cu: a small column split across many
+// blocks gives each a few bytes and still pays the full grid.sync(). A CG halo
+// is one column, so this collapses to a single block at the usual sizes.
+constexpr std::size_t min_elements_per_block = 4096;  // 16 KiB of float
+
+// Block size for the halo kernel. Named because the occupancy query that sizes
+// the grid must use the same value the launch does.
+constexpr int halo_block_size = 256;
+
+std::size_t blocks_for(std::size_t elements, std::size_t max_grid) {
+  if (elements == 0U || max_grid == 0U) {
+    return 1U;
+  }
+  const std::size_t wanted = elements / min_elements_per_block;
+  const std::size_t least = wanted < 1U ? 1U : wanted;
+  return least > max_grid ? max_grid : least;
+}
+
+// Device-initiated west/east exchange, following halo_1d.cu: blocks each move a
+// chunk with a plain (signal-less) block put, every block that issued work
+// completes its own operations, and only after a grid-wide completion point
+// does block 0 raise one signal per direction. One signal per direction (not
+// one per block) is load-bearing -- without IBGDA each block's remote signal is
+// a separate proxied op, and concurrent signal-adds can be dropped on the proxy
+// path, leaving the waiter spinning forever.
+//
+// The chain is open, not a ring: rank 0 has no left and rank pes-1 no right.
+// Those ends neither signal nor wait in that direction, and their halo column
+// stays at the zero the setup memset left, which is the boundary condition the
+// validation expects.
+__global__ void halo_exchange_kernel(float* recv_west, float* recv_east, const float* send_west,
+                                     const float* send_east, std::uint64_t* signals,
+                                     std::size_t side, std::size_t chunk, int left, int right,
+                                     std::uint64_t threshold) {
+  cg::grid_group grid = cg::this_grid();
+  const std::size_t off = static_cast<std::size_t>(blockIdx.x) * chunk;
+  const std::size_t len = off < side ? (side - off < chunk ? side - off : chunk) : 0U;
+
+  if (len != 0U) {
+    // My west column lands in the left neighbour's east halo, my east column in
+    // the right neighbour's west halo.
+    if (left >= 0) {
+      nvshmemx_float_put_nbi_block(recv_east + off, send_west + off, len, left);
+    }
+    if (right >= 0) {
+      nvshmemx_float_put_nbi_block(recv_west + off, send_east + off, len, right);
+    }
+  }
+  __syncthreads();
+  if (len != 0U && threadIdx.x == 0) {
+    // Complete this block's cooperative NBI operations before the grid leader
+    // publishes the exchange-complete signals.
+    nvshmem_quiet();
+  }
+  grid.sync();  // every active block has completed its puts
+
+  if (blockIdx.x == 0 && threadIdx.x == 0) {
+    // I wrote the left neighbour's recv_east, so I raise its sig_east; I wrote
+    // the right neighbour's recv_west, so I raise its sig_west. Single writer
+    // per counter, so SIGNAL_ADD(+1) is safe and the threshold is monotone.
+    if (left >= 0) {
+      nvshmemx_signal_op(signals + sig_east, 1U, NVSHMEM_SIGNAL_ADD, left);
+    }
+    if (right >= 0) {
+      nvshmemx_signal_op(signals + sig_west, 1U, NVSHMEM_SIGNAL_ADD, right);
+    }
+    // Symmetrically, my recv_west comes from the left and my recv_east from the
+    // right, so those are the counters I wait on.
+    if (left >= 0) {
+      nvshmem_signal_wait_until(signals + sig_west, NVSHMEM_CMP_GE, threshold);
+    }
+    if (right >= 0) {
+      nvshmem_signal_wait_until(signals + sig_east, NVSHMEM_CMP_GE, threshold);
+    }
+  }
+  grid.sync();  // compute must not read a halo before the wait cleared
+}
 
 __global__ void init_p_kernel(float* p, std::size_t side, std::size_t local_cols, std::size_t width) {
   const auto jj = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
@@ -122,7 +228,20 @@ int main(int argc, char** argv) {
     if (device_count == 0) {
       throw std::runtime_error("no CUDA devices available");
     }
-    check_cuda(cudaSetDevice(mpi_rank % device_count), "cudaSetDevice");
+    const int device = mpi_rank % device_count;
+    check_cuda(cudaSetDevice(device), "cudaSetDevice");
+
+    // grid.sync() and in-kernel NVSHMEM point-to-point synchronization both
+    // require a cooperative launch, as in halo_1d.cu.
+    int coop_supported = 0;
+    check_cuda(cudaDeviceGetAttribute(&coop_supported, cudaDevAttrCooperativeLaunch, device),
+               "cudaDeviceGetAttribute(cooperative)");
+    if (coop_supported == 0) {
+      throw std::runtime_error("device does not support cooperative launch");
+    }
+    int sm_count = 0;
+    check_cuda(cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device),
+               "cudaDeviceGetAttribute(SM count)");
 
     nvshmemx_init_attr_t attr = {};
     MPI_Comm mpi_comm = MPI_COMM_WORLD;
@@ -158,16 +277,59 @@ int main(int argc, char** argv) {
     auto* send_east = static_cast<float*>(nvshmem_malloc(max_side * sizeof(float)));
     auto* recv_west = static_cast<float*>(nvshmem_malloc(max_side * sizeof(float)));
     auto* recv_east = static_cast<float*>(nvshmem_malloc(max_side * sizeof(float)));
-    auto* partial_pq = static_cast<double*>(nvshmem_malloc(sizeof(double)));
-    auto* partial_qq = static_cast<double*>(nvshmem_malloc(sizeof(double)));
-    auto* result_pq = static_cast<double*>(nvshmem_malloc(sizeof(double)));
-    auto* result_qq = static_cast<double*>(nvshmem_malloc(sizeof(double)));
+    // The two dot-product scalars are adjacent so the step reduces them in one
+    // call instead of two. They are latency-bound at one element each, so a
+    // second call very nearly doubles the reduce phase. NOTE: the other
+    // backends still issue two reductions here, so this phase is not
+    // like-for-like against them until they are fused too.
+    auto* partial = static_cast<double*>(nvshmem_malloc(2U * sizeof(double)));
+    auto* result = static_cast<double*>(nvshmem_malloc(2U * sizeof(double)));
+    // Two counters, never reset: the neighbour pair never changes across the
+    // side sweep, so one monotone threshold covers the whole run. A reset would
+    // race in-flight proxied signals and drop one (halo_1d.cu).
+    auto* signals = static_cast<std::uint64_t*>(nvshmem_malloc(2U * sizeof(std::uint64_t)));
     if (send_west == nullptr || send_east == nullptr || recv_west == nullptr || recv_east == nullptr ||
-        partial_pq == nullptr || partial_qq == nullptr || result_pq == nullptr || result_qq == nullptr) {
+        partial == nullptr || result == nullptr || signals == nullptr) {
       throw std::runtime_error("failed to allocate NVSHMEM symmetric memory");
     }
+    double* const partial_pq = partial;
+    double* const partial_qq = partial + 1;
+    check_cuda(cudaMemset(signals, 0, 2U * sizeof(std::uint64_t)), "cudaMemset(signals)");
 
-    const auto sync = [&]() { check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(phase)"); };
+    cudaStream_t stream = nullptr;
+    check_cuda(cudaStreamCreate(&stream), "cudaStreamCreate");
+
+    // Largest grid that can run concurrently -- the cooperative-launch ceiling.
+    int blocks_per_sm = 0;
+    check_cuda(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&blocks_per_sm, halo_exchange_kernel,
+                                                             halo_block_size, 0),
+               "cudaOccupancyMaxActiveBlocksPerMultiprocessor");
+    std::size_t max_grid = static_cast<std::size_t>(blocks_per_sm > 0 ? blocks_per_sm : 1) *
+                           static_cast<std::size_t>(sm_count);
+
+    // Transport-aware block cap, as in halo_1d.cu: without IBGDA every block's
+    // remote put is a separate proxied IB operation, so many blocks flood the
+    // host proxy inter-node.
+    std::size_t block_cap = 0;
+    if (const char* cap_env = std::getenv("GPU_BENCH_NVSHMEM_MAX_BLOCKS")) {
+      block_cap = std::strtoull(cap_env, nullptr, 10);
+    } else if (const char* nodes_env = std::getenv("GPU_BENCH_JOB_NODES")) {
+      if (std::strtol(nodes_env, nullptr, 10) > 1) {
+        block_cap = 8;
+      }
+    }
+    if (block_cap > 0 && block_cap < max_grid) {
+      max_grid = block_cap;
+    }
+
+    const auto sync = [&]() {
+      check_cuda(cudaStreamSynchronize(stream), "cudaStreamSynchronize(phase)");
+    };
+
+    // Counts halo launches, so the signal threshold is base + 1 on the next
+    // one. Every PE runs the same warmup, iterations, and optional phase pass,
+    // so this stays identical across PEs.
+    std::uint64_t halo_launches = 0;
 
     int all_sides_ok = 1;
     for (const std::size_t side : sides) {
@@ -195,42 +357,52 @@ int main(int argc, char** argv) {
       }
       check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(init)");
 
+      const auto halo_blocks = blocks_for(side, max_grid);
+      const auto halo_chunk = std::max<std::size_t>((side + halo_blocks - 1U) / halo_blocks, 1U);
+
       /* The step, split into the four phases the analysis decomposes it into.
-       * Composing them is exactly the step this benchmark has always timed: the
-       * pack and compute phases already synchronized before the puts and the
-       * reduction could read their output, so the split adds no synchronization
-       * to the headline loop - only the phase pass adds any. */
+       * Everything here is stream-ordered and asynchronous, so composing them
+       * and synchronizing once at the end is exactly the step this benchmark
+       * has always timed. The phase pass synchronizes between them instead,
+       * which serializes work the step is otherwise free to overlap - which is
+       * why it is a separate pass and not instrumentation of the headline
+       * loop. */
       const auto pack = [&]() {
         if (local_cols > 0) {
-          pack_column_kernel<<<grid1d, block1d>>>(p_field, send_west, side, width, 1U);
-          pack_column_kernel<<<grid1d, block1d>>>(p_field, send_east, side, width, local_cols);
-          check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(pack)");
+          pack_column_kernel<<<grid1d, block1d, 0, stream>>>(p_field, send_west, side, width, 1U);
+          pack_column_kernel<<<grid1d, block1d, 0, stream>>>(p_field, send_east, side, width, local_cols);
         }
       };
       const auto halo = [&]() {
-        if (left >= 0) {
-          nvshmem_float_put(recv_east, send_west, side, left);
+        std::size_t side_v = side;
+        std::size_t chunk_v = halo_chunk;
+        int left_v = left;
+        int right_v = right;
+        std::uint64_t threshold = halo_launches + 1U;
+        void* args[] = {&recv_west, &recv_east, &send_west, &send_east, &signals,
+                        &side_v,    &chunk_v,   &left_v,    &right_v,   &threshold};
+        const int status = nvshmemx_collective_launch(
+            reinterpret_cast<const void*>(halo_exchange_kernel),
+            dim3(static_cast<unsigned>(halo_blocks)), dim3(halo_block_size), args, 0, stream);
+        if (status != 0) {
+          throw std::runtime_error("nvshmemx_collective_launch failed");
         }
-        if (right >= 0) {
-          nvshmem_float_put(recv_west, send_east, side, right);
-        }
-        nvshmem_quiet();
-        nvshmem_barrier_all();
+        ++halo_launches;
       };
       const auto compute = [&]() {
-        check_cuda(cudaMemset(partial_pq, 0, sizeof(double)), "cudaMemset(partial_pq)");
-        check_cuda(cudaMemset(partial_qq, 0, sizeof(double)), "cudaMemset(partial_qq)");
+        check_cuda(cudaMemsetAsync(partial, 0, 2U * sizeof(double), stream), "cudaMemset(partial)");
         if (local_cols > 0) {
-          unpack_column_kernel<<<grid1d, block1d>>>(p_field, recv_west, side, width, 0U);
-          unpack_column_kernel<<<grid1d, block1d>>>(p_field, recv_east, side, width, local_cols + 1U);
-          spmv_kernel<<<grid2d, block2d>>>(p_field, q_field, side, local_cols, width);
-          cg_dot_kernel<<<dot_grid, block1d>>>(p_field, q_field, partial_pq, partial_qq, side, local_cols, width);
+          unpack_column_kernel<<<grid1d, block1d, 0, stream>>>(p_field, recv_west, side, width, 0U);
+          unpack_column_kernel<<<grid1d, block1d, 0, stream>>>(p_field, recv_east, side, width, local_cols + 1U);
+          spmv_kernel<<<grid2d, block2d, 0, stream>>>(p_field, q_field, side, local_cols, width);
+          cg_dot_kernel<<<dot_grid, block1d, 0, stream>>>(p_field, q_field, partial_pq, partial_qq, side,
+                                                          local_cols, width);
         }
-        check_cuda(cudaDeviceSynchronize(), "cudaDeviceSynchronize(spmv+dot)");
       };
       const auto reduce = [&]() {
-        nvshmem_double_sum_reduce(NVSHMEM_TEAM_WORLD, result_pq, partial_pq, 1);
-        nvshmem_double_sum_reduce(NVSHMEM_TEAM_WORLD, result_qq, partial_qq, 1);
+        check_nvshmem(
+            nvshmemx_double_sum_reduce_on_stream(NVSHMEM_TEAM_WORLD, result, partial, 2, stream),
+            "nvshmemx_double_sum_reduce_on_stream");
       };
 
       nvshmem_barrier_all();
@@ -240,6 +412,7 @@ int main(int argc, char** argv) {
         halo();
         compute();
         reduce();
+        sync();
       });
       const auto global = gpu_bench::collective_stats(stats);
 
@@ -267,8 +440,8 @@ int main(int argc, char** argv) {
       }
       double host_pq = 0.0;
       double host_qq = 0.0;
-      check_cuda(cudaMemcpy(&host_pq, result_pq, sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy(pq)");
-      check_cuda(cudaMemcpy(&host_qq, result_qq, sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy(qq)");
+      check_cuda(cudaMemcpy(&host_pq, result, sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy(pq)");
+      check_cuda(cudaMemcpy(&host_qq, result + 1, sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy(qq)");
       int local_ok = gpu_bench::nearly_equal(host_pq, ref_pq) && gpu_bench::nearly_equal(host_qq, ref_qq)
                          ? 1
                          : 0;
@@ -304,10 +477,10 @@ int main(int argc, char** argv) {
       }
     }
 
-    nvshmem_free(result_qq);
-    nvshmem_free(result_pq);
-    nvshmem_free(partial_qq);
-    nvshmem_free(partial_pq);
+    check_cuda(cudaStreamDestroy(stream), "cudaStreamDestroy");
+    nvshmem_free(signals);
+    nvshmem_free(result);
+    nvshmem_free(partial);
     nvshmem_free(recv_east);
     nvshmem_free(recv_west);
     nvshmem_free(send_east);

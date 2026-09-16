@@ -83,7 +83,7 @@ not exact traffic crossing physical links.
 | `cuda_mpi` | Two variable-count `MPI_Alltoallv` calls | Return of the blocking collectives |
 | `sycl_mpi` | `MPI_Alltoallv` over USM buffers | Return of the blocking collectives |
 | `cuda_nccl` | Two grouped variable-count exchanges | CUDA stream synchronization |
-| `cuda_nvshmem` | Per-destination puts and local copies | Quiet and global barrier after each phase |
+| `cuda_nvshmem` | Device-initiated per-destination puts and local copies, one put kernel plus one signal kernel per phase | Quiet, then one signal per peer actually exchanged with |
 | `oshmpi` | Variable-byte puts and local copies | Quiet, device synchronization, and barrier after each phase |
 | `sycl_oneccl` | Grouped variable-count point-to-point exchanges | oneCCL event completion |
 

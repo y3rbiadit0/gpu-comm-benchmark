@@ -18,10 +18,17 @@ Each step:
 3. Computes the four-neighbor stencil
    `q(i,j) = 0.25 * (north + south + west + east)`, with zero outside the grid.
 4. Computes local double-precision partials for `dot(p,q)` and `dot(q,q)`.
-5. Performs two separate global sum reductions, each carrying one double.
+5. Globally sums the two doubles.
 
 The input field remains fixed between iterations. The benchmark does not perform
 CG vector updates, residual calculation, or convergence testing.
+
+Step 5 reduces the same two doubles everywhere, but backends differ in how many
+calls they use to do it, and the two are not comparable at this phase. Both
+scalars are latency-bound at one element, so a backend issuing two one-element
+reductions pays very nearly twice the reduce phase of one issuing a single
+two-element reduction. `cuda_nvshmem` fuses; every other backend still issues
+two. Read `phase_reduce_usec` with that in mind until they agree.
 
 ## Command-line contract
 
@@ -102,7 +109,7 @@ application-level normalization, not exact link traffic.
 | `cuda_mpi` | `MPI_Sendrecv` halo and two `MPI_Allreduce` calls | Blocking communication plus CUDA synchronization |
 | `sycl_mpi` | MPI halo and reductions over USM | Blocking communication plus SYCL event completion |
 | `cuda_nccl` | Grouped halo and two NCCL allreduces | CUDA stream synchronization |
-| `cuda_nvshmem` | Put-based halo, barrier, and two team reductions | CUDA synchronization and SHMEM completion |
+| `cuda_nvshmem` | Device-initiated halo with neighbour signals, and one fused two-element team reduction | CUDA stream synchronization |
 | `oshmpi` | Put-based halo and direct or staged reductions | SHMEM completion, including staging when selected |
 | `sycl_oneccl` | Grouped halo and two oneCCL allreduces | oneCCL event completion |
 | `sycl_oneccl_oshmpi` | Same oneCCL operations over OSHMPI | oneCCL event completion |
