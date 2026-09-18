@@ -23,3 +23,8 @@ set_target_properties(cuda_nvshmem_moe PROPERTIES
 set_target_properties(cuda_nvshmem_cg_step PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
 )
+
+# Device-initiated application benchmarks: the kernel runs the iteration and
+# issues its own communication. A separate backend, not a variant of the two
+# targets above -- see device/CMakeLists.txt.
+add_subdirectory(device)

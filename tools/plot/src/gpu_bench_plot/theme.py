@@ -18,9 +18,12 @@ BACKEND_ORDER = (
     # Appended, never inserted: the tuple index selects the colour, so putting a
     # new backend next to its relative would recolour every backend after it and
     # break the guarantee above. There are seven validated categorical slots, so
-    # this eighth entry falls through to muted grey in colour_for() until an
-    # eighth is validated -- known and ordered, but not yet distinctly coloured.
+    # the entries past the seventh fall through to muted grey in colour_for()
+    # until more are validated -- known and ordered, but not yet distinctly
+    # coloured. They share that grey, so a figure carrying more than one of them
+    # needs another channel (marker or linestyle) to tell them apart.
     "cuda_nccl_device",
+    "cuda_nvshmem_device",
 )
 BASELINE_BACKEND = "cuda_mpi"
 
